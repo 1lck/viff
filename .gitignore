@@ -1,0 +1,7 @@
+/build/
+/dist/
+*.test
+*.out
+*.prof
+.DS_Store
+/.viff-test/
