@@ -10,6 +10,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	"viff/assets/branding"
 	vapp "viff/internal/app"
 	"viff/internal/platform"
 )
@@ -164,6 +165,8 @@ func (w *Window) Config() app.Config {
 	}
 	return app.Config{
 		Title:          "Viff",
+		Class:          "viff",
+		Icon:           branding.Icon,
 		Width:          width,
 		Height:         height,
 		MinWidth:       900,

@@ -133,3 +133,9 @@ are proposed weekly by Dependabot.
 
 GitHub 仓库主分支要求 PR、CI 通过、解决评审讨论及线性历史，禁止强推和删除。
 保留所有者/管理员应急绕过权限；单维护者项目不强制额外审批人数。Dependabot 每周提出依赖更新。
+
+## 应用图标
+
+应用统一使用白底橙色、无文字的[品牌图标](../assets/branding/README.md)。
+修改原始图稿后，运行 `go run ./cmd/brandassets` 重新生成各平台资源。
+打包脚本会配置 macOS ICNS、Windows 程序和安装器 ICO，以及 Linux 桌面图标。

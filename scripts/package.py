@@ -27,6 +27,8 @@ def copy_notices(destination):
         shutil.copy2(ROOT / name, destination / name)
     for name in ("docs", "licenses"):
         shutil.copytree(ROOT / name, destination / name)
+    shutil.copytree(ROOT / "assets/branding", destination / "assets/branding",
+                    ignore=shutil.ignore_patterns("*.go", "source.png"))
     icons = destination / "assets/icons/intellij"
     icons.mkdir(parents=True)
     for name in ("LICENSE", "NOTICE.md"):
@@ -49,11 +51,13 @@ def package_mac(binary, name, version, work, dest):
     shutil.copy2(binary, contents / "MacOS/viff")
     (contents / "MacOS/viff").chmod(0o755)
     copy_notices(contents / "Resources")
+    shutil.copy2(ROOT / "assets/branding/icon.icns", contents / "Resources/viff.icns")
     numeric_version = version.lstrip("v").split("-", 1)[0]
     with (contents / "Info.plist").open("wb") as stream:
         plistlib.dump({
             "CFBundleName": "Viff", "CFBundleDisplayName": "Viff",
             "CFBundleIdentifier": "io.github.1lck.viff", "CFBundleExecutable": "viff",
+            "CFBundleIconFile": "viff.icns",
             "CFBundlePackageType": "APPL", "CFBundleInfoDictionaryVersion": "6.0",
             "CFBundleShortVersionString": numeric_version,
             "CFBundleVersion": numeric_version, "LSMinimumSystemVersion": "13.0",
@@ -92,6 +96,8 @@ def package_windows(binary, name, version, work, dest, smoke):
     payload = work / "payload"
     copy_notices(payload)
     shutil.copy2(binary, payload / "viff.exe")
+    binary = payload / "viff.exe"
+    run("go", "run", "./cmd/brandassets", "-exe", binary, "-version", version, cwd=ROOT)
     output = dest / f"{name}-setup.exe"
     script = work / "installer.nsi"
     # A per-user install avoids UAC and keeps all registry writes in HKCU.
@@ -103,6 +109,8 @@ InstallDir "$LOCALAPPDATA\\Programs\\Viff"
 InstallDirRegKey HKCU "Software\\Viff" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
+!define MUI_ICON "{nsis_string(ROOT / 'assets/branding/icon.ico')}"
+!define MUI_UNICON "{nsis_string(ROOT / 'assets/branding/icon.ico')}"
 !define MUI_ABORTWARNING
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "{nsis_string(ROOT / 'LICENSE')}"
@@ -121,6 +129,7 @@ Section "Viff" SEC_MAIN
   CreateShortcut "$SMPROGRAMS\\Viff\\Viff.lnk" "$INSTDIR\\viff.exe"
   CreateShortcut "$SMPROGRAMS\\Viff\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"
   WriteRegStr HKCU "Software\\Viff" "InstallDir" "$INSTDIR"
+  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Viff" "DisplayIcon" '$\\"$INSTDIR\\viff.exe$\\",0'
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Viff" "DisplayName" "Viff"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Viff" "DisplayVersion" "{version}"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Viff" "Publisher" "Viff contributors"
@@ -207,12 +216,16 @@ def package_linux(binary, name, version, arch, work, dest, smoke):
     (deb / "usr/bin").mkdir(parents=True)
     shutil.copy2(portable / "viff", deb / "usr/bin/viff")
     copy_notices(deb / "usr/share/doc/viff")
+    for size in (16, 32, 48, 64, 128, 256, 512):
+        icon_dir = deb / f"usr/share/icons/hicolor/{size}x{size}/apps"
+        icon_dir.mkdir(parents=True)
+        shutil.copy2(ROOT / f"assets/branding/icon-{size}.png", icon_dir / "viff.png")
     applications = deb / "usr/share/applications"
     applications.mkdir(parents=True)
     (applications / "viff.desktop").write_text(
         "[Desktop Entry]\nType=Application\nName=Viff\n"
         "Comment=Lightweight native Git client\nExec=viff\n"
-        "Terminal=false\nCategories=Development;RevisionControl;\n", encoding="utf-8")
+        "Icon=viff\nStartupWMClass=viff\nTerminal=false\nCategories=Development;RevisionControl;\n", encoding="utf-8")
     (deb / "DEBIAN").mkdir()
     deb_version = version.lstrip("v").replace("-", "~", 1)
     (deb / "DEBIAN/control").write_text(

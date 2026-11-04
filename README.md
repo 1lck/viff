@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/branding/icon.png" width="128" height="128" alt="Viff" />
+
 # Viff
 
 **A lightweight, native Git desktop client.**
