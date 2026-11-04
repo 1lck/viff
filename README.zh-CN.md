@@ -102,6 +102,26 @@ Git 需单独安装并加入 `PATH`。Linux 还需要[发布指南](docs/release
 目前仍是**预发布版本**。macOS 应用使用 ad-hoc 签名，未经 Developer ID 签名或公证；
 Windows 安装器未经 Authenticode 签名，因此操作系统可能显示安全提示。
 
+## macOS 提示“无法打开 Viff.app”
+
+如果 macOS 提示“Apple 无法验证 Viff.app 是否包含可能危害 Mac 安全或泄漏隐私的恶意软件”，
+通常是因为手动下载的安装包尚未经过 Apple 公证。请先确认应用来自可信的
+[GitHub Releases](https://github.com/1lck/viff/releases)，然后选择以下任一方式：
+
+<p align="center">
+  <img src="./docs/assets/screenshots/macos-app-verification-warning.png" width="492" alt="macOS 提示无法打开 Viff.app">
+</p>
+
+1. 在“应用程序”中按住 Control 键点按 `Viff.app`，选择“打开”，再在确认对话框中选择“打开”。
+2. 如果仍被阻止，打开“系统设置 > 隐私与安全性”，在安全性提示旁点按“仍要打开”，然后再次启动应用。
+3. 也可以在终端中移除下载文件的隔离标记：
+
+   ```bash
+   sudo xattr -dr com.apple.quarantine /Applications/Viff.app
+   ```
+
+上述命令只应对你确认来源可靠的应用使用。
+
 ## 平台支持进度
 
 | 平台    | 验证情况                                                        |
@@ -143,9 +163,35 @@ VIFF_SHOTS="$PWD/.viff-test/shots" VIFF_SHOTS_BY_TEST=1 \
 设置保存在系统用户配置目录的 `Viff/settings.json`，可在设置对话框查看实际路径。
 写操作仅作用于当前仓库，非活动仓库按需刷新。自由文本冲突编辑及不支持的二进制冲突需要外部编辑器。
 
+## ⭐ 特别鸣谢
+
+<p align="center">
+  <a href="https://linux.do/">
+    <img src="./docs/assets/special-thanks/linux-do.png" width="42%" alt="LINUX DO">
+  </a>
+</p>
+
+<p align="center">
+  <strong>关于 AI 的一切，欢迎前往 <a href="https://linux.do/">LINUX DO</a>！祝社区越来越好～</strong>
+</p>
+
+## 贡献者
+
+感谢所有参与 Viff 开发和改进的贡献者。
+
+<a href="https://github.com/1lck/viff/graphs/contributors">
+  <img src="https://raw.githubusercontent.com/1lck/viff/chart-assets/contributors.svg" alt="贡献者">
+</a>
+
 ## 许可与致谢
 
 Viff 原创代码采用 [MIT 许可证](LICENSE)。Viva、JetBrains Mono、IntelliJ Platform 图标及其它依赖
 保留各自许可，详见[第三方声明](THIRD_PARTY_NOTICES.md)。
 
 界面参考了 IntelliJ IDEA 的 Git 工作流。Viff 是独立项目，与 JetBrains 没有关联，也未获得其背书。
+
+## Star History
+
+<a href="https://www.star-history.com/#1lck/viff&Date">
+  <img alt="Star History 图表" src="https://raw.githubusercontent.com/1lck/viff/chart-assets/star-history-light.svg" width="100%" />
+</a>
