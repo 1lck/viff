@@ -92,6 +92,11 @@ type Workspace struct {
 	// Watch starts file-system watching for a repository; set by the
 	// composition root so platform code stays out of this package.
 	Watch func(repo domain.Repo, changed func(meta bool)) (Watcher, error)
+	// ConfirmCheckout asks the UI whether to stash local changes and retry a
+	// checkout Git blocked. It runs on the UI thread and returns true when the
+	// user accepted; nil reports the failure instead of offering the choice.
+	// Changes are never stashed without this confirmation.
+	ConfirmCheckout func(CheckoutBlocked) bool
 	// Now is the clock (replaceable in tests).
 	Now func() time.Time
 }

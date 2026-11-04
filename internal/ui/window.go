@@ -112,6 +112,7 @@ const (
 // hook of the workspace to w.Invalidate.
 func New(ws *vapp.Workspace) *Window {
 	w := &Window{ws: ws, commitOpen: true, gitOpen: true}
+	ws.ConfirmCheckout = w.confirmStashCheckout
 	w.mono = ui.MonoFamily(platform.EditorFontFamily)
 	w.applyTheme()
 	w.cm.init()

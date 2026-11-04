@@ -275,9 +275,7 @@ func (w *Workspace) Checkout(ref domain.Ref) {
 	w.Run("Checkout "+ref.Short, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.Checkout(ctx, repo, ref)
 	}, RunOptions{OnError: func(err error) bool {
-		switch gitcli.KindOf(err) {
-		case gitcli.ErrLocalChangesOverwrite, gitcli.ErrUntrackedOverwrite:
-			w.Notify(NoticeError, "Checkout failed", ErrorText(err)+"\n\nCommit, stash or roll back your changes first.")
+		if w.checkoutBlocked(CheckoutBlocked{Ref: ref, Err: err}) {
 			return true
 		}
 		return false
@@ -290,7 +288,9 @@ func (w *Workspace) Checkout(ref domain.Ref) {
 func (w *Workspace) CheckoutRevision(rev string) {
 	w.Run("Checkout "+domain.ShortHash(rev), func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.CheckoutRevision(ctx, repo, rev)
-	}, RunOptions{Success: "Checked out " + domain.ShortHash(rev), SuccessBody: "HEAD is detached. Create a branch to keep new commits."})
+	}, RunOptions{OnError: func(err error) bool {
+		return w.checkoutBlocked(CheckoutBlocked{Rev: rev, Err: err})
+	}, Success: "Checked out " + domain.ShortHash(rev), SuccessBody: "HEAD is detached. Create a branch to keep new commits."})
 }
 
 // NewBranch creates a branch.

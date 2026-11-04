@@ -16,3 +16,4 @@
 | [0010](0010-submodule-status.md) | 子模块的状态、更新与同步 |
 | [0011](0011-log-history-editing.md) | 在 Log 里直接编辑历史 |
 | [0012](0012-worktrees.md) | 工作树界面 |
+| [0013](0013-smart-checkout.md) | 先 stash 再检出 |
