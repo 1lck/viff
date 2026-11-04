@@ -834,6 +834,9 @@ func (w *Window) changesMenu() []item {
 		item{title: "Copy Path", icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
 		item{title: "Copy Relative Path", run: func() { w.copyText(first.entry.Path) }},
 	)
+	patchPaths, patchStaged, canPatch := patchTargets(sel)
+	items = append(items, sep(),
+		item{title: "Create Patch…", icon: icons.Patch, disabled: !canPatch, run: func() { w.savePatch(patchPaths, patchStaged) }})
 	return items
 }
 

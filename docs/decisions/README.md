@@ -12,3 +12,4 @@
 | [0006](0006-deferred-ui-work.md) | 绘制期间产生的延迟工作 |
 | [0007](0007-read-only-file-view.md) | 只读文件查看与 blame |
 | [0008](0008-compare-commits.md) | 提交比较视图 |
+| [0009](0009-patch.md) | 补丁的创建与应用 |

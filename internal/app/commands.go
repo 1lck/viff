@@ -645,6 +645,59 @@ func (w *Workspace) Blame(rev, path string, done func(*domain.Blame, error)) {
 	}()
 }
 
+// CreatePatch builds a patch for paths (all changes when empty) in the
+// background. staged takes the index against HEAD; otherwise the working tree
+// against the index. Paths are relative to the repository root.
+func (w *Workspace) CreatePatch(paths []string, staged bool, done func([]byte, error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	repo := rs.Repo
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		patch, err := w.Git.CreatePatch(ctx, repo, paths, staged)
+		w.post(func() {
+			if w.Repo == rs {
+				done(patch, err)
+			}
+		})
+	}()
+}
+
+// ApplyPatchFile applies a saved patch to the working tree or, with cached,
+// to the index alone. Git checks the whole patch first, so a patch that does
+// not apply leaves the repository untouched; the failure keeps Git's message.
+func (w *Workspace) ApplyPatchFile(path string, cached bool, done func(error)) {
+	body := filepath.Base(path)
+	if cached {
+		body += ", applied to the index only"
+	}
+	w.Run("Apply Patch", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		patch, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read patch: %w", err)
+		}
+		return w.Git.ApplyPatch(ctx, repo, patch, cached, false)
+	}, RunOptions{
+		Success:     "Patch applied",
+		SuccessBody: body,
+		OnError: func(err error) bool {
+			w.Notify(NoticeError, "Cannot apply patch", ErrorText(err))
+			if done != nil {
+				done(err)
+			}
+			return true
+		},
+		After: func() {
+			if done != nil {
+				done(nil)
+			}
+		},
+	})
+}
+
 // Worktrees loads the worktree list.
 func (w *Workspace) Worktrees(done func([]domain.Worktree, error)) {
 	rs := w.Repo

@@ -93,7 +93,12 @@ func (w *Window) paintGitWindow(r ui.Rect) {
 			w.loadReflog()
 		}
 	})
-	if w.action(idHideGit, ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, "Hide", actOpts{}) {
+	ay := r.Y + (headerH-actionSize)/2
+	more := rect(ax-actionSize*2-4, ay, actionSize, actionSize)
+	if w.action(idOptGit, more.X, more.Y, icons.MoreHorizontal, "Git Actions", actOpts{}) {
+		w.after(func() { w.openMenuBelow(rect(right(more)-200, ay, 200, actionSize), w.gitWindowMenu(), 220) })
+	}
+	if w.action(idHideGit, ax-actionSize, ay, icons.Hide, "Hide", actOpts{}) {
 		w.after(func() { w.gitOpen = false })
 	}
 	w.p.hline(content.X, content.Y, content.Width, w.pal.Border)

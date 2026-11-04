@@ -406,6 +406,28 @@ func (r *Runner) Clone(ctx context.Context, parent, url, dir string, progress fu
 	return err
 }
 
+// CreatePatch returns a patch for paths (every change when empty): the working
+// tree against the index, or the index against HEAD when staged. Paths are
+// relative to the repository root.
+//
+// The output is binary-safe and keeps the a/ and b/ prefixes and the exact
+// paths whatever diff.* the user configured, so another checkout can apply it.
+func (r *Runner) CreatePatch(ctx context.Context, repo domain.Repo, paths []string, staged bool) ([]byte, error) {
+	args := []string{
+		"diff", "--no-color", "--binary",
+		"--no-ext-diff", "--no-textconv", "--no-relative",
+		"--src-prefix=a/", "--dst-prefix=b/",
+	}
+	if staged {
+		args = append(args, "--cached")
+	}
+	if len(paths) > 0 {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
+	return r.Run(ctx, repo.Root, args...)
+}
+
 // ApplyPatch applies a patch to the index (cached) or the working tree,
 // optionally in reverse. It checks first so a stale patch never half-applies.
 func (r *Runner) ApplyPatch(ctx context.Context, repo domain.Repo, patch []byte, cached, reverse bool) error {
