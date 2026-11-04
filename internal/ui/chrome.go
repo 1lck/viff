@@ -133,6 +133,11 @@ func (w *Window) paintToolbar(r ui.Rect) {
 		w.after(func() { w.openMenuBelow(ar, w.settingsMenu(), 220) })
 	}
 	ax -= actionSize + 4
+	if w.action(idTbHelp, ax, ay, icons.Help, "Help", actOpts{}) {
+		ar := rect(ax-260+actionSize, ay, 260, actionSize)
+		w.after(func() { w.openMenuBelow(ar, w.helpMenu(), 260) })
+	}
+	ax -= actionSize + 4
 	if w.action(idTbSearch, ax, ay, icons.Search, "Search Commits\t⌘F", actOpts{}) {
 		w.after(w.focusLogSearch)
 	}
@@ -298,7 +303,21 @@ func (w *Window) paintStatus(r ui.Rect) {
 	x += tw + 4
 	w.p.iconIn(icons.ChevronRight, rect(x, r.Y, 16, r.Height))
 	x += 18
-	w.p.text(rs.HeadLabel(), rect(x, r.Y, 300, r.Height), fontUI, regular, w.pal.TextMuted)
+	tw = w.p.text(rs.HeadLabel(), rect(x, r.Y, 300, r.Height), fontUI, regular, w.pal.TextMuted)
+	x += tw
+
+	// Diagnostics recording is a quiet status marker, not a dialog: the user
+	// keeps working while it lasts. Clicking it stops the recording and saves
+	// the bundle, the same as Help > Stop Recording and Save Diagnostics.
+	if w.ws.ProblemRecording() {
+		label := "● Recording diagnostics…"
+		lw := w.p.width(label, fontUI, regular)
+		rr := rect(x+20, r.Y, lw+10, r.Height)
+		w.p.text(label, rr, fontUI, regular, w.pal.Warning)
+		w.c.HitWithOptions(idStatusRecording, rr, "Recording diagnostics", ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
+		w.tip(idStatusRecording, "Recording diagnostics — click to stop and save")
+		w.clicked(idStatusRecording, w.stopRecordingAndSave)
+	}
 
 	rx := right(r) - 12
 	// Branch widget with sync state.

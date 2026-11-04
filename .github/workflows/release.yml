@@ -67,13 +67,19 @@ jobs:
       - name: Build and package with licenses
         run: |
           mkdir -p build dist
+          # The release tag is the identity users report; stamp it into the binary.
+          VERSION="$GITHUB_REF_NAME"
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          LD="-X viff/internal/version.Version=$VERSION -X viff/internal/version.Commit=$COMMIT -X viff/internal/version.BuildDate=$BUILD_DATE"
           if [ "$RUNNER_OS" = Windows ]; then
-            go build -trimpath -ldflags="-s -w -H=windowsgui" -o build/viff.exe ./cmd/viff
+            go build -trimpath -ldflags="-s -w -H=windowsgui $LD" -o build/viff.exe ./cmd/viff
           elif [ "$RUNNER_OS" = macOS ]; then
-            CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
+            CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
           else
-            go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
+            go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
           fi
+          if [ "$RUNNER_OS" != "Windows" ]; then ./build/viff --version; fi
           python scripts/package.py "$GITHUB_REF_NAME" --smoke
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

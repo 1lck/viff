@@ -74,6 +74,9 @@ type Window struct {
 	favPtr                map[string]*bool
 	pendingRebase         string
 	pendingRepositoryFile *repositoryOpenTarget
+	// diagDesc is the description the user typed when a problem recording was
+	// started; the diagnostics issue template repeats it.
+	diagDesc string
 
 	lastGen      uint64
 	lastRoot     string
@@ -205,6 +208,23 @@ func (w *Window) Start(dir string) {
 	if w.ws.Settings.Warning != "" {
 		w.ws.Notify(vapp.NoticeWarning, "Settings", w.ws.Settings.Warning)
 	}
+}
+
+// ShowCrashNotice tells the user the previous run ended unexpectedly and
+// offers the problem-reporting entry points. crashPath is the crash file found
+// at startup (it may be empty); main calls this after Start when the
+// observability crash detector reports a previous crash.
+func (w *Window) ShowCrashNotice(crashPath string) {
+	body := "The previous session ended unexpectedly."
+	if crashPath != "" {
+		body += " A crash report was saved to:\n" + crashPath
+	} else {
+		body += " A crash report is in the log folder."
+	}
+	body += "\n\nReporting the problem helps fix it."
+	w.ws.Notify(vapp.NoticeWarning, "Viff closed unexpectedly last time", body,
+		vapp.NoticeAction{Title: "Report a Problem…", Run: w.openReportProblem},
+		vapp.NoticeAction{Title: "Open Log Folder", Run: w.openLogFolder})
 }
 
 func (w *Window) onClosed() {

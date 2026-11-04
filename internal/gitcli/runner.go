@@ -97,6 +97,93 @@ func KindOf(err error) ErrorKind {
 	return ErrOther
 }
 
+// String is the stable name of the kind written to logs next to the code. It
+// is a log format: rename one only together with the log format.
+func (k ErrorKind) String() string {
+	switch k {
+	case ErrCancelled:
+		return "cancelled"
+	case ErrAuth:
+		return "auth"
+	case ErrLocked:
+		return "locked"
+	case ErrNotRepository:
+		return "not_repository"
+	case ErrConflict:
+		return "conflict"
+	case ErrNotFound:
+		return "not_found"
+	case ErrRejected:
+		return "rejected"
+	case ErrUntrackedOverwrite:
+		return "untracked_overwrite"
+	case ErrLocalChangesOverwrite:
+		return "local_changes"
+	case ErrNotMerged:
+		return "not_merged"
+	case ErrNothingToCommit:
+		return "nothing_to_commit"
+	case ErrHookFailed:
+		return "hook_failed"
+	case ErrNoGit:
+		return "no_git"
+	}
+	return "other"
+}
+
+// Code is the stable, user-facing error code for the kind. It is what the UI,
+// the log and the diagnostics bundle show, so users can paste one token into
+// an issue and be understood. It never changes without a migration plan.
+func (k ErrorKind) Code() string {
+	switch k {
+	case ErrAuth:
+		return "auth.failed"
+	case ErrLocked:
+		return "repo.locked"
+	case ErrNotRepository:
+		return "repo.not_a_repository"
+	case ErrConflict:
+		return "git.conflict"
+	case ErrNotFound:
+		return "git.not_found"
+	case ErrRejected:
+		return "push.rejected"
+	case ErrUntrackedOverwrite:
+		return "worktree.untracked_overwrite"
+	case ErrLocalChangesOverwrite:
+		return "worktree.local_changes"
+	case ErrNotMerged:
+		return "branch.not_merged"
+	case ErrNothingToCommit:
+		return "commit.empty"
+	case ErrHookFailed:
+		return "hook.failed"
+	case ErrNoGit:
+		return "git.missing"
+	case ErrCancelled:
+		return "git.cancelled"
+	}
+	return "git.failed"
+}
+
+// Code returns the error code of e, "git.failed" for a nil error.
+func (e *Error) Code() string {
+	if e == nil {
+		return "git.failed"
+	}
+	return e.Kind.Code()
+}
+
+// CodeOf returns the stable error code for err: the code of its kind, with
+// "git.failed" for errors Viff did not classify and "" for nil. Callers pass
+// the result to the UI and to log events; a failure event always has a code.
+func CodeOf(err error) string {
+	if err == nil {
+		return ""
+	}
+	return KindOf(err).Code()
+}
+
 func classify(stderr string, exit int, ctxErr error) ErrorKind {
 	if ctxErr != nil {
 		return ErrCancelled

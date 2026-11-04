@@ -11,6 +11,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/observability"
 )
 
 // RepoState is everything known about the open repository. Each field is
@@ -90,19 +91,31 @@ func (w *Workspace) Open(dir string, done func(error)) {
 	}
 	w.repos.activateSeq++
 	seq := w.repos.activateSeq
+	start := time.Now()
 	_, ctx, finish := w.startTask("Opening "+filepath.Base(dir), false)
 	go func() {
 		repo, err := w.Git.Discover(ctx, dir)
+		took := time.Since(start)
 		w.post(func() {
 			finish()
 			if seq != w.repos.activateSeq {
 				// A newer open, switch or close replaced this request.
+				w.record(observability.Event{
+					Event: observability.EventRepoOpen, Level: observability.LevelWarn,
+					Repo: dir, Op: "open", Dur: took,
+					Fields: map[string]any{"status": "stale"},
+				})
 				if done != nil {
 					done(ErrRepositoryStale)
 				}
 				return
 			}
 			if err != nil {
+				w.record(observability.Event{
+					Event: observability.EventRepoOpen, Level: observability.LevelError,
+					Repo: dir, Op: "open", Code: gitcli.CodeOf(err), Dur: took,
+					Fields: map[string]any{"status": "failed"},
+				})
 				if done != nil {
 					done(err)
 				}
@@ -112,12 +125,22 @@ func (w *Workspace) Open(dir string, done func(error)) {
 			// repository is a switch from the existing one, so refuse it the
 			// same way ActivateRepository does.
 			if w.Busy() {
+				w.record(observability.Event{
+					Event: observability.EventRepoOpen, Level: observability.LevelWarn,
+					Repo: dir, Op: "open", Dur: took,
+					Fields: map[string]any{"status": "busy"},
+				})
 				if done != nil {
 					done(ErrRepositoryBusy)
 				}
 				return
 			}
 			w.setRepo(repo)
+			w.record(observability.Event{
+				Event: observability.EventRepoOpen, Level: observability.LevelInfo,
+				Repo: repo.Root, Op: "open", Dur: took,
+				Fields: map[string]any{"status": "ok", "worktree": repo.IsLinkedWorktree()},
+			})
 			if done != nil {
 				done(nil)
 			}
@@ -129,13 +152,12 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 	// The repository becomes part of the explicit workspace list and the
 	// active one; this also persists the list before any command runs.
 	root := w.noteActiveRepository(repo)
+	oldRoot := ""
 	if w.Repo != nil {
+		oldRoot = w.Repo.Repo.Root
 		w.Repo.Log.close()
 	}
-	if w.watcher != nil {
-		w.watcher.Close()
-		w.watcher = nil
-	}
+	w.closeWatcher(oldRoot)
 	w.nextGen++
 	w.Repo = &RepoState{Repo: repo, Gen: w.nextGen, rootKey: root}
 	if w.Settings != nil {
@@ -144,19 +166,53 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 	}
 	w.Refresh(true)
 	w.ReloadLog()
-	if w.Watch != nil {
-		state := w.Repo
-		watcher, err := w.Watch(repo, func(meta bool) {
-			w.post(func() {
-				if w.Repo == state {
-					w.Refresh(meta)
-				}
-			})
-		})
-		if err == nil {
-			w.watcher = watcher
-		}
+	w.startWatcher(repo)
+}
+
+// startWatcher starts the file-system watch of repo. The backend is chosen by
+// the Watch function the composition root installs, so the event leaves
+// backend empty rather than guessing between native and polling.
+func (w *Workspace) startWatcher(repo domain.Repo) {
+	if w.Watch == nil {
+		return
 	}
+	state := w.Repo
+	watcher, err := w.Watch(repo, func(meta bool) {
+		w.post(func() {
+			if w.Repo == state {
+				w.Refresh(meta)
+			}
+		})
+	})
+	if err != nil {
+		w.record(observability.Event{
+			Event: observability.EventRepoWatch, Level: observability.LevelWarn,
+			Repo: repo.Root, Op: "watch",
+			Fields: map[string]any{"status": "error", "backend": "", "error": truncateBytes(err.Error(), 512)},
+		})
+		return
+	}
+	w.watcher = watcher
+	w.record(observability.Event{
+		Event: observability.EventRepoWatch, Level: observability.LevelInfo,
+		Repo: repo.Root, Op: "watch",
+		Fields: map[string]any{"status": "started", "backend": ""},
+	})
+}
+
+// closeWatcher stops the current watcher, if any, and records it. root is the
+// repository the watcher watched, "" when unknown.
+func (w *Workspace) closeWatcher(root string) {
+	if w.watcher == nil {
+		return
+	}
+	w.watcher.Close()
+	w.watcher = nil
+	w.record(observability.Event{
+		Event: observability.EventRepoWatch, Level: observability.LevelInfo,
+		Repo: root, Op: "watch",
+		Fields: map[string]any{"status": "stopped", "backend": ""},
+	})
 }
 
 // Close closes the repository and returns to the welcome screen. It releases
@@ -168,14 +224,42 @@ func (w *Workspace) Close() {
 	// Invalidate opens and switches that are still discovering: a repository
 	// that is being opened must not reopen the window after it was closed.
 	w.repos.activateSeq++
+	root := ""
 	if w.Repo != nil {
+		root = w.Repo.Repo.Root
+		w.record(observability.Event{
+			Event: observability.EventRepoClose, Level: observability.LevelInfo,
+			Repo: root, Op: "close",
+			Fields: map[string]any{
+				"op_state":      operationStateName(w.Repo.Operation),
+				"tasks_running": len(w.Tasks),
+				"watcher":       w.watcher != nil,
+			},
+		})
 		w.Repo.Log.close()
 	}
-	if w.watcher != nil {
-		w.watcher.Close()
-		w.watcher = nil
-	}
+	w.closeWatcher(root)
 	w.Repo = nil
+}
+
+// operationStateName is the stable name of the in-progress operation used in
+// event fields, "none" when the working tree is not in the middle of one.
+func operationStateName(op domain.Operation) string {
+	switch op.Kind {
+	case domain.OpMerge:
+		return "merge"
+	case domain.OpRebase:
+		return "rebase"
+	case domain.OpCherryPick:
+		return "cherry-pick"
+	case domain.OpRevert:
+		return "revert"
+	case domain.OpApplyMailbox:
+		return "apply-mailbox"
+	case domain.OpBisect:
+		return "bisect"
+	}
+	return "none"
 }
 
 // Refresh queries status and operation state again, and refs when meta is
@@ -194,6 +278,7 @@ func (w *Workspace) Refresh(meta bool) {
 		return
 	}
 	rs.refreshing = true
+	start := time.Now()
 	rs.statusSeq++
 	seq := rs.statusSeq
 	repo := rs.Repo
@@ -222,6 +307,7 @@ func (w *Workspace) Refresh(meta bool) {
 				return
 			}
 			rs.refreshing = false
+			staged, unstaged, untracked, conflicted := 0, 0, 0, 0
 			if err != nil {
 				w.markRepositoryError(rs.rootKey, err)
 				if gitcli.KindOf(err) == gitcli.ErrNotRepository {
@@ -242,6 +328,7 @@ func (w *Workspace) Refresh(meta bool) {
 				rs.StatusTime = w.Now()
 				rs.Operation = op
 				rs.Conflicts = conflicts
+				staged, unstaged, untracked, conflicted = st.Counts()
 				// Git reports a rename as one entry whose old path is gone;
 				// keep change-list membership attached to the new path. A
 				// failure is reported once per failure streak, not on every
@@ -270,6 +357,21 @@ func (w *Workspace) Refresh(meta bool) {
 			// Keep the workspace overview row of the active repository in
 			// step with the view; a failure keeps the known status.
 			w.syncActiveSummary(err)
+			if err == nil {
+				w.record(observability.Event{
+					Event: observability.EventRepoRefresh, Level: observability.LevelInfo,
+					Repo: repo.Root, Op: "refresh", Dur: time.Since(start),
+					Fields: map[string]any{
+						"gen":        rs.Gen,
+						"meta":       meta,
+						"staged":     staged,
+						"unstaged":   unstaged,
+						"untracked":  untracked,
+						"conflicted": conflicted,
+						"op_state":   operationStateName(op),
+					},
+				})
+			}
 			if rs.refreshMore {
 				rs.refreshMore = false
 				w.Refresh(true)

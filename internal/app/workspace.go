@@ -17,9 +17,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/observability"
 )
 
 // Git is the subset of the Git adapter the use cases need. It is satisfied by
@@ -69,7 +71,10 @@ type Task struct {
 	Progress string
 	Started  time.Time
 	cancel   context.CancelFunc
-	Write    bool
+	// cancelled reports that the user cancelled the task, so its end event can
+	// distinguish a cancel from a normal finish.
+	cancelled bool
+	Write     bool
 }
 
 // Workspace is the application state for one window.
@@ -107,6 +112,16 @@ type Workspace struct {
 	Console       []ConsoleEntry
 	Tasks         []*Task
 
+	// obs records structured events. It is observability.Nop{} until the
+	// composition root installs a logger, so call sites never check for nil
+	// and a workspace without logging behaves exactly like before.
+	obs observability.Recorder
+	// inc starts and stops diagnostic recordings; Nop when logging is off.
+	inc observability.IncidentController
+	// logLevel is the configured level name ("info" or "debug"). It is kept
+	// so a recorder installed later still receives the configured level.
+	logLevel string
+
 	// repos is the private state behind Repositories; see repositories.go.
 	repos repositoriesState
 	// nextGen is the repository generation counter. It only ever grows: a
@@ -136,12 +151,29 @@ type Watcher interface{ Close() }
 
 // NewWorkspace creates the state. invalidate is called from any goroutine
 // when results are waiting; the UI then calls Drain on its thread.
+//
+// Logging is off until SetRecorder installs a recorder: the default Nop
+// recorder keeps every existing test and a build without a config directory
+// working unchanged.
 func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
-	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now}
+	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now, obs: observability.Nop{}, inc: observability.Nop{}}
+	w.SetLogLevel("")
+	if settings != nil {
+		w.SetLogLevel(settings.LogLevel)
+	}
 	git.Log = w.logCommand
 	w.loadRepositories()
 	w.ApplyGitSettings()
 	return w
+}
+
+// now is the workspace clock, falling back to the real time when a Workspace
+// was built as a literal without NewWorkspace (tests).
+func (w *Workspace) now() time.Time {
+	if w.Now != nil {
+		return w.Now()
+	}
+	return time.Now()
 }
 
 // post queues fn to run on the UI thread.
@@ -180,25 +212,155 @@ func (w *Workspace) id() uint64 {
 
 const consoleLimit = 400
 
+// consoleOutputLimit bounds one Console entry's output. The Console tab renders
+// an entry as one row, so an unbounded stderr would cost memory and painting
+// time for no diagnostic value; 8 KiB is far more than any Git message.
+const consoleOutputLimit = 8 << 10
+
+// failStderrLimit bounds the stderr summary attached to a git.fail event. The
+// logger redacts the value on its way to disk, so the application passes the
+// raw Git output (see the observability contract).
+const failStderrLimit = 2 << 10
+
+// slowRead is the duration after which a successful read command is recorded
+// as a git.end event even though reads are otherwise not worth a log line:
+// slow reads are what "Viff feels slow" reports are made of.
+const slowRead = 500 * time.Millisecond
+
+// quietReads are the commands whose successful result is console noise: they
+// run on every refresh. A failing read is always shown. The list mirrors the
+// old inline switch and adds the read commands it missed, so long-running
+// reads cannot push failure context out of the Console tab.
+var quietReads = map[string]bool{
+	"status": true, "log": true, "for-each-ref": true, "cat-file": true,
+	"show": true, "diff-tree": true, "rev-parse": true, "ls-files": true,
+	"reflog": true, "remote": true, "config": true, "worktree": true,
+	"merge-base": true, "diff": true, "diff-files": true, "rev-list": true,
+	"ls-tree": true, "blame": true, "ls-remote": true, "show-ref": true,
+	"symbolic-ref": true, "describe": true, "grep": true, "check-ignore": true,
+	"check-ref-format": true, "name-rev": true, "stash": true,
+	// --version is not a subcommand, but the startup probe goes through
+	// Runner.Log and must not appear as Console noise before any repository
+	// is open.
+	"--version": true,
+}
+
+// writeCommands are the Git subcommands that change the repository, the index
+// or the working tree. Ambiguous families (branch, tag, stash, remote, config,
+// worktree, submodule) are decided per invocation in commandWrites.
+var writeCommands = map[string]bool{
+	"add": true, "am": true, "apply": true, "checkout": true,
+	"cherry-pick": true, "clean": true, "clone": true, "commit": true,
+	"fetch": true, "filter-branch": true, "gc": true, "init": true,
+	"merge": true, "mv": true, "pull": true, "push": true, "rebase": true,
+	"replace": true, "reset": true, "restore": true, "revert": true, "rm": true,
+	"switch": true, "update-index": true, "update-ref": true,
+}
+
+// commandWrites reports whether args runs a command that changes repository
+// state. It is a heuristic used only to label events and Console entries; a
+// wrong answer costs a log field, never correctness.
+func commandWrites(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "stash":
+		if len(args) < 2 {
+			return false
+		}
+		switch args[1] {
+		case "apply", "pop", "drop", "push", "save", "clear", "branch", "create", "store":
+			return true
+		}
+		return false
+	case "branch":
+		// `git branch` lists; creating, renaming, deleting and setting the
+		// upstream take arguments.
+		return len(args) > 1 && !hasFlagPrefix(args[1:], "--list", "-l", "--show-current", "--merged", "--no-merged", "--contains")
+	case "tag":
+		return len(args) > 1 && !hasFlagPrefix(args[1:], "-l", "--list", "-n", "--contains", "--merged", "--no-merged")
+	case "worktree":
+		return len(args) < 2 || args[1] != "list"
+	case "remote":
+		if len(args) < 2 {
+			return false
+		}
+		switch args[1] {
+		case "add", "remove", "rm", "rename", "set-url", "set-head", "set-branches", "prune", "update":
+			return true
+		}
+		return false
+	case "config":
+		for _, a := range args[1:] {
+			switch a {
+			case "--get", "--get-all", "--get-regexp", "--list", "-l", "--show-origin", "--show-scope":
+				return false
+			}
+		}
+		return len(args) > 1
+	case "submodule":
+		return len(args) < 2 || args[1] != "status"
+	}
+	return writeCommands[args[0]]
+}
+
+// hasFlagPrefix reports whether args starts with one of flags.
+func hasFlagPrefix(args []string, flags ...string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	for _, f := range flags {
+		if args[0] == f || strings.HasPrefix(args[0], f+"=") {
+			return true
+		}
+	}
+	return false
+}
+
 // logCommand records commands in the console. It runs on worker goroutines.
+//
+// It has two independent jobs: keeping the Console tab readable (silent
+// successful reads, failures always shown) and reporting the same command to
+// the structured event log (every failure, every successful write, every slow
+// read). The default Nop recorder makes the event half a no-op.
 func (w *Workspace) logCommand(dir string, args []string, took time.Duration, err error) {
 	if len(args) == 0 {
 		return
 	}
-	switch args[0] {
-	case "status", "log", "for-each-ref", "cat-file", "show", "diff-tree", "rev-parse", "ls-files", "stash", "reflog", "remote", "config", "worktree", "merge-base", "diff":
-		if err == nil && (len(args) < 2 || args[0] != "stash" || args[1] == "list") {
-			return // reads are not console noise unless they fail
-		}
+	op := args[0]
+	write := commandWrites(args)
+	if err != nil {
+		w.record(observability.Event{
+			Event:  observability.EventGitFail,
+			Level:  observability.LevelError,
+			Repo:   dir,
+			Op:     op,
+			Code:   gitcli.CodeOf(err),
+			Dur:    took,
+			Fields: gitFailFields(err, write),
+		})
+	} else if write || took > slowRead {
+		w.record(observability.Event{
+			Event:  observability.EventGitEnd,
+			Level:  observability.LevelInfo,
+			Repo:   dir,
+			Op:     op,
+			Dur:    took,
+			Fields: map[string]any{"write": write, "exit": 0},
+		})
 	}
-	entry := ConsoleEntry{Time: time.Now(), Command: "git " + strings.Join(quoteArgs(args), " "), Took: took}
+	if err == nil && quietRead(args) {
+		return // reads are not console noise unless they fail
+	}
+	entry := ConsoleEntry{Time: w.now(), Command: "git " + strings.Join(quoteArgs(args), " "), Took: took}
 	if err != nil {
 		entry.Failed = true
 		var ge *gitcli.Error
 		if errors.As(err, &ge) {
-			entry.Output = strings.TrimSpace(ge.Stderr + "\n" + ge.Stdout)
+			entry.Output = truncateBytes(strings.TrimSpace(ge.Stderr+"\n"+ge.Stdout), consoleOutputLimit)
 		} else {
-			entry.Output = err.Error()
+			entry.Output = truncateBytes(err.Error(), consoleOutputLimit)
 		}
 	}
 	w.post(func() {
@@ -207,6 +369,65 @@ func (w *Workspace) logCommand(dir string, args []string, took time.Duration, er
 			w.Console = append([]ConsoleEntry(nil), w.Console[len(w.Console)-consoleLimit:]...)
 		}
 	})
+}
+
+// quietRead reports whether a successful invocation of args is Console noise.
+func quietRead(args []string) bool {
+	if len(args) == 0 || !quietReads[args[0]] {
+		return false
+	}
+	// `git stash list` is a read; the other stash subcommands change state and
+	// stay visible exactly as before.
+	return args[0] != "stash" || len(args) < 2 || args[1] == "list"
+}
+
+// gitFailFields is the small, log-safe payload of a git.fail event. The raw
+// stderr is capped here; the logger redacts it before it reaches a file.
+func gitFailFields(err error, write bool) map[string]any {
+	fields := map[string]any{
+		"exit":  -1,
+		"kind":  gitcli.KindOf(err).String(),
+		"code":  gitcli.CodeOf(err),
+		"write": write,
+	}
+	var ge *gitcli.Error
+	if errors.As(err, &ge) {
+		if ge.ExitCode != 0 {
+			fields["exit"] = ge.ExitCode
+		}
+		stderr := strings.TrimSpace(ge.Stderr)
+		if stderr == "" {
+			stderr = strings.TrimSpace(ge.Stdout)
+		}
+		if stderr == "" {
+			stderr = ge.Message()
+		}
+		if stderr != "" {
+			fields["stderr"] = truncateBytes(stderr, failStderrLimit)
+		}
+		return fields
+	}
+	if msg := strings.TrimSpace(err.Error()); msg != "" {
+		fields["stderr"] = truncateBytes(msg, failStderrLimit)
+	}
+	return fields
+}
+
+// truncateBytes shortens s to at most limit bytes, keeping the text valid
+// UTF-8 and marking the cut with an ellipsis.
+func truncateBytes(s string, limit int) string {
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+	cut := limit
+	if cut > len("…") {
+		cut -= len("…")
+	}
+	s = s[:cut]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s + "…"
 }
 
 func quoteArgs(args []string) []string {
@@ -223,11 +444,52 @@ func quoteArgs(args []string) []string {
 
 // Notify adds a notification.
 func (w *Workspace) Notify(kind NoticeKind, title, body string, actions ...NoticeAction) {
-	n := Notification{ID: w.id(), Kind: kind, Title: title, Body: body, Time: w.Now(), Actions: actions}
+	w.notify(kind, title, body, "", actions...)
+}
+
+// notify is Notify with the stable error code, "" when there is none, so the
+// event log can group notifications by cause.
+func (w *Workspace) notify(kind NoticeKind, title, body, code string, actions ...NoticeAction) {
+	n := Notification{ID: w.id(), Kind: kind, Title: title, Body: body, Time: w.now(), Actions: actions}
 	w.Notifications = append(w.Notifications, n)
 	if len(w.Notifications) > 50 {
 		w.Notifications = w.Notifications[len(w.Notifications)-50:]
 	}
+	fields := map[string]any{"level": noticeLevelName(kind), "title": title}
+	if code != "" {
+		fields["code"] = code
+	}
+	w.record(observability.Event{
+		Event:  observability.EventUINotice,
+		Level:  noticeEventLevel(kind),
+		Repo:   w.repoRoot(),
+		Op:     "notify",
+		Code:   code,
+		Fields: fields,
+	})
+}
+
+// noticeLevelName is the stable name of a notice kind in event fields.
+func noticeLevelName(kind NoticeKind) string {
+	switch kind {
+	case NoticeSuccess:
+		return "success"
+	case NoticeWarning:
+		return "warning"
+	case NoticeError:
+		return "error"
+	}
+	return "info"
+}
+
+// noticeEventLevel maps a notice to the event level: only errors and warnings
+// are worth keeping at info level, everything else is context.
+func noticeEventLevel(kind NoticeKind) observability.Level {
+	switch kind {
+	case NoticeWarning, NoticeError:
+		return observability.LevelWarn
+	}
+	return observability.LevelInfo
 }
 
 // Dismiss removes a notification.
@@ -255,16 +517,17 @@ func (w *Workspace) warnChangeListSync(err error) {
 	w.Notify(NoticeWarning, "Change lists", err.Error())
 }
 
-// NotifyError shows a Git failure with its message.
+// NotifyError shows a Git failure with its message. The notification carries
+// the stable error code in the event log, so a user can quote it in a report.
 func (w *Workspace) NotifyError(title string, err error) {
 	if err == nil {
 		return
 	}
 	if gitcli.KindOf(err) == gitcli.ErrCancelled {
-		w.Notify(NoticeInfo, title, "Cancelled")
+		w.notify(NoticeInfo, title, "Cancelled", gitcli.CodeOf(err))
 		return
 	}
-	w.Notify(NoticeError, title, ErrorText(err))
+	w.notify(NoticeError, title, ErrorText(err), gitcli.CodeOf(err))
 }
 
 // ErrorText is the message of an error suitable for the UI, with a hint for
@@ -291,11 +554,21 @@ func ErrorText(err error) string {
 	return msg
 }
 
-// startTask registers a task; the returned done function removes it.
+// startTask registers a task; the returned done function removes it. Both the
+// start and the end are recorded as events: a task that never ends is exactly
+// what a "frozen while pushing" report looks like.
 func (w *Workspace) startTask(title string, write bool) (*Task, context.Context, func()) {
 	ctx, cancel := context.WithCancel(context.Background())
-	t := &Task{ID: w.id(), Title: title, Started: w.Now(), cancel: cancel, Write: write}
+	t := &Task{ID: w.id(), Title: title, Started: w.now(), cancel: cancel, Write: write}
 	w.Tasks = append(w.Tasks, t)
+	key := taskTitleKey(title)
+	w.record(observability.Event{
+		Event:  observability.EventTaskStart,
+		Level:  observability.LevelInfo,
+		Repo:   w.repoRoot(),
+		Op:     key,
+		Fields: map[string]any{"task": t.ID, "title_key": key, "write": write},
+	})
 	return t, ctx, func() {
 		cancel()
 		for i, x := range w.Tasks {
@@ -304,7 +577,30 @@ func (w *Workspace) startTask(title string, write bool) (*Task, context.Context,
 				break
 			}
 		}
+		status := "done"
+		if t.cancelled {
+			status = "cancelled"
+		}
+		w.record(observability.Event{
+			Event:  observability.EventTaskEnd,
+			Level:  observability.LevelInfo,
+			Repo:   w.repoRoot(),
+			Op:     key,
+			Dur:    w.now().Sub(t.Started),
+			Fields: map[string]any{"task": t.ID, "status": status},
+		})
 	}
+}
+
+// taskTitleKey is the coarse action name of a task title for event fields. The
+// full title may contain repository or branch names, so only the first word
+// ("push", "commit", "opening") is recorded.
+func taskTitleKey(title string) string {
+	fields := strings.Fields(title)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSuffix(fields[0], ":"))
 }
 
 // CancelTask cancels a running task. Cancelling a write stops the process;
@@ -312,6 +608,16 @@ func (w *Workspace) startTask(title string, write bool) (*Task, context.Context,
 func (w *Workspace) CancelTask(id uint64) {
 	for _, t := range w.Tasks {
 		if t.ID == id && t.cancel != nil {
+			if !t.cancelled {
+				t.cancelled = true
+				w.record(observability.Event{
+					Event:  observability.EventTaskCancel,
+					Level:  observability.LevelInfo,
+					Repo:   w.repoRoot(),
+					Op:     taskTitleKey(t.Title),
+					Fields: map[string]any{"task": t.ID, "elapsed_ms": w.now().Sub(t.Started).Milliseconds()},
+				})
+			}
 			t.cancel()
 		}
 	}
