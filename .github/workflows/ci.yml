@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2022]
+        os: [macos-15, windows-2022, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     defaults:
@@ -62,6 +62,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Install Linux runtime and packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan1 mesa-vulkan-drivers libxcb1 libcairo2 libfontconfig1 libfreetype6 libharfbuzz0b libpango-1.0-0 libpangocairo-1.0-0 fonts-dejavu-core
+      - name: Install Windows installer compiler
+        if: runner.os == 'Windows'
+        run: |
+          if [ ! -f '/c/Program Files (x86)/NSIS/makensis.exe' ]; then
+            choco install nsis --yes --no-progress
+          fi
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
       - name: Record environment
         run: |
           mkdir -p .viff-test/ci/logs
@@ -80,10 +92,14 @@ jobs:
         run: |
           mkdir -p build
           if [ "$RUNNER_OS" = "Windows" ]; then
-            go build -trimpath -ldflags="-s -w" -o build/viff.exe ./cmd/viff
+            go build -trimpath -ldflags="-s -w -H=windowsgui" -o build/viff.exe ./cmd/viff
+          elif [ "$RUNNER_OS" = macOS ]; then
+            CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
           else
             go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
           fi
+      - name: Package and check installation without opening windows
+        run: python scripts/package.py v0.1.0-ci --smoke
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

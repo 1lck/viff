@@ -62,6 +62,26 @@ current logs and screenshots as artifacts for 14 days.
 测试假设的修复。之后完整复跑相关包，再将两个 UI 点击同步用例各验证五轮。重复运行不增加
 测试总数。仓库只保留精选演示截图；CI 将当次日志和截图保存为附件，保留 14 天。
 
+## Cross-platform CI and packaging / 跨平台 CI 与安装包
+
+CI runs the Git and Viva headless UI suites on macOS, Windows Server 2022, and
+Ubuntu. It also checks native packages: macOS DMG application bundles, Windows
+NSIS installers, and Linux DEB and portable archives. These checks do not launch
+application windows. Review the workflow results for the exact commit before
+claiming a release has passed.
+
+CI 在 macOS、Windows Server 2022 和 Ubuntu 运行 Git 与 Viva 无头 UI 测试，
+并检查 macOS DMG 应用包、Windows NSIS 安装器、Linux DEB 和便携包。
+这些检查不打开应用窗口。声明某个版本通过验收前，须检查对应提交的工作流结果。
+
+Ubuntu headless results verify application behavior in the CI renderer. They do
+not establish compatibility with every Linux distribution, display server,
+graphics driver, input method, or desktop environment. Package validation and
+interactive desktop acceptance are separate checks.
+
+Ubuntu 无头结果验证的是 CI 渲染环境下的应用行为，不代表覆盖所有 Linux 发行版、
+显示服务器、显卡驱动、输入法或桌面环境。安装包验证与交互式桌面验收分别记录。
+
 ## What remains unverified / 尚未验证
 
 - Windows 10/11 desktop input, IME, and native window interaction / Windows 10/11 桌面输入、输入法及原生窗口交互。

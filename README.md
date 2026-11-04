@@ -81,7 +81,7 @@ go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
 On Windows, run these commands in PowerShell after cloning:
 
 ```powershell
-go build -trimpath -ldflags="-s -w" -o build/viff.exe ./cmd/viff
+go build -trimpath -ldflags="-s -w -H=windowsgui" -o build/viff.exe ./cmd/viff
 .\build\viff.exe C:\path\to\repository
 ```
 
@@ -90,20 +90,34 @@ You can also open, clone, or initialize a repository there.
 
 ### Download a release
 
-[GitHub Releases](https://github.com/1lck/viff/releases) provides available builds,
-release notes, and SHA-256 checksums. Early releases are **pre-release,
-unsigned executables**, not signed installers. Git must be installed separately.
-Choose the archive matching your OS and CPU architecture.
+Download your platform's package from [GitHub Releases](https://github.com/1lck/viff/releases).
+Starting with **v0.1.0-alpha.2**, releases include native installation formats:
+
+| Platform  | Architecture          | Package      | Install                                                           |
+| --------- | --------------------- | ------------ | ----------------------------------------------------------------- |
+| macOS 12+ | Apple Silicon (arm64) | `.dmg`       | Open the disk image and drag **Viff** to **Applications**.        |
+| Windows   | x64 (amd64)           | `-setup.exe` | Run the per-user installer.                                       |
+| Linux     | x64 (amd64)           | `.deb`       | On Debian/Ubuntu, run `sudo apt install ./viff-*.deb`.            |
+| Linux     | x64 (amd64)           | `.tar.gz`    | Extract the portable archive and run `./viff` from its directory. |
+
+Git must be installed separately and available on `PATH`. Linux also needs the
+system rendering libraries listed in the [release guide](docs/releases.md).
+Each release includes `SHA256SUMS` for download verification; the original
+`alpha.1` release only contains portable ZIPs.
+
+These are **pre-release builds**. The macOS app uses an ad-hoc signature, without
+Developer ID signing or notarization. Windows installers are not Authenticode
+signed. Operating systems may show security warnings.
 
 ## Platform status
 
-| Platform | Verification                                                               |
-| -------- | -------------------------------------------------------------------------- |
-| macOS    | Native development and Git / headless UI tests                             |
-| Windows  | Real Git and Viva headless UI tests on Windows Server 2022 x64; Windows CI |
-| Linux    | Not yet validated as a desktop application                                 |
+| Platform | Verification                                                                    |
+| -------- | ------------------------------------------------------------------------------- |
+| macOS    | Native development and Git / headless UI tests                                  |
+| Windows  | Real Git and Viva headless UI tests on Windows Server 2022 x64; Windows CI      |
+| Linux    | Ubuntu Git and Viva headless UI CI; interactive desktop acceptance remains open |
 
-Windows 10/11 desktop interaction, IME input, installers, and signing still need
+Windows 10/11 desktop interaction, IME input, and signing still need
 dedicated acceptance testing. Some shortcut labels still use macOS symbols.
 Windows and Linux file watching uses polling.
 
@@ -128,7 +142,8 @@ VIFF_SHOTS="$PWD/.viff-test/shots" VIFF_SHOTS_BY_TEST=1 \
 ```
 
 Tests create disposable repositories and use isolated Git configuration. CI runs
-on macOS and Windows and retains test evidence as workflow artifacts.
+on macOS, Windows, and Linux and retains test evidence as workflow artifacts.
+Native packaging is checked without opening application windows.
 
 - [Contributing / 参与贡献](CONTRIBUTING.md)
 - [Security policy / 安全问题](SECURITY.md)
