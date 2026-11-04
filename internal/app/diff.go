@@ -148,8 +148,13 @@ func revisions(src DiffSource) (oldRev, newRev gitcli.Revision, oldTitle, newTit
 		}
 		return gitcli.RevIndex, gitcli.RevWorktree, "Staged", "Your version"
 	}
-	newRev = gitcli.RevCommit(src.Commit)
-	newTitle = domain.ShortHash(src.Commit)
+	if src.Commit == "" {
+		// A revision compared with the working tree.
+		newRev, newTitle = gitcli.RevWorktree, "Your version"
+	} else {
+		newRev = gitcli.RevCommit(src.Commit)
+		newTitle = domain.ShortHash(src.Commit)
+	}
 	if src.Parent != "" {
 		oldRev = gitcli.RevCommit(src.Parent)
 		oldTitle = domain.ShortHash(src.Parent)

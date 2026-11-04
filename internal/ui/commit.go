@@ -1,0 +1,988 @@
+package viffui
+
+import (
+	"path"
+	"sort"
+	"strings"
+
+	"github.com/vivaui/viva/app"
+	"github.com/vivaui/viva/components"
+	"github.com/vivaui/viva/text"
+	"github.com/vivaui/viva/ui"
+
+	vapp "viff/internal/app"
+	"viff/internal/domain"
+	"viff/internal/ui/icons"
+)
+
+// commitView is the Commit tool window's view state.
+type commitView struct {
+	msg       *text.Editor
+	layout    components.TextareaLayout
+	amend     bool
+	saved     string // the message typed before Amend loaded HEAD's
+	loaded    string // HEAD's message as loaded for Amend
+	signOff   bool
+	noVerify  bool
+	collapsed map[string]bool
+	sel       map[string]bool
+	anchor    string
+	cursor    string
+	scroll    scroller
+	rows      []changeRow
+	msgH      float32
+}
+
+// changeRow is one row of the staging tree.
+type changeRow struct {
+	key    string
+	area   domain.Area
+	kind   int // rowGroup, rowDir, rowFile
+	dir    string
+	entry  domain.StatusEntry
+	count  int
+	depth  int
+}
+
+const (
+	rowGroup = iota
+	rowDir
+	rowFile
+)
+
+var areaOrder = []domain.Area{domain.AreaConflicts, domain.AreaStaged, domain.AreaUnstaged, domain.AreaUntracked}
+
+func areaTitle(a domain.Area) string {
+	switch a {
+	case domain.AreaStaged:
+		return "Staged"
+	case domain.AreaUnstaged:
+		return "Changes"
+	case domain.AreaUntracked:
+		return "Unversioned Files"
+	}
+	return "Merge Conflicts"
+}
+
+func (v *commitView) init() {
+	v.msg = text.NewEditor("")
+	v.collapsed = map[string]bool{}
+	v.sel = map[string]bool{}
+	v.msgH = 150
+}
+
+func (v *commitView) reset() {
+	setText(v.msg, "")
+	v.msg.ClearHistory()
+	v.amend = false
+	v.saved, v.loaded = "", ""
+	clear(v.sel)
+	clear(v.collapsed)
+	v.anchor, v.cursor = "", ""
+	v.scroll = scroller{}
+}
+
+func rowKey(a domain.Area, p string) string { return string(rune('0'+a)) + ":" + p }
+
+// buildRows flattens the status into tree rows.
+func (w *Window) buildRows() {
+	v := &w.cm
+	rs := w.repo()
+	v.rows = v.rows[:0]
+	tree := w.ws.Settings.CommitTree
+	for _, a := range areaOrder {
+		entries := rs.Entries(a)
+		if len(entries) == 0 && a != domain.AreaStaged && a != domain.AreaUnstaged {
+			continue
+		}
+		if len(entries) == 0 && a == domain.AreaStaged && rs.Status.Clean() {
+			continue
+		}
+		gk := rowKey(a, "")
+		v.rows = append(v.rows, changeRow{key: gk, area: a, kind: rowGroup, count: len(entries)})
+		if v.collapsed[gk] {
+			continue
+		}
+		if !tree {
+			for _, e := range entries {
+				v.rows = append(v.rows, changeRow{key: rowKey(a, e.Path), area: a, kind: rowFile, entry: e, depth: 1})
+			}
+			continue
+		}
+		byDir := map[string][]domain.StatusEntry{}
+		for _, e := range entries {
+			d := domain.DirName(e.Path)
+			byDir[d] = append(byDir[d], e)
+		}
+		dirs := sortedKeys(byDir)
+		for _, d := range dirs {
+			files := byDir[d]
+			depth := 1
+			if d != "" {
+				dk := rowKey(a, d+"/")
+				v.rows = append(v.rows, changeRow{key: dk, area: a, kind: rowDir, dir: d, count: len(files), depth: 1})
+				if v.collapsed[dk] {
+					continue
+				}
+				depth = 2
+			}
+			for _, e := range files {
+				v.rows = append(v.rows, changeRow{key: rowKey(a, e.Path), area: a, kind: rowFile, entry: e, depth: depth})
+			}
+		}
+	}
+}
+
+func (w *Window) paintCommitWindow(r ui.Rect) {
+	w.island(r)
+	content, ax := w.toolHeader(r, idBanner, []string{"Commit", "Stash"}, w.commitTab, func(i int) { w.commitTab = i })
+	if w.action(idHideCommit, ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, "Hide\t⇧⎋", actOpts{}) {
+		w.after(func() { w.commitOpen = false })
+	}
+	if w.commitTab == 1 {
+		w.paintStash(content)
+		return
+	}
+	rs := w.repo()
+	if rs.Operation.Active() {
+		content = w.paintOperationBanner(content)
+	}
+
+	// Toolbar.
+	tb := splitTop(&content, 34)
+	x, y := tb.X+8, tb.Y+(tb.Height-actionSize)/2
+	if w.action(idCmRefresh, x, y, icons.Refresh, "Refresh", actOpts{}) {
+		w.after(func() { w.ws.Refresh(true) })
+	}
+	x += actionSize + 2
+	sel := w.selectedEntries()
+	if w.action(idCmRollback, x, y, icons.Revert, "Rollback…\t⌥⌘Z", actOpts{disabled: len(w.rollbackTargets()) == 0}) {
+		w.after(w.openRollback)
+	}
+	x += actionSize + 2
+	if w.action(idCmDiff, x, y, icons.Diff, "Show Diff\t⌘D", actOpts{disabled: len(sel) == 0}) {
+		w.after(func() { w.openSelectedDiff(true) })
+	}
+	x += actionSize + 8
+	w.p.vline(x-4, y+5, actionSize-10, w.pal.Separator)
+	staged, unstaged, untracked, _ := rs.Status.Counts()
+	if w.action(idCmStage, x, y, icons.Add, "Stage All", actOpts{disabled: unstaged+untracked == 0}) {
+		w.after(func() { w.stageArea(domain.AreaUnstaged, domain.AreaUntracked) })
+	}
+	x += actionSize + 2
+	if w.action(idCmUnstage, x, y, icons.Remove, "Unstage All", actOpts{disabled: staged == 0}) {
+		w.after(func() { w.unstageAll() })
+	}
+	x += actionSize + 8
+	w.p.vline(x-4, y+5, actionSize-10, w.pal.Separator)
+	if w.action(idCmGroup, x, y, icons.ShowAsTree, "Group by Directory", actOpts{toggled: w.ws.Settings.CommitTree}) {
+		w.after(func() { w.ws.Settings.CommitTree = !w.ws.Settings.CommitTree; w.saveSettings() })
+	}
+	x += actionSize + 2
+	if w.action(idCmExpand, x, y, icons.ExpandAll, "Expand All\t⌘+", actOpts{}) {
+		w.after(func() { clear(w.cm.collapsed) })
+	}
+	x += actionSize + 2
+	if w.action(idCmCollapse, x, y, icons.CollapseAll, "Collapse All\t⌘-", actOpts{}) {
+		w.after(func() {
+			for _, a := range areaOrder {
+				w.cm.collapsed[rowKey(a, "")] = true
+			}
+		})
+	}
+	x += actionSize + 2
+	if w.action(idCmStash, x, y, icons.Shelve, "Stash Changes…", actOpts{disabled: rs.Status.Clean()}) {
+		w.after(w.openStashDialog)
+	}
+
+	// Message section and buttons at the bottom.
+	v := &w.cm
+	msgH := clampF(v.msgH, 90, max(90, content.Height-120))
+	bottomR := splitBottom(&content, msgH+40+44)
+	w.p.hline(bottomR.X, bottomR.Y, bottomR.Width, w.pal.Border)
+	startH := msgH
+	w.splitter(idSplitMessage, rect(bottomR.X, bottomR.Y-3, bottomR.Width, 6), false,
+		func() { startH = msgH },
+		func(d float32) { v.msgH = clampF(startH-d, 90, max(90, r.Height-260)) }, nil)
+	w.paintChanges(content)
+	w.paintCommitMessage(bottomR, msgH)
+}
+
+// paintOperationBanner shows a merge/rebase/cherry-pick in progress.
+func (w *Window) paintOperationBanner(r ui.Rect) ui.Rect {
+	rs := w.repo()
+	op := rs.Operation
+	conflicts := len(rs.Entries(domain.AreaConflicts))
+	title := op.Kind.Title() + " in progress"
+	detail := ""
+	switch op.Kind {
+	case domain.OpRebase:
+		if op.Onto != "" {
+			detail = "Rebasing " + op.HeadName + " onto " + domain.ShortHash(op.Onto)
+		}
+		if op.Total > 0 {
+			detail += " (" + itoa(op.Step) + "/" + itoa(op.Total) + ")"
+		}
+	case domain.OpMerge:
+		detail = "Merging into " + rs.HeadLabel()
+	case domain.OpCherryPick, domain.OpRevert:
+		if op.Incoming != "" {
+			detail = domain.ShortHash(op.Incoming) + " " + op.IncomingSubject
+		}
+	}
+	if conflicts > 0 {
+		detail = strings.TrimSpace(detail + " · " + plural(conflicts, "conflict", "conflicts"))
+	}
+	h := float32(78)
+	b := splitTop(&r, h+12)
+	br := rect(b.X+8, b.Y+4, b.Width-16, h)
+	bg, border := w.pal.Banner, w.pal.BannerBorder
+	if conflicts > 0 {
+		bg, border = w.pal.BannerWarn, w.pal.BannerWarnBorder
+	}
+	w.p.outline(br, 8, 1, border, bg)
+	icon := icons.Info
+	if conflicts > 0 {
+		icon = icons.Warning
+	}
+	w.p.iconIn(icon, rect(br.X+8, br.Y+6, 20, 22))
+	w.p.text(title, rect(br.X+32, br.Y+6, br.Width-40, 22), fontUI, semibold, w.pal.Text)
+	w.p.text(detail, rect(br.X+32, br.Y+26, br.Width-40, 18), fontSmall, regular, w.pal.TextMuted)
+	bx, by := br.X+32, br.Y+h-34
+	if op.CanContinue() {
+		label := "Continue"
+		bw := w.buttonWidth(label)
+		if w.button(idCmContinue, rect(bx, by, bw, 26), label, btnDefault, conflicts > 0) {
+			w.after(func() { w.ws.OperationAction("continue") })
+		}
+		if conflicts > 0 {
+			w.tip(idCmContinue, "Resolve and stage all conflicts first")
+		}
+		bx += bw + 8
+	}
+	if op.CanSkip() {
+		bw := w.buttonWidth("Skip")
+		if w.button(idCmSkip, rect(bx, by, bw, 26), "Skip", btnNormal, false) {
+			w.after(func() { w.ws.OperationAction("skip") })
+		}
+		bx += bw + 8
+	}
+	if op.CanAbort() {
+		bw := w.buttonWidth("Abort")
+		if w.button(idCmAbort, rect(bx, by, bw, 26), "Abort", btnNormal, false) {
+			w.after(func() {
+				w.confirm("Abort "+op.Kind.Title(), "Abort the "+strings.ToLower(op.Kind.Title())+" and restore the state before it started? Changes made while resolving are lost.", "Abort", func() {
+					w.ws.OperationAction("abort")
+				})
+			})
+		}
+	}
+	return r
+}
+
+func (w *Window) paintChanges(r ui.Rect) {
+	v := &w.cm
+	rs := w.repo()
+	w.buildRows()
+	w.list(idChangesList, scChangeRows, r, "Changes")
+	content := float32(len(v.rows)) * rowH
+	v.scroll.clamp(content+8, r.Height)
+	w.onScrollIn(r, func(dx, dy float32) { v.scroll.Y += dy; v.scroll.clamp(content+8, r.Height) })
+	focused := w.focused(idChangesList)
+	w.onKeys(idChangesList, w.changesKey)
+
+	if !rs.StatusLoaded {
+		w.p.textCenter("Loading…", r, fontUI, regular, w.pal.TextSecond)
+		return
+	}
+	if rs.Status.Clean() && len(v.rows) <= 1 {
+		ec := rect(r.X, r.Y+r.Height*0.3, r.Width, 22)
+		w.p.textCenter("No changes", ec, fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter("Working tree is clean", rect(ec.X, ec.Y+22, ec.Width, 20), fontSmall, regular, w.pal.TextDisable)
+		return
+	}
+	w.c.Clip(r)
+	y := r.Y + 4 - v.scroll.Y
+	for i, row := range v.rows {
+		rr := rect(r.X, y, r.Width, rowH)
+		y += rowH
+		if bottom(rr) < r.Y || rr.Y > bottom(r) {
+			continue
+		}
+		id := scChangeRows.At(i)
+		hl := rect(rr.X+6, rr.Y, rr.Width-12, rr.Height)
+		selected := v.sel[row.key]
+		if selected {
+			c := w.pal.SelectionInac
+			if focused {
+				c = w.pal.Selection
+			}
+			w.p.round(hl, 4, c)
+		} else if w.hovered(id) || w.hovered(scChangeAction.At(i)) {
+			w.p.round(hl, 4, w.pal.Hover)
+		}
+		x := rr.X + 10 + float32(row.depth)*18
+		switch row.kind {
+		case rowGroup, rowDir:
+			chev := icons.ChevronDown
+			if v.collapsed[row.key] {
+				chev = icons.ChevronRight
+			}
+			w.p.iconIn(chev, rect(x, rr.Y, 16, rowH))
+			x += 20
+			title := areaTitle(row.area)
+			if row.kind == rowDir {
+				w.p.iconIn(icons.Folder, rect(x, rr.Y, 16, rowH))
+				x += 22
+				title = row.dir
+			}
+			tw := w.p.text(title, rect(x, rr.Y, r.Width-x-40, rowH), fontUI, regular, w.pal.Text)
+			if row.kind == rowGroup {
+				w.p.text(plural(row.count, "file", "files"), rect(x+tw+8, rr.Y, 120, rowH), fontUI, regular, w.pal.TextSecond)
+			} else {
+				w.p.text(itoa(row.count), rect(x+tw+8, rr.Y, 60, rowH), fontUI, regular, w.pal.TextSecond)
+			}
+		default:
+			e := row.entry
+			kind := e.KindIn(row.area)
+			w.p.iconIn(fileIcon(e.Path), rect(x, rr.Y, 16, rowH))
+			x += 22
+			name := domain.FileName(e.Path)
+			fg := w.statusColor(kind)
+			tw := w.p.text(name, rect(x, rr.Y, right(rr)-x-40, rowH), fontUI, regular, fg)
+			if kind == domain.ChangeDeleted {
+				w.p.hline(x, rr.Y+rowH/2, tw, fg)
+			}
+			hint := domain.DirName(e.Path)
+			if w.ws.Settings.CommitTree {
+				hint = ""
+			}
+			if e.OrigPath != "" && (row.area == domain.AreaStaged || kind == domain.ChangeRenamed) {
+				hint = "← " + e.OrigPath
+			}
+			if e.IsSubmodule() {
+				hint = strings.TrimSpace("submodule " + hint)
+			}
+			if hint != "" {
+				hx := x + tw + 8
+				w.p.text(w.p.truncateMiddle(hint, fontUI, regular, max(0, right(rr)-hx-40)), rect(hx, rr.Y, right(rr)-hx-36, rowH), fontUI, regular, w.pal.TextSecond)
+			}
+		}
+		w.c.HitWithOptions(id, hl, w.rowLabel(row), ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected, Expandable: row.kind != rowFile, Expanded: row.kind != rowFile && !v.collapsed[row.key]})
+		w.rowAction(i, row, hl)
+		if w.c.Clicked(id) {
+			i := i
+			w.after(func() { w.clickRow(i) })
+		}
+		w.onDouble(id, func() { w.activateRow(row) })
+		w.onContext(id, func(x, y float32) {
+			if !v.sel[row.key] {
+				clear(v.sel)
+				v.sel[row.key] = true
+				v.cursor, v.anchor = row.key, row.key
+			}
+			w.openMenu(x, y, w.changesMenu())
+		})
+	}
+	w.c.Unclip()
+	w.vbar(scLogScrollbars.At(1), r, &v.scroll, content+8)
+}
+
+func (w *Window) rowLabel(row changeRow) string {
+	switch row.kind {
+	case rowGroup:
+		return areaTitle(row.area)
+	case rowDir:
+		return row.dir
+	}
+	return row.entry.Path
+}
+
+// rowAction paints the hover +/- action at the right of a row.
+func (w *Window) rowAction(i int, row changeRow, hl ui.Rect) {
+	id := scChangeAction.At(i)
+	if !(w.hovered(scChangeRows.At(i)) || w.hovered(id)) {
+		return
+	}
+	var pair icons.Pair
+	var tip string
+	switch row.area {
+	case domain.AreaStaged:
+		pair, tip = icons.Remove, "Unstage"
+	case domain.AreaConflicts:
+		return
+	default:
+		pair, tip = icons.Add, "Stage"
+	}
+	if row.kind == rowGroup {
+		tip += " All"
+	}
+	if w.action(id, right(hl)-24, hl.Y+1, pair, tip, actOpts{size: 22}) {
+		w.after(func() {
+			paths := w.rowPaths(row)
+			if row.area == domain.AreaStaged {
+				w.ws.UnstagePaths(paths)
+			} else {
+				w.ws.StagePaths(paths)
+			}
+		})
+	}
+}
+
+// rowPaths returns the files a row stands for.
+func (w *Window) rowPaths(row changeRow) []string {
+	rs := w.repo()
+	switch row.kind {
+	case rowFile:
+		ps := []string{row.entry.Path}
+		if row.area == domain.AreaStaged && row.entry.OrigPath != "" {
+			ps = append(ps, row.entry.OrigPath)
+		}
+		return ps
+	case rowDir:
+		var out []string
+		for _, e := range rs.Entries(row.area) {
+			if domain.DirName(e.Path) == row.dir {
+				out = append(out, e.Path)
+			}
+		}
+		return out
+	}
+	var out []string
+	for _, e := range rs.Entries(row.area) {
+		out = append(out, e.Path)
+		if row.area == domain.AreaStaged && e.OrigPath != "" {
+			out = append(out, e.OrigPath)
+		}
+	}
+	return out
+}
+
+func (w *Window) statusColor(k domain.ChangeKind) ui.Color {
+	switch k {
+	case domain.ChangeAdded, domain.ChangeCopied:
+		return w.pal.StatusAdded
+	case domain.ChangeDeleted:
+		return w.pal.StatusDeleted
+	case domain.ChangeRenamed:
+		return w.pal.StatusRenamed
+	case domain.ChangeUntracked:
+		return w.pal.StatusUnknown
+	case domain.ChangeConflicted:
+		return w.pal.StatusConflict
+	case domain.ChangeIgnored:
+		return w.pal.StatusIgnored
+	}
+	return w.pal.StatusModified
+}
+
+// clickRow selects a row (with Shift/Cmd extension) and previews its diff.
+func (w *Window) clickRow(i int) {
+	v := &w.cm
+	if i >= len(v.rows) {
+		return
+	}
+	row := v.rows[i]
+	mods := w.mods
+	switch {
+	case mods&ui.ModifierShift != 0 && v.anchor != "":
+		a := w.rowIndex(v.anchor)
+		if a < 0 {
+			a = i
+		}
+		lo, hi := min(a, i), max(a, i)
+		clear(v.sel)
+		for k := lo; k <= hi; k++ {
+			v.sel[v.rows[k].key] = true
+		}
+	case mods&ui.ModifierMeta != 0:
+		if v.sel[row.key] {
+			delete(v.sel, row.key)
+		} else {
+			v.sel[row.key] = true
+		}
+		v.anchor = row.key
+	default:
+		if row.kind != rowFile && v.sel[row.key] && len(v.sel) == 1 {
+			// A second click on a selected node toggles it, as the chevron does.
+			v.collapsed[row.key] = !v.collapsed[row.key]
+		}
+		clear(v.sel)
+		v.sel[row.key] = true
+		v.anchor = row.key
+	}
+	v.cursor = row.key
+	if row.kind == rowFile && len(v.sel) == 1 {
+		w.showDiff(w.sourceFor(row), false)
+	}
+}
+
+func (w *Window) rowIndex(key string) int {
+	for i, r := range w.cm.rows {
+		if r.key == key {
+			return i
+		}
+	}
+	return -1
+}
+
+func (w *Window) sourceFor(row changeRow) vapp.DiffSource {
+	e := row.entry
+	src := vapp.DiffSource{Path: e.Path, Area: row.area, Working: true, Kind: e.KindIn(row.area)}
+	if row.area == domain.AreaStaged {
+		src.OldPath = e.OrigPath
+	}
+	return src
+}
+
+func (w *Window) activateRow(row changeRow) {
+	if row.kind == rowFile {
+		w.showDiff(w.sourceFor(row), true)
+		return
+	}
+	w.cm.collapsed[row.key] = !w.cm.collapsed[row.key]
+}
+
+func (w *Window) changesKey(e ui.KeyEvent) bool {
+	v := &w.cm
+	if len(v.rows) == 0 {
+		return false
+	}
+	cur := w.rowIndex(v.cursor)
+	move := func(to int) {
+		to = max(0, min(len(v.rows)-1, to))
+		row := v.rows[to]
+		if e.Modifiers&ui.ModifierShift != 0 {
+			v.sel[row.key] = true
+		} else {
+			clear(v.sel)
+			v.sel[row.key] = true
+			v.anchor = row.key
+		}
+		v.cursor = row.key
+		v.scroll.reveal(float32(to)*rowH, rowH+8, w.areas[idChangesList].Height)
+		if row.kind == rowFile {
+			w.showDiff(w.sourceFor(row), false)
+		}
+	}
+	switch e.Key {
+	case ui.KeyDown:
+		move(cur + 1)
+	case ui.KeyUp:
+		if cur < 0 {
+			cur = len(v.rows)
+		}
+		move(cur - 1)
+	case ui.KeyHome:
+		move(0)
+	case ui.KeyEnd:
+		move(len(v.rows) - 1)
+	case ui.KeyPageDown:
+		move(cur + 15)
+	case ui.KeyPageUp:
+		move(cur - 15)
+	case ui.KeyLeft:
+		if cur >= 0 {
+			row := v.rows[cur]
+			if row.kind != rowFile && !v.collapsed[row.key] {
+				v.collapsed[row.key] = true
+			} else {
+				for k := cur - 1; k >= 0; k-- {
+					if v.rows[k].kind != rowFile && v.rows[k].depth < row.depth {
+						move(k)
+						break
+					}
+				}
+			}
+		}
+	case ui.KeyRight:
+		if cur >= 0 && v.rows[cur].kind != rowFile {
+			v.collapsed[v.rows[cur].key] = false
+		}
+	case ui.KeyEnter:
+		if cur >= 0 {
+			w.activateRow(v.rows[cur])
+		}
+	case ui.KeySpace:
+		w.toggleStageSelection()
+	case ui.KeyDelete, ui.KeyBackspace:
+		if len(w.rollbackTargets()) > 0 {
+			w.openRollback()
+		}
+	default:
+		return false
+	}
+	return true
+}
+
+// selectedEntries returns the selected file rows (directories and groups
+// expand to their files).
+func (w *Window) selectedEntries() []changeRow {
+	v := &w.cm
+	var out []changeRow
+	seen := map[string]bool{}
+	rs := w.repo()
+	for _, row := range v.rows {
+		if !v.sel[row.key] {
+			continue
+		}
+		switch row.kind {
+		case rowFile:
+			if !seen[row.key] {
+				seen[row.key] = true
+				out = append(out, row)
+			}
+		default:
+			for _, e := range rs.Entries(row.area) {
+				if row.kind == rowDir && domain.DirName(e.Path) != row.dir {
+					continue
+				}
+				k := rowKey(row.area, e.Path)
+				if !seen[k] {
+					seen[k] = true
+					out = append(out, changeRow{key: k, area: row.area, kind: rowFile, entry: e})
+				}
+			}
+		}
+	}
+	return out
+}
+
+func (w *Window) toggleStageSelection() {
+	var stage, unstage []string
+	for _, r := range w.selectedEntries() {
+		switch r.area {
+		case domain.AreaStaged:
+			unstage = append(unstage, r.entry.Path)
+			if r.entry.OrigPath != "" {
+				unstage = append(unstage, r.entry.OrigPath)
+			}
+		case domain.AreaUnstaged, domain.AreaUntracked:
+			stage = append(stage, r.entry.Path)
+		case domain.AreaConflicts:
+			w.markResolved(r.entry.Path)
+		}
+	}
+	if len(stage) > 0 {
+		w.ws.StagePaths(stage)
+	}
+	if len(unstage) > 0 {
+		w.ws.UnstagePaths(unstage)
+	}
+}
+
+func (w *Window) stageArea(areas ...domain.Area) {
+	var paths []string
+	for _, a := range areas {
+		for _, e := range w.repo().Entries(a) {
+			paths = append(paths, e.Path)
+		}
+	}
+	if len(paths) > 0 {
+		w.ws.StagePaths(paths)
+	}
+}
+
+func (w *Window) unstageAll() {
+	var paths []string
+	for _, e := range w.repo().Entries(domain.AreaStaged) {
+		paths = append(paths, e.Path)
+		if e.OrigPath != "" {
+			paths = append(paths, e.OrigPath)
+		}
+	}
+	if len(paths) > 0 {
+		w.ws.UnstagePaths(paths)
+	}
+}
+
+// markResolved stages a conflicted file once it has no conflict markers.
+func (w *Window) markResolved(p string) {
+	w.ws.StagePaths([]string{p})
+}
+
+func (w *Window) openSelectedDiff(pin bool) {
+	sel := w.selectedEntries()
+	if len(sel) == 0 {
+		return
+	}
+	w.showDiff(w.sourceFor(sel[0]), pin)
+}
+
+// rollbackTargets returns the selection's files that can be rolled back.
+func (w *Window) rollbackTargets() []changeRow {
+	var out []changeRow
+	for _, r := range w.selectedEntries() {
+		if r.area != domain.AreaConflicts {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func (w *Window) openRollback() {
+	targets := w.rollbackTargets()
+	if len(targets) == 0 {
+		return
+	}
+	var tracked, untracked, staged []string
+	for _, r := range targets {
+		switch r.area {
+		case domain.AreaUntracked:
+			untracked = append(untracked, r.entry.Path)
+		case domain.AreaStaged:
+			staged = append(staged, r.entry.Path)
+			if r.entry.OrigPath != "" {
+				staged = append(staged, r.entry.OrigPath)
+			}
+		default:
+			tracked = append(tracked, r.entry.Path)
+		}
+	}
+	deleteNew := false
+	files := append(append(append([]string{}, staged...), tracked...), untracked...)
+	sort.Strings(files)
+	w.openDialog(&dialog{
+		title: "Rollback Changes", ok: "Rollback", width: 520,
+		body: func(f *form) {
+			f.text("Discard local changes in " + plural(len(files), "file", "files") + "? This cannot be undone.")
+			n := min(len(files), 8)
+			f.custom(float32(n)*22+4, func(r ui.Rect) {
+				w.p.outline(r, 4, 1, w.pal.ControlBorder, w.pal.ControlBg)
+				for i := 0; i < n; i++ {
+					rr := rect(r.X+8, r.Y+2+float32(i)*22, r.Width-16, 22)
+					w.p.iconIn(fileIcon(files[i]), rect(rr.X, rr.Y, 16, 22))
+					w.p.text(files[i], rect(rr.X+22, rr.Y, rr.Width-22, 22), fontUI, regular, w.pal.Text)
+				}
+			})
+			if len(files) > n {
+				f.muted("and " + itoa(len(files)-n) + " more")
+			}
+			f.gap(8)
+			if len(untracked) > 0 {
+				f.check("Delete "+plural(len(untracked), "unversioned file", "unversioned files")+" from disk", &deleteNew)
+			}
+			if len(staged) > 0 {
+				f.muted("Staged changes are reset to HEAD.")
+			}
+		},
+		onOK: func() bool {
+			del := []string(nil)
+			if deleteNew {
+				del = untracked
+			}
+			if len(staged) > 0 {
+				w.ws.Rollback(append(staged, tracked...), del, true)
+			} else if len(tracked) > 0 || len(del) > 0 {
+				w.ws.Rollback(tracked, del, false)
+			}
+			return true
+		},
+	})
+}
+
+// changesMenu is the staging tree's context menu.
+func (w *Window) changesMenu() []item {
+	sel := w.selectedEntries()
+	if len(sel) == 0 {
+		return nil
+	}
+	var stage, unstage bool
+	conflict := false
+	untrackedOnly := true
+	for _, r := range sel {
+		switch r.area {
+		case domain.AreaStaged:
+			unstage = true
+		case domain.AreaConflicts:
+			conflict = true
+		default:
+			stage = true
+		}
+		if r.area != domain.AreaUntracked {
+			untrackedOnly = false
+		}
+	}
+	first := sel[0]
+	root := w.repo().Repo.Root
+	full := path.Join(root, first.entry.Path)
+	items := []item{
+		{title: "Show Diff", icon: icons.Diff, shortcut: "⌘D", run: func() { w.showDiff(w.sourceFor(first), true) }},
+	}
+	if stage {
+		items = append(items, item{title: "Stage", icon: icons.Add, shortcut: "Space", run: w.toggleStageSelection})
+	}
+	if unstage {
+		items = append(items, item{title: "Unstage", icon: icons.Remove, shortcut: "Space", run: w.toggleStageSelection})
+	}
+	if conflict {
+		items = append(items, item{title: "Mark Resolved", icon: icons.Checked, run: func() { w.markResolved(first.entry.Path) }})
+	}
+	items = append(items, item{title: "Rollback…", icon: icons.Revert, shortcut: "⌥⌘Z", disabled: len(w.rollbackTargets()) == 0, run: w.openRollback}, sep())
+	if untrackedOnly {
+		items = append(items, item{title: "Add to .gitignore", icon: icons.Gitignore, run: func() { w.addToGitignore(sel) }})
+	}
+	items = append(items,
+		item{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(first.entry.Path) }},
+		item{title: "Open in External Editor", icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(first.entry.Path, 0) }},
+		item{title: "Show in Finder", icon: icons.Folder, run: func() { revealPath(full) }},
+		sep(),
+		item{title: "Copy Path", icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
+		item{title: "Copy Relative Path", run: func() { w.copyText(first.entry.Path) }},
+	)
+	return items
+}
+
+func (w *Window) copyText(s string) {
+	if err := app.SetClipboardText(s); err != nil {
+		w.ws.NotifyError("Cannot copy", err)
+	}
+}
+
+// ---- message and commit buttons ------------------------------------------------
+
+func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
+	v := &w.cm
+	rs := w.repo()
+	// Amend + options row.
+	top := rect(r.X+10, r.Y+6, r.Width-20, 28)
+	if w.checkbox(idCmAmend, top.X, top.Y, top.Height, "Amend", v.amend, !rs.HasHead()) {
+		w.after(w.toggleAmend)
+	}
+	if w.action(idCmOptions, right(top)-actionSize, top.Y+1, icons.Settings, "Commit Options", actOpts{}) {
+		w.after(func() { w.openMenuBelow(rect(right(top)-200, top.Y, 200, top.Height), w.commitOptionsMenu(), 220) })
+	}
+	mr := rect(r.X+10, bottom(top)+4, r.Width-20, msgH)
+	value := v.msg.String()
+	sel := v.msg.Selection()
+	caret := runeToByte(value, v.msg.Caret())
+	ss, se := runeToByte(value, min(sel.Start, sel.End)), runeToByte(value, max(sel.Start, sel.End))
+	components.PaintTextarea(w.c, w.theme, mr, components.TextareaSnapshot{
+		ID: idCmMessage, Label: "Commit message", Value: value, Placeholder: "Commit message",
+		ShowCaret: true, HideEditorText: true, Layout: &v.layout,
+		Caret: caret, SelectionStart: ss, SelectionEnd: se,
+	})
+	w.editors[idCmMessage] = v.msg
+	w.onScrollIn(mr, func(dx, dy float32) { v.layout.ScrollBy(dy) })
+	w.onKeys(idCmMessage, func(e ui.KeyEvent) bool {
+		if e.Key == ui.KeyEnter && e.Modifiers&ui.ModifierMeta != 0 {
+			w.doCommit(false)
+			return true
+		}
+		mv, extend := components.TextareaMovementForKey(e.Key, e.Modifiers)
+		if mv == components.TextareaMoveNone || mv == components.TextareaMoveLineStart || mv == components.TextareaMoveLineEnd {
+			return false
+		}
+		val := v.msg.String()
+		nb := v.layout.Move(val, runeToByte(val, v.msg.Caret()), mv)
+		v.msg.MoveTo(byteToRune(val, nb), extend)
+		return true
+	})
+
+	// Buttons.
+	by := bottom(mr) + 10
+	staged, _, _, conflicts := rs.Status.Counts()
+	empty := strings.TrimSpace(value) == ""
+	can := !empty && (staged > 0 || v.amend) && conflicts == 0
+	label := "Commit"
+	if v.amend {
+		label = "Amend Commit"
+	}
+	bw := w.buttonWidth(label)
+	if w.button(idCmCommit, rect(r.X+10, by, bw, buttonH), label, btnDefault, !can) {
+		w.after(func() { w.doCommit(false) })
+	}
+	switch {
+	case conflicts > 0:
+		w.tip(idCmCommit, "Resolve conflicts before committing")
+	case staged == 0 && !v.amend:
+		w.tip(idCmCommit, "Stage changes to commit")
+	case empty:
+		w.tip(idCmCommit, "Enter a commit message")
+	default:
+		w.tip(idCmCommit, label+"\t⌘⏎")
+	}
+	pl := "Commit and Push…"
+	if v.amend {
+		pl = "Amend Commit and Push…"
+	}
+	pw := w.buttonWidth(pl)
+	if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
+		w.after(func() { w.doCommit(true) })
+	}
+	if !can && staged == 0 && !v.amend && !rs.Status.Clean() && conflicts == 0 {
+		hx := r.X + 10 + bw + 10 + pw + 12
+		w.p.text("Nothing staged", rect(hx, by, right(r)-hx-10, buttonH), fontSmall, regular, w.pal.TextSecond)
+	}
+}
+
+func (w *Window) commitOptionsMenu() []item {
+	v := &w.cm
+	return []item{
+		header("Commit Checks"),
+		{title: "Run Git hooks", checked: !v.noVerify, run: func() { v.noVerify = !v.noVerify }},
+		{title: "Sign-off commit", checked: v.signOff, run: func() { v.signOff = !v.signOff }},
+	}
+}
+
+func (w *Window) toggleAmend() {
+	v := &w.cm
+	v.amend = !v.amend
+	if v.amend {
+		v.saved = v.msg.String()
+		if strings.TrimSpace(v.saved) == "" {
+			w.ws.LastMessage(func(m string) {
+				if v.amend && strings.TrimSpace(v.msg.String()) == "" {
+					m = strings.TrimRight(m, "\n")
+					v.loaded = m
+					setText(v.msg, m)
+				}
+			})
+		}
+		return
+	}
+	if v.msg.String() == v.loaded {
+		setText(v.msg, v.saved)
+	}
+	v.loaded = ""
+}
+
+func (w *Window) doCommit(push bool) {
+	v := &w.cm
+	rs := w.repo()
+	staged, _, _, conflicts := rs.Status.Counts()
+	msg := strings.TrimSpace(v.msg.String())
+	if msg == "" || conflicts > 0 || (staged == 0 && !v.amend) {
+		return
+	}
+	req := vapp.CommitRequest{Message: v.msg.String(), Amend: v.amend, SignOff: v.signOff, NoVerify: v.noVerify}
+	w.ws.Commit(req, func() {
+		setText(v.msg, "")
+		v.msg.ClearHistory()
+		v.amend, v.saved, v.loaded = false, "", ""
+		if push {
+			w.openPush()
+		}
+	})
+}
+
+// focusCommit shows the Commit tool window and focuses the message.
+func (w *Window) focusCommit() {
+	w.commitOpen = true
+	w.commitTab = 0
+	w.focusNext = idCmMessage
+}
+
+func runeToByte(s string, r int) int {
+	if r <= 0 {
+		return 0
+	}
+	n := 0
+	for i := range s {
+		if n == r {
+			return i
+		}
+		n++
+	}
+	return len(s)
+}

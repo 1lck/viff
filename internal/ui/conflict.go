@@ -1,0 +1,231 @@
+package viffui
+
+import (
+	"path"
+
+	"github.com/vivaui/viva/ui"
+
+	"viff/internal/domain"
+	"viff/internal/ui/icons"
+)
+
+// conflictPane is one column of the conflict viewer.
+type conflictPane struct {
+	title string
+	disp  []string
+	syn   [][]span
+	mark  []uint8 // per line: 0 plain, 1 changed vs base, 2 conflict body, 3 marker line
+}
+
+func (w *Window) conflictPanes(t *diffTab) []conflictPane {
+	cv := t.res.Conflict
+	mk := func(title string, s []string, base []string) conflictPane {
+		p := conflictPane{title: title, disp: expandAll(s)}
+		p.syn = highlight(t.src.Path, p.disp)
+		p.mark = make([]uint8, len(s))
+		if base != nil {
+			for _, b := range domain.DiffLines(base, s, domain.WhitespaceExact, 0) {
+				for k := b.NewStart; k < min(b.NewEnd, len(s)); k++ {
+					p.mark[k] = 1
+				}
+			}
+		}
+		return p
+	}
+	base := cv.Base.Lines
+	if !cv.Base.Content.Exists {
+		base = nil
+	}
+	ours := mk(cv.OursLabel, cv.Ours.Lines, base)
+	theirs := mk(cv.TheirsLabel, cv.Theirs.Lines, base)
+	cur := mk("Result (working tree)", cv.Current.Lines, nil)
+	for _, b := range cv.Markers.Blocks {
+		for k := b.Begin; k <= min(b.Finish, len(cur.mark)-1); k++ {
+			cur.mark[k] = 2
+		}
+		for _, k := range []int{b.Begin, b.OursEnd, b.Finish} {
+			if k >= 0 && k < len(cur.mark) {
+				cur.mark[k] = 3
+			}
+		}
+		if b.BaseStart >= 0 && b.BaseStart-1 < len(cur.mark) && b.BaseStart > 0 {
+			cur.mark[b.BaseStart-1] = 3
+		}
+	}
+	return []conflictPane{ours, cur, theirs}
+}
+
+func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
+	cv := t.res.Conflict
+	rs := w.repo()
+	// Banner.
+	bh := float32(84)
+	br := splitTop(&r, bh)
+	inner := rect(br.X+10, br.Y+8, br.Width-20, bh-16)
+	bg, border := w.pal.BannerWarn, w.pal.BannerWarnBorder
+	resolved := cv.Resolved || (cv.Conflict.Kind.Textual() && len(cv.Markers.Blocks) == 0 && cv.Current.Content.Exists)
+	if resolved {
+		bg, border = w.pal.Banner, w.pal.BannerBorder
+	}
+	w.p.outline(inner, 8, 1, border, bg)
+	icon := icons.Warning
+	title := "Merge conflict: " + cv.Conflict.Kind.Description()
+	sub := "Resolve it in your editor; Viff shows both sides and the file on disk as it changes."
+	if resolved {
+		icon = icons.Success
+		title = "No conflict markers left in the file on disk"
+		sub = "Review the result, then mark the file as resolved to stage it."
+	} else if n := len(cv.Markers.Blocks); n > 0 {
+		sub = plural(n, "conflict", "conflicts") + " in the file on disk. Edit it in your editor; this view updates when it is saved."
+		if !cv.Markers.Reliable {
+			sub = "The conflict markers look unusual; check the file in your editor."
+		}
+	} else if !cv.Conflict.Kind.Textual() {
+		sub = "There is no text to merge. Keep or delete the file on disk, then mark it as resolved."
+	}
+	w.p.iconIn(icon, rect(inner.X+8, inner.Y+6, 18, 22))
+	w.p.text(title, rect(inner.X+32, inner.Y+6, inner.Width-44, 22), fontUI, semibold, w.pal.Text)
+	w.p.text(sub, rect(inner.X+32, inner.Y+26, inner.Width-44, 18), fontSmall, regular, w.pal.TextMuted)
+	bx, by := inner.X+32, bottom(inner)-32
+	label := "Mark as Resolved"
+	bw := w.buttonWidth(label)
+	if w.button(idConflictStage, rect(bx, by, bw, 26), label, btnDefault, !resolved && cv.Conflict.Kind.Textual()) {
+		p := t.src.Path
+		w.after(func() { w.markResolved(p) })
+	}
+	if !resolved && cv.Conflict.Kind.Textual() {
+		w.tip(idConflictStage, "Remove all conflict markers first")
+	}
+	bx += bw + 8
+	ow := w.buttonWidth("Open in Editor")
+	if w.button(idConflictOpen, rect(bx, by, ow, 26), "Open in Editor", btnNormal, !cv.Current.Content.Exists) {
+		p := t.src.Path
+		line := 0
+		if t.conflictBlock < len(cv.Markers.Blocks) && len(cv.Markers.Blocks) > 0 {
+			line = cv.Markers.Blocks[t.conflictBlock].Begin + 1
+		}
+		w.after(func() { w.openExternal(p, line) })
+	}
+	bx += ow + 8
+	cw := w.buttonWidth("Copy Path")
+	if w.button(idConflictCopy, rect(bx, by, cw, 26), "Copy Path", btnBorderless, false) {
+		full := path.Join(rs.Repo.Root, t.src.Path)
+		w.after(func() { w.copyText(full) })
+	}
+	// Conflict navigation.
+	n := len(cv.Markers.Blocks)
+	if n > 0 {
+		t.conflictBlock = min(t.conflictBlock, n-1)
+		nx := right(inner) - 8 - actionSize
+		if w.action(scConflictNav.At(1), nx, by, icons.Down, "Next Conflict", actOpts{disabled: t.conflictBlock >= n-1}) {
+			w.after(func() { t.conflictBlock++; w.scrollToConflict(t) })
+		}
+		nx -= actionSize + 2
+		if w.action(scConflictNav.At(0), nx, by, icons.Up, "Previous Conflict", actOpts{disabled: t.conflictBlock == 0}) {
+			w.after(func() { t.conflictBlock--; w.scrollToConflict(t) })
+		}
+		s := "Conflict " + itoa(t.conflictBlock+1) + " of " + itoa(n)
+		sw := w.p.width(s, fontUI, regular)
+		w.p.text(s, rect(nx-sw-10, by, sw+2, 26), fontUI, regular, w.pal.TextMuted)
+	}
+
+	if !cv.Conflict.Kind.Textual() && !cv.Current.Content.Exists && !cv.Ours.Content.Exists && !cv.Theirs.Content.Exists {
+		return
+	}
+	if t.unified == nil {
+		t.unified = []uline{} // marks the panes as prepared
+	}
+	panes := w.conflictPanesCached(t)
+	titles := splitTop(&r, 28)
+	w.p.fill(titles, w.pal.IslandAlt)
+	w.p.hline(titles.X, bottom(titles)-1, titles.Width, w.pal.Border)
+	gap := float32(1)
+	pw := (r.Width - 2*gap) / 3
+	cellW, lineH, _ := w.metrics()
+	maxLines := 0
+	for _, p := range panes {
+		maxLines = max(maxLines, len(p.disp))
+	}
+	content := float32(maxLines+3) * lineH
+	t.y = clampF(t.y, 0, max(0, content-r.Height))
+	w.onScrollIn(r, func(dx, dy float32) { t.y += dy; t.x = max(0, t.x+dx) })
+	w.diffKeys(t, idDiffRight, lineH, r.Height)
+	for i, p := range panes {
+		pr := rect(r.X+float32(i)*(pw+gap), r.Y, pw, r.Height)
+		w.paintTitle(rect(pr.X+10, titles.Y, pr.Width-16, titles.Height), p.title, "")
+		w.paintConflictPane(p, pr, t, cellW, lineH)
+		if i > 0 {
+			w.p.vline(pr.X-1, titles.Y, r.Height+titles.Height, w.pal.Border)
+		}
+	}
+	sc := scroller{Y: t.y}
+	w.vbar(idDiffScrollR, r, &sc, content)
+	w.wrapBarDrag(idDiffScrollR, func(y float32) { t.y = y }, func() float32 { return t.y }, content, r.Height)
+}
+
+// conflictPanesCached keeps the panes with the tab between paints.
+func (w *Window) conflictPanesCached(t *diffTab) []conflictPane {
+	if c, ok := conflictCache[t]; ok && c.res == t.res {
+		return c.panes
+	}
+	panes := w.conflictPanes(t)
+	conflictCache[t] = conflictEntry{res: t.res, panes: panes}
+	return panes
+}
+
+type conflictEntry struct {
+	res   any
+	panes []conflictPane
+}
+
+var conflictCache = map[*diffTab]conflictEntry{}
+
+func (w *Window) paintConflictPane(p conflictPane, r ui.Rect, t *diffTab, cellW, lineH float32) {
+	_, _, fs := w.metrics()
+	gutter := w.gutterWidth(len(p.disp), cellW)
+	gr := rect(r.X, r.Y, gutter, r.Height)
+	tr := rect(r.X+gutter, r.Y, r.Width-gutter, r.Height)
+	style := ui.TextStyle{Size: fs, Color: w.pal.EditorText, Mono: true, MonoFace: w.mono}
+	numStyle := ui.TextStyle{Size: fs - 1, Color: w.pal.LineNumber, Mono: true, MonoFace: w.mono}
+	w.c.Clip(r)
+	first := max(0, int(t.y/lineH))
+	last := min(len(p.disp), int((t.y+r.Height)/lineH)+1)
+	var runs []ui.TextRun
+	for i := first; i < last; i++ {
+		y := r.Y + float32(i)*lineH - t.y
+		switch p.mark[i] {
+		case 1:
+			w.p.fill(rect(tr.X, y, tr.Width, lineH), w.pal.DiffModified)
+		case 2:
+			w.p.fill(rect(tr.X, y, tr.Width, lineH), w.pal.DiffConflict)
+		case 3:
+			w.p.fill(rect(tr.X, y, tr.Width, lineH), lighten(w.pal.DiffConflict, 0.12))
+		}
+		w.c.LabelAligned(itoa(i+1), rect(gr.X, y, gr.Width-14, lineH), numStyle, ui.AlignRight)
+		if s := p.disp[i]; s != "" {
+			var spans []span
+			if i < len(p.syn) && p.mark[i] != 3 {
+				spans = p.syn[i]
+			}
+			base := w.pal.EditorText
+			if p.mark[i] == 3 {
+				base = w.pal.TextMuted
+			}
+			runs = w.runsFor(s, spans, runs, base)
+			w.c.Clip(tr)
+			w.c.LabelRuns(s, rect(tr.X+6-t.x, y, float32(displayCells(s)+1)*cellW, lineH), style, cellW, runs)
+			w.c.Unclip()
+		}
+	}
+	w.c.Unclip()
+	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
+}
+
+func (w *Window) scrollToConflict(t *diffTab) {
+	cv := t.res.Conflict
+	if cv == nil || t.conflictBlock < 0 || t.conflictBlock >= len(cv.Markers.Blocks) {
+		return
+	}
+	_, lineH, _ := w.metrics()
+	t.y = max(0, float32(cv.Markers.Blocks[t.conflictBlock].Begin-4)*lineH)
+}

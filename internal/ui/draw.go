@@ -131,15 +131,14 @@ func (p *pen) width(s string, size, weight float32) float32 {
 	return p.c.TextWidthWeight(s, size, weight)
 }
 
-// icon draws an icon pair for the palette, centred in a box of size px at
-// (x, y) top-left.
+// icon draws an icon pair for the palette in a box of size px at (x, y).
 func (p *pen) icon(pair icons.Pair, x, y, size float32) {
 	pair.For(p.pal.Dark).Draw(p.c, rect(x, y, size, size), 1)
 }
 
 // iconAlpha draws an icon faded (disabled).
-func (p *pen) iconAlpha(pair icons.Pair, x, y, size, alpha float32) {
-	pair.For(p.pal.Dark).Draw(p.c, rect(x, y, size, size), alpha)
+func (p *pen) iconAlpha(pair icons.Pair, r ui.Rect, alpha float32) {
+	pair.For(p.pal.Dark).Draw(p.c, rect(r.X+(r.Width-iconSize)/2, r.Y+(r.Height-iconSize)/2, iconSize, iconSize), alpha)
 }
 
 // iconIn centres a 16px icon in r.
@@ -147,8 +146,7 @@ func (p *pen) iconIn(pair icons.Pair, r ui.Rect) {
 	p.icon(pair, r.X+(r.Width-iconSize)/2, r.Y+(r.Height-iconSize)/2, iconSize)
 }
 
-// iconTinted draws a monochrome icon in a colour of the caller's choosing
-// (used over accent backgrounds).
+// iconTinted draws a monochrome icon in one colour (over accent backgrounds).
 func (p *pen) iconTinted(pair icons.Pair, r ui.Rect, c ui.Color) {
 	pair.For(p.pal.Dark).DrawTinted(p.c, rect(r.X+(r.Width-iconSize)/2, r.Y+(r.Height-iconSize)/2, iconSize, iconSize), c)
 }
