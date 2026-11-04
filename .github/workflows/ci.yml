@@ -104,6 +104,9 @@ jobs:
           - os: windows-2022
             shard: 2
             shards: 2
+          - os: macos-15
+            shard: 1
+            shards: 1
           - os: ubuntu-24.04
             shard: 1
             shards: 1
@@ -165,6 +168,8 @@ jobs:
           LD="-X viff/internal/version.Version=$VERSION -X viff/internal/version.Commit=$COMMIT -X viff/internal/version.BuildDate=$BUILD_DATE"
           if [ "$RUNNER_OS" = "Windows" ]; then
             go build -trimpath -ldflags="-s -w -H=windowsgui $LD" -o build/viff.exe ./cmd/viff
+          elif [ "$RUNNER_OS" = macOS ]; then
+            CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
           else
             go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
           fi
@@ -184,7 +189,7 @@ jobs:
   # The headless UI suite is the longest step, so it is sharded across runner
   # machines. Every test still runs exactly once per OS; the shard action
   # splits the test list by index. Windows gets three shards because its runner
-  # is the slowest for this suite.
+  # is the slowest for this suite; macOS and Linux get two.
   ui:
     name: UI (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: changes
@@ -202,6 +207,12 @@ jobs:
           - os: windows-2022
             shard: 3
             shards: 3
+          - os: macos-15
+            shard: 1
+            shards: 2
+          - os: macos-15
+            shard: 2
+            shards: 2
           - os: ubuntu-24.04
             shard: 1
             shards: 2
@@ -254,86 +265,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # macOS runner slots are scarce and shared by every workflow in the account,
-  # so macOS runs in a single job and the independent vet/core tests/UI tests/
-  # build commands run concurrently inside it. Splitting this into separate
-  # macOS jobs made every extra job wait minutes for a runner slot, which cost
-  # more wall time than the concurrency saved.
-  macos:
-    name: macOS
-    needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
-    runs-on: macos-15
-    timeout-minutes: 20
-    defaults:
-      run:
-        shell: bash
-    env:
-      VIFF_SHOTS: ${{ github.workspace }}/.viff-test/ci/screenshots
-      VIFF_SHOTS_BY_TEST: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Record environment
-        run: |
-          mkdir -p .viff-test/ci/logs build
-          go version
-          git --version
-          printf 'TEMP=%s\nTMP=%s\nTMPDIR=%s\n' "$RUNNER_TEMP" "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
-      - name: Vet, test and build in parallel
-        run: |
-          set -uo pipefail
-          # Stamp the build identity into the binary; About and diagnostics read it.
-          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
-          COMMIT=$(git rev-parse --short HEAD)
-          BUILD_DATE=$(date -u +%Y-%m-%d)
-          LD="-X viff/internal/version.Version=$VERSION -X viff/internal/version.Commit=$COMMIT -X viff/internal/version.BuildDate=$BUILD_DATE"
-
-          go vet -tags 'vivahead litheaudit' ./... > .viff-test/ci/logs/vet.log 2>&1 &
-          vet=$!
-          go test -json -count=1 -timeout=10m ./... > .viff-test/ci/logs/core.jsonl &
-          core=$!
-          go test -json -count=1 -timeout=15m -tags 'vivahead litheaudit' ./internal/ui > .viff-test/ci/logs/ui.jsonl &
-          ui=$!
-          CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 \
-            go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff > .viff-test/ci/logs/build.log 2>&1 &
-          build=$!
-
-          status=0
-          wait "$vet" || status=1
-          wait "$core" || status=1
-          wait "$ui" || status=1
-          wait "$build" || status=1
-          if [ "$status" -ne 0 ]; then
-            for log in vet build; do
-              if [ -s ".viff-test/ci/logs/$log.log" ]; then
-                echo "===== $log.log ====="
-                cat ".viff-test/ci/logs/$log.log"
-              fi
-            done
-            exit "$status"
-          fi
-      - name: Package and check installation without opening windows
-        run: python scripts/package.py v0.1.0-ci --smoke
-      - name: Upload test evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: test-evidence-macos-15
-          path: .viff-test/ci/
-          include-hidden-files: true
-          if-no-files-found: warn
-          retention-days: 14
-
   required:
     name: CI
     if: always()
-    needs: [changes, quality, test, ui, macos]
+    needs: [changes, quality, test, ui]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -344,7 +279,6 @@ jobs:
           QUALITY: ${{ needs.quality.result }}
           TEST: ${{ needs.test.result }}
           UI: ${{ needs.ui.result }}
-          MACOS: ${{ needs.macos.result }}
         run: |
           set -euo pipefail
           test "$CHANGES" = success
@@ -354,10 +288,8 @@ jobs:
             test "$QUALITY" = skipped
             test "$TEST" = skipped
             test "$UI" = skipped
-            test "$MACOS" = skipped
           else
             test "$QUALITY" = success
             test "$TEST" = success
             test "$UI" = success
-            test "$MACOS" = success
           fi
