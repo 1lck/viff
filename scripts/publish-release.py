@@ -24,9 +24,28 @@ def gh(*args):
     return subprocess.run(['gh', *args], text=True, capture_output=True)
 
 
+release_id = None
+
+
 def release():
-    result = gh('api', f'{endpoint}/tags/{tag}')
-    return json.loads(result.stdout) if result.returncode == 0 else None
+    global release_id
+    # The tag endpoint does not reliably expose drafts. Once discovered, address
+    # the release by ID; use the authenticated list endpoint to find drafts.
+    route = f'{endpoint}/{release_id}' if release_id is not None else f'{endpoint}/tags/{tag}'
+    result = gh('api', route)
+    if result.returncode == 0:
+        state = json.loads(result.stdout)
+        release_id = state['id']
+        return state
+    result = gh('api', '--paginate', '--slurp', f'{endpoint}?per_page=100')
+    if result.returncode != 0:
+        return None
+    for page in json.loads(result.stdout):
+        for state in page:
+            if state['tag_name'] == tag:
+                release_id = state['id']
+                return state
+    return None
 
 
 for attempt in range(5):
