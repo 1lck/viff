@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -883,4 +884,77 @@ func (w *Workspace) InteractiveRebase(base string, steps []gitcli.RebaseStep) {
 		_, err := w.Git.InteractiveRebase(ctx, repo, base, steps)
 		return err
 	}, RunOptions{OnError: w.operationError("Rebase"), Success: "Rebase finished"})
+}
+
+// CommitMessage loads one commit's full message for the edit dialog.
+func (w *Workspace) CommitMessage(hash string, done func(message string, err error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	repo := rs.Repo
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		d, err := w.Git.CommitDetail(ctx, repo, hash)
+		w.post(func() {
+			if w.Repo == rs {
+				done(d.Body, err)
+			}
+		})
+	}()
+}
+
+// RewordCommit replaces one commit's message. Its content and the commits
+// after it stay the same.
+func (w *Workspace) RewordCommit(hash, message string) {
+	short := domain.ShortHash(hash)
+	w.Run("Edit commit message", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		_, err := w.Git.RewordCommit(ctx, repo, hash, message)
+		return err
+	}, RunOptions{OnError: w.rewriteError("Edit commit message"), Success: "Message of " + short + " updated",
+		SuccessBody: "The commits after it were replayed on top."})
+}
+
+// SquashCommit folds one commit into its parent with a combined message.
+func (w *Workspace) SquashCommit(hash, message string) {
+	short := domain.ShortHash(hash)
+	w.Run("Squash commit", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		_, err := w.Git.SquashCommit(ctx, repo, hash, message)
+		return err
+	}, RunOptions{OnError: w.rewriteError("Squash commit"), Success: "Squashed " + short + " into its parent",
+		SuccessBody: "The combined commit keeps both changes."})
+}
+
+// DropCommit removes one commit from the branch; its changes disappear.
+func (w *Workspace) DropCommit(hash string) {
+	short := domain.ShortHash(hash)
+	w.Run("Drop commit", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		_, err := w.Git.DropCommit(ctx, repo, hash)
+		return err
+	}, RunOptions{OnError: w.rewriteError("Drop commit"), Success: "Dropped " + short,
+		SuccessBody: "The commits after it were replayed without it."})
+}
+
+// rewriteError explains a refused or aborted history edit. The Git command
+// aborts its own rebase, so the branch is back where it started.
+func (w *Workspace) rewriteError(title string) func(error) bool {
+	return func(err error) bool {
+		switch {
+		case errors.Is(err, gitcli.ErrRewriteAbortLeft):
+			w.Notify(NoticeError, title+" failed", "The rebase is still in progress. Run `git rebase --abort` in a terminal before doing anything else.\n\n"+ErrorText(err))
+			return true
+		case gitcli.KindOf(err) == gitcli.ErrConflict:
+			w.Notify(NoticeWarning, title+" was aborted", "The edit hit a conflict. Viff aborted the rebase and left the branch as it was.")
+			return true
+		case errors.Is(err, gitcli.ErrRewriteOperation),
+			errors.Is(err, gitcli.ErrRewriteRoot),
+			errors.Is(err, gitcli.ErrRewriteMerge),
+			errors.Is(err, gitcli.ErrRewriteUnrelated),
+			errors.Is(err, gitcli.ErrRewriteMessage):
+			w.Notify(NoticeWarning, title, err.Error())
+			return true
+		}
+		return false
+	}
 }

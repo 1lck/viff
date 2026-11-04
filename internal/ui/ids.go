@@ -183,3 +183,8 @@ var (
 	// Commit comparison dialog.
 	idCompareScroll = tree.ID(fDialog, "compare-scroll")
 )
+
+// Editing history from the log.
+var (
+	idLogEditMessage = tree.ID(fDialog, "log-edit-message")
+)

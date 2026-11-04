@@ -739,6 +739,16 @@ func (w *Window) commitMenu() []item {
 			})
 		}})
 	}
+	if single {
+		// Editing history replays the commits after the target, so it needs
+		// a commit with exactly one parent and no operation in flight.
+		canEdit := len(c.Parents) == 1 && !rs.Operation.Active()
+		items = append(items, sep(),
+			item{title: "Edit Commit Message…", disabled: !canEdit, run: func() { w.openRewordCommit(c) }},
+			item{title: "Squash into Parent…", disabled: !canEdit, run: func() { w.openSquashCommit(c) }},
+			item{title: "Drop Commit…", disabled: !canEdit, run: func() { w.openDropCommit(c) }},
+		)
+	}
 	items = append(items, sep(),
 		item{title: "New Branch…", icon: icons.Add, disabled: !single, run: func() { w.openNewBranch(c.Hash, short) }},
 		item{title: "New Tag…", icon: icons.BranchLabel, disabled: !single, run: func() { w.openNewTag(c.Hash, short) }},
