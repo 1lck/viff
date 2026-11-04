@@ -275,7 +275,11 @@ func (w *Window) Paint(c *ui.Canvas, size ui.Size) {
 		c.AfterPaint(w.runDeferred)
 		w.Invalidate()
 	}
-	if w.ws.Busy() || w.ws.Pending() {
+	if w.ws.Pending() {
+		// Results queued before the window existed (or between wakes) are
+		// applied in OnWake; ask for one.
+		w.Invalidate()
+	} else if w.ws.Busy() {
 		c.RequestFrameIn(120 * time.Millisecond)
 	}
 }

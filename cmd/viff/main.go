@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/vivaui/viva/app"
+	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
@@ -46,7 +47,9 @@ func main() {
 	}
 	win.Start(dir)
 
-	if err := app.Run(win.Config()); err != nil {
+	// RunCanvas, not Run: Run opens a plain native window and ignores Paint
+	// and the event handlers.
+	if err := app.RunCanvas(win.Config(), &ui.Canvas{}); err != nil {
 		fmt.Fprintln(os.Stderr, "viff:", err)
 		os.Exit(1)
 	}
