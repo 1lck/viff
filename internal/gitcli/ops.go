@@ -66,9 +66,9 @@ func (r *Runner) writePaths(ctx context.Context, repo domain.Repo, args []string
 
 // CommitOptions configures a commit.
 type CommitOptions struct {
-	Message string
-	Amend   bool
-	SignOff bool
+	Message  string
+	Amend    bool
+	SignOff  bool
 	NoVerify bool
 	// Paths, when set, commits only these paths (git commit --only).
 	Paths []string

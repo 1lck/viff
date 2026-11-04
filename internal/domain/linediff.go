@@ -10,7 +10,7 @@ import (
 type WhitespaceMode uint8
 
 const (
-	WhitespaceExact WhitespaceMode = iota
+	WhitespaceExact  WhitespaceMode = iota
 	WhitespaceTrim                  // ignore leading and trailing whitespace
 	WhitespaceIgnore                // ignore all whitespace
 )

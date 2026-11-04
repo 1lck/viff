@@ -192,7 +192,7 @@ func TestGraphLayoutContinuityAcrossPages(t *testing.T) {
 	var commits []Commit
 	n := 300
 	for i := 0; i < n; i++ {
-		c := Commit{Hash: string(rune('A' + i%26)) + string(rune('0'+i/26%10)) + string(rune('a'+i/260))}
+		c := Commit{Hash: string(rune('A'+i%26)) + string(rune('0'+i/26%10)) + string(rune('a'+i/260))}
 		commits = append(commits, c)
 	}
 	for i := range commits {

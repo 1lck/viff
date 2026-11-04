@@ -21,9 +21,9 @@ type PatchSide struct {
 func BuildPatch(path string, old, new PatchSide, blocks []Block, selOld, selNew func(int) bool) []byte {
 	const context = 3
 	type line struct {
-		kind byte // ' ', '-', '+'
-		text string
-		old  int // old line index for ' ' and '-', -1 for '+'
+		kind    byte // ' ', '-', '+'
+		text    string
+		old     int // old line index for ' ' and '-', -1 for '+'
 		eofNoNL bool
 	}
 	delta := 0 // applied size change so far, to compute new-side starts
