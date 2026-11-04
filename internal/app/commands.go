@@ -1015,6 +1015,27 @@ func (w *Workspace) CompareCommits(from, to string, done func([]domain.Change, e
 	}()
 }
 
+// RevisionTree lists the files in the tree of rev, sorted by path, in the
+// background. The header of the browser comes from the log entry the UI
+// already has, so only the tree is asked of Git.
+func (w *Workspace) RevisionTree(rev string, done func([]domain.TreeEntry, error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	repo := rs.Repo
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		list, err := w.Git.TreeAt(ctx, repo, rev)
+		w.post(func() {
+			if w.Repo == rs {
+				done(list, err)
+			}
+		})
+	}()
+}
+
 // RebaseCommits loads the commits an interactive rebase starting at from
 // would replay, oldest first, and the base it rebases onto.
 func (w *Workspace) RebaseCommits(from string, done func(list []gitcli.RebaseCommit, base string, err error)) {

@@ -754,6 +754,7 @@ func (w *Window) commitMenu() []item {
 		item{title: "New Tag…", icon: icons.BranchLabel, disabled: !single, run: func() { w.openNewTag(c.Hash, short) }},
 		// A merge commit has more than one history, so "up to" is ambiguous.
 		item{title: "Push Up to Commit…", icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }},
+		item{title: "Browse Repository at Revision…", icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }},
 	)
 	return items
 }
