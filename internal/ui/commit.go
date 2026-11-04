@@ -95,7 +95,7 @@ func (w *Window) buildRows() {
 		if len(entries) == 0 && a != domain.AreaStaged && a != domain.AreaUnstaged {
 			continue
 		}
-		if len(entries) == 0 && a == domain.AreaStaged && rs.Status.Clean() {
+		if len(entries) == 0 && a == domain.AreaStaged {
 			continue
 		}
 		gk := rowKey(a, "")
@@ -170,7 +170,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 		w.after(func() { w.stageArea(domain.AreaUnstaged, domain.AreaUntracked) })
 	}
 	x += actionSize + 2
-	if w.action(idCmUnstage, x, y, icons.Remove, "Unstage All", actOpts{disabled: staged == 0}) {
+	if w.action(idCmUnstage, x, y, icons.Hide, "Unstage All", actOpts{disabled: staged == 0}) {
 		w.after(func() { w.unstageAll() })
 	}
 	x += actionSize + 8
@@ -408,7 +408,7 @@ func (w *Window) rowAction(i int, row changeRow, hl ui.Rect) {
 	var tip string
 	switch row.area {
 	case domain.AreaStaged:
-		pair, tip = icons.Remove, "Unstage"
+		pair, tip = icons.Hide, "Unstage"
 	case domain.AreaConflicts:
 		return
 	default:
@@ -813,7 +813,7 @@ func (w *Window) changesMenu() []item {
 		items = append(items, item{title: "Stage", icon: icons.Add, shortcut: "Space", run: w.toggleStageSelection})
 	}
 	if unstage {
-		items = append(items, item{title: "Unstage", icon: icons.Remove, shortcut: "Space", run: w.toggleStageSelection})
+		items = append(items, item{title: "Unstage", icon: icons.Hide, shortcut: "Space", run: w.toggleStageSelection})
 	}
 	if conflict {
 		items = append(items, item{title: "Mark Resolved", icon: icons.Checked, run: func() { w.markResolved(first.entry.Path) }})
@@ -909,10 +909,6 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	pw := w.buttonWidth(pl)
 	if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
 		w.after(func() { w.doCommit(true) })
-	}
-	if !can && staged == 0 && !v.amend && !rs.Status.Clean() && conflicts == 0 {
-		hx := r.X + 10 + bw + 10 + pw + 12
-		w.p.text("Nothing staged", rect(hx, by, right(r)-hx-10, buttonH), fontSmall, regular, w.pal.TextSecond)
 	}
 }
 

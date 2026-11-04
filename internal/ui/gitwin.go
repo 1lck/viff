@@ -1038,8 +1038,14 @@ func (w *Window) paintDetails(r ui.Rect) {
 	mr := inset(msg, 14, 10)
 	lines := w.c.WrapLines(nil, d.Subject, fontUI, semibold, mr.Width, 4)
 	body := strings.TrimSpace(d.Body)
+	if strings.HasPrefix(body, d.Subject) {
+		body = strings.TrimSpace(body[len(d.Subject):])
+	}
 	var bodyLines []string
 	for _, para := range strings.Split(body, "\n") {
+		if body == "" {
+			break
+		}
 		if para == "" {
 			bodyLines = append(bodyLines, "")
 			continue

@@ -249,10 +249,19 @@ func (w *Window) refreshTabs() {
 	if rs == nil {
 		return
 	}
-	for _, t := range w.ed.tabs {
-		if t.src.Working && !t.loading && t.statusAt.Before(rs.StatusTime) {
-			w.loadTab(t)
+	v := &w.ed
+	for i := len(v.tabs) - 1; i >= 0; i-- {
+		t := v.tabs[i]
+		if !t.src.Working || t.loading || !t.statusAt.Before(rs.StatusTime) {
+			continue
 		}
+		if t.preview && !inArea(rs.Entries(t.src.Area), t.src.Path) {
+			// The file left this area (staged, committed or rolled back):
+			// a preview follows the selection, so it closes like IntelliJ's.
+			w.after(func() { w.closeTabOf(t) })
+			continue
+		}
+		w.loadTab(t)
 	}
 }
 
@@ -487,5 +496,23 @@ func (w *Window) openExternal(rel string, line int) {
 	full := path.Join(rs.Repo.Root, rel)
 	if err := platform.OpenWith(w.ws.Settings.ExternalEditor, full, line); err != nil {
 		w.ws.NotifyError("Cannot open "+domain.FileName(rel), err)
+	}
+}
+
+func inArea(entries []domain.StatusEntry, p string) bool {
+	for _, e := range entries {
+		if e.Path == p {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *Window) closeTabOf(t *diffTab) {
+	for i, o := range w.ed.tabs {
+		if o == t {
+			w.closeTab(i)
+			return
+		}
 	}
 }

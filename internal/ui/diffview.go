@@ -103,7 +103,7 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	var oldY float32
 	if sync {
 		oldY = float32(domain.MapLine(res.Blocks, float64(t.y/lineH), false)) * lineH
-		oldY = clampF(oldY, 0, max(0, oldContent-h))
+		oldY = clampF(oldY, 0, max(0, oldContent-3*lineH))
 	} else {
 		t.yOld = clampF(t.yOld, 0, max(0, oldContent-h))
 		oldY = t.yOld
@@ -540,7 +540,7 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 					w.after(func() { w.applyBlock(t, bi, vapp.BlockRevert) })
 				}
 			} else {
-				if w.blockButton(scDiffBlockA.At(bi), rect(gr.X+gutter-20, y+(lineH-15)/2, 15, 15), icons.Remove, w.applyTip(t, bi, "Unstage")) {
+				if w.blockButton(scDiffBlockA.At(bi), rect(gr.X+gutter-20, y+(lineH-15)/2, 15, 15), icons.Hide, w.applyTip(t, bi, "Unstage")) {
 					w.after(func() { w.applyBlock(t, bi, vapp.BlockUnstage) })
 				}
 			}

@@ -93,11 +93,6 @@ func (w *Window) paintDialog(full ui.Rect) {
 	d := w.dialog
 	w.c.PushLayer(10)
 	defer w.c.PopLayer()
-	scrim := ui.Color{Alpha: 0.35}
-	if !w.pal.Dark {
-		scrim = ui.Color{Alpha: 0.18}
-	}
-	w.p.fill(full, scrim)
 	w.c.HitWithOptions(idDialogScrim, full, "", ui.HitOptions{Backdrop: true, SkipFocus: true})
 
 	height := 44 + d.contentH + 24 + buttonH + dlgPad
