@@ -9,6 +9,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	"viff/assets/branding"
 	"viff/internal/ui/icons"
 )
 
@@ -48,7 +49,7 @@ func (w *Window) paintWelcome(full ui.Rect) {
 	// Left navigation.
 	nav := splitLeft(&r, 230)
 	nav = inset(nav, 0, 0)
-	w.projectBadge(rect(nav.X+20, nav.Y+16, 36, 36), "Viff", 8)
+	w.c.DrawBitmap(branding.Bitmap, rect(nav.X+20, nav.Y+16, 36, 36))
 	w.p.text("Viff", rect(nav.X+66, nav.Y+14, 150, 22), 15, semibold, w.pal.Text)
 	w.p.text("Git client", rect(nav.X+66, nav.Y+34, 150, 18), fontSmall, regular, w.pal.TextSecond)
 	items := []struct {

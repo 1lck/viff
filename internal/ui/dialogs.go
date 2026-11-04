@@ -1,6 +1,7 @@
 package viffui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	"viff/assets/branding"
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/gitcli"
@@ -561,14 +563,14 @@ func (w *Window) settingsMenu() []item {
 
 func (w *Window) openAbout() {
 	ver := ""
-	if v, err := w.ws.Git.Version(nil); err == nil {
+	if v, err := w.ws.Git.Version(context.Background()); err == nil {
 		ver = v
 	}
 	w.openDialog(&dialog{
 		title: "About Viff", ok: "Close", width: 420, noCancel: true,
 		body: func(f *form) {
 			f.custom(56, func(r ui.Rect) {
-				w.projectBadge(rect(r.X, r.Y+4, 44, 44), "Viff", 10)
+				w.c.DrawBitmap(branding.Bitmap, rect(r.X, r.Y+4, 44, 44))
 				w.p.text("Viff", rect(r.X+58, r.Y+4, 200, 24), 18, semibold, w.pal.Text)
 				w.p.text("A Git client in the style of IntelliJ IDEA", rect(r.X+58, r.Y+28, r.Width-58, 20), fontUI, regular, w.pal.TextMuted)
 			})

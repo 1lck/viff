@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/branding/icon.png" width="128" height="128" alt="Viff" />
+
 # Viff
 
 **轻量、原生的 Git 桌面客户端。**
