@@ -105,7 +105,11 @@ func (w *Window) gitWindowMenu() []item {
 		{title: "Apply Patch to Index…", icon: icons.Patch, run: func() { w.choosePatch(true) }},
 	}
 	// The submodule actions share this one menu.
-	return append(append(items, sep()), w.gitMenu()...)
+	items = append(append(items, sep()), w.gitMenu()...)
+	if w.repo().Shallow {
+		items = append(items, sep(), item{title: "Fetch Full History (Unshallow)", icon: icons.Fetch, run: func() { w.fetchFullHistory() }})
+	}
+	return items
 }
 
 // choosePatch asks for a saved patch and applies it.

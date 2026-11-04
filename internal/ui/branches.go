@@ -193,6 +193,9 @@ func (w *Window) refActions(r domain.Ref) []item {
 			item{title: "Rename…", icon: icons.Edit, run: func() { w.openRename(r) }},
 			item{title: "Delete", icon: icons.Delete, run: func() { w.ws.DeleteBranch(r, false) }},
 		)
+		if len(rs.Remotes) > 0 {
+			items = append(items, item{title: "Update from Remote", icon: icons.Update, disabled: busy, run: func() { w.updateBranchFromRemote(r) }})
+		}
 	} else {
 		items = append(items, item{title: "Delete", icon: icons.Delete, run: func() {
 			w.confirm("Delete Remote Branch", "Delete "+q+" on "+r.Remote()+"? Everyone who fetches will lose this branch.", "Delete", func() {

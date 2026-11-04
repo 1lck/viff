@@ -425,6 +425,56 @@ func (w *Workspace) Pull(mode gitcli.PullMode) {
 	})
 }
 
+// UpdateBranch fast-forwards a local branch that no worktree has checked out
+// from the remote's same-named branch. A branch that diverged, or that a
+// worktree holds, is left untouched and explained instead of forced.
+func (w *Workspace) UpdateBranch(remote, branch string) {
+	var res gitcli.BranchUpdate
+	w.Run("Updating "+branch, func(ctx context.Context, repo domain.Repo, p func(string)) error {
+		var err error
+		res, err = w.Git.UpdateBranch(ctx, repo, remote, branch, p)
+		return err
+	}, RunOptions{
+		OnError: func(err error) bool {
+			if errors.Is(err, gitcli.ErrBranchCheckedOut) {
+				w.Notify(NoticeWarning, "Cannot update "+branch, "The branch is checked out in a worktree. Update it there, where its files are.")
+				return true
+			}
+			if errors.Is(err, gitcli.ErrBranchDiverged) {
+				w.Notify(NoticeWarning, "Cannot fast-forward "+branch, "It has commits the remote does not. Merge or rebase it in a worktree first; Viff leaves the branch unchanged.")
+				return true
+			}
+			return false
+		},
+		After: func() {
+			switch {
+			case res.UpToDate:
+				w.Notify(NoticeSuccess, branch+" is up to date", "No new commits on "+remote+"/"+branch+".")
+			case res.New != "":
+				w.Notify(NoticeSuccess, "Updated "+branch, fmt.Sprintf("%s → %s, %d new commits", domain.ShortHash(res.Old), domain.ShortHash(res.New), res.Commits))
+			}
+		},
+	})
+}
+
+// UnshallowRepository fetches the history a shallow clone left out.
+func (w *Workspace) UnshallowRepository() {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	if !rs.Shallow {
+		w.Notify(NoticeInfo, "History is complete", "This repository is not a shallow clone.")
+		return
+	}
+	w.Run("Fetching full history", func(ctx context.Context, repo domain.Repo, p func(string)) error {
+		return w.Git.Unshallow(ctx, repo, p)
+	}, RunOptions{
+		Success:     "Full history fetched",
+		SuccessBody: "The repository is no longer a shallow clone.",
+	})
+}
+
 // Push pushes a branch.
 func (w *Workspace) Push(o gitcli.PushOptions, after func()) {
 	title := "Pushing"

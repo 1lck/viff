@@ -39,6 +39,10 @@ type RepoState struct {
 	Worktrees       []domain.Worktree
 	WorktreesLoaded bool
 
+	// Shallow marks a clone whose history is truncated. The Git window offers
+	// to fetch the missing history while it is set.
+	Shallow bool
+
 	Log LogState
 
 	// Detail is the selected commit's detail in the log.
@@ -171,6 +175,7 @@ func (w *Workspace) Refresh(meta bool) {
 			stashes, _ = w.Git.Stashes(ctx, repo)
 		}
 		worktrees, worktreesErr := w.Git.Worktrees(ctx, repo)
+		shallow, shallowErr := w.Git.IsShallow(ctx, repo)
 		w.post(func() {
 			if w.Repo != rs || rs.statusSeq != seq {
 				return
@@ -205,6 +210,9 @@ func (w *Workspace) Refresh(meta bool) {
 			}
 			if worktreesErr == nil {
 				rs.Worktrees, rs.WorktreesLoaded = worktrees, true
+			}
+			if shallowErr == nil {
+				rs.Shallow = shallow
 			}
 			if rs.refreshMore {
 				rs.refreshMore = false
