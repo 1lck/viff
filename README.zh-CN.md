@@ -91,7 +91,7 @@ go build -trimpath -ldflags="-s -w -H=windowsgui" -o build/viff.exe ./cmd/viff
 
 | 平台      | 架构                   | 格式         | 安装方式                                             |
 | --------- | ---------------------- | ------------ | ---------------------------------------------------- |
-| macOS 12+ | Apple Silicon（arm64） | `.dmg`       | 打开磁盘映像，将 **Viff** 拖入 **Applications**。    |
+| macOS 13+ | Apple Silicon（arm64） | `.dmg`       | 打开磁盘映像，将 **Viff** 拖入 **Applications**。    |
 | Windows   | x64（amd64）           | `-setup.exe` | 运行安装器，安装到当前用户目录。                     |
 | Linux     | x64（amd64）           | `.deb`       | Debian/Ubuntu 执行 `sudo apt install ./viff-*.deb`。 |
 | Linux     | x64（amd64）           | `.tar.gz`    | 解压便携包，在解压目录执行 `./viff`。                |

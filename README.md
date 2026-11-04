@@ -95,7 +95,7 @@ Starting with **v0.1.0-alpha.2**, releases include native installation formats:
 
 | Platform  | Architecture          | Package      | Install                                                           |
 | --------- | --------------------- | ------------ | ----------------------------------------------------------------- |
-| macOS 12+ | Apple Silicon (arm64) | `.dmg`       | Open the disk image and drag **Viff** to **Applications**.        |
+| macOS 13+ | Apple Silicon (arm64) | `.dmg`       | Open the disk image and drag **Viff** to **Applications**.        |
 | Windows   | x64 (amd64)           | `-setup.exe` | Run the per-user installer.                                       |
 | Linux     | x64 (amd64)           | `.deb`       | On Debian/Ubuntu, run `sudo apt install ./viff-*.deb`.            |
 | Linux     | x64 (amd64)           | `.tar.gz`    | Extract the portable archive and run `./viff` from its directory. |

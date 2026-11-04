@@ -161,10 +161,16 @@ Section "Uninstall"
     if output.read_bytes()[:2] != b"MZ":
         raise RuntimeError("Installer is not a Windows executable")
     if smoke:
+        import winreg
+
+        uninstall_key = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Viff"
         install = work / "installed"
         run(output, "/S", f"/D={install}")
         try:
             require_notices(install)
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, uninstall_key) as key:
+                if winreg.QueryValueEx(key, "DisplayVersion")[0] != version:
+                    raise RuntimeError("Installer registration has the wrong version")
             if (install / "viff.exe").read_bytes() != binary.read_bytes():
                 raise RuntimeError("Installed binary differs from build")
         finally:
@@ -174,6 +180,11 @@ Section "Uninstall"
                 run(uninstaller, "/S", f"_?={install}")
         if (install / "viff.exe").exists():
             raise RuntimeError("Uninstall did not remove the application")
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, uninstall_key):
+                raise RuntimeError("Uninstall left its registration behind")
+        except FileNotFoundError:
+            pass
     return [output]
 
 
@@ -185,6 +196,13 @@ def package_linux(binary, name, version, arch, work, dest, smoke):
     tar_path = dest / f"{name}.tar.gz"
     with tarfile.open(tar_path, "w:gz") as archive:
         archive.add(portable, arcname=name)
+    with tarfile.open(tar_path, "r:gz") as archive:
+        executable = archive.getmember(f"{name}/viff")
+        if not executable.isfile() or not executable.mode & 0o111:
+            raise RuntimeError("Portable archive has no executable")
+        for relative in ("LICENSE", "THIRD_PARTY_NOTICES.md", "assets/icons/intellij/LICENSE"):
+            if not archive.getmember(f"{name}/{relative}").isfile():
+                raise RuntimeError(f"Portable archive is missing {relative}")
     deb = work / "deb"
     (deb / "usr/bin").mkdir(parents=True)
     shutil.copy2(portable / "viff", deb / "usr/bin/viff")
