@@ -14,6 +14,7 @@ import (
 	"github.com/vivaui/viva/headless"
 
 	vapp "viff/internal/app"
+	"viff/internal/domain"
 	"viff/internal/gitcli"
 	"viff/internal/platform"
 	"viff/internal/storage"
@@ -66,7 +67,7 @@ func newUIFixture(t *testing.T) *uiFixture {
 	f.git("checkout", "-q", "main")
 	f.write("config.json", "{\n  \"name\": \"demo\",\n  \"port\": 9090,\n  \"debug\": false,\n  \"timeout\": 30\n}\n")
 	f.commit("Raise default port and add timeout", "2026-10-07T11:00:00")
-	f.git("merge", "-q", "--no-ff", "-m", "Merge branch 'feature/search'", "feature/search")
+	f.gitDated("2026-10-08T12:00:00", "merge", "-q", "--no-ff", "-m", "Merge branch 'feature/search'", "feature/search")
 	f.git("push", "-q", "origin", "main", "feature/search")
 	f.git("checkout", "-q", "-b", "fix/store-locking")
 	f.write("internal/store/store.go", storeV2)
@@ -119,6 +120,16 @@ func (f *uiFixture) gitIn(dir string, args ...string) string {
 	return string(out)
 }
 
+func (f *uiFixture) gitDated(date string, args ...string) {
+	f.t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = f.dir
+	cmd.Env = append(append(os.Environ(), f.env...), "GIT_EDITOR=true", "GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		f.t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
 func (f *uiFixture) write(name, content string) {
 	p := filepath.Join(f.dir, name)
 	os.MkdirAll(filepath.Dir(p), 0o755)
@@ -150,6 +161,32 @@ func (f *uiFixture) settle() {
 	f.s.Settle(60*time.Millisecond, 2*time.Second)
 }
 
+// settleTab also waits for the active editor tab to load.
+func (f *uiFixture) settleTab() {
+	f.t.Helper()
+	f.settle()
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		t := f.win.ed.cur()
+		return t != nil && !t.loading
+	}, 20*time.Second); err != nil {
+		f.t.Fatal(err)
+	}
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+}
+
+// assertIdle fails if the window keeps repainting with nothing going on
+// (a deferred-work loop would show up here).
+func (f *uiFixture) assertIdle() {
+	f.t.Helper()
+	f.s.Settle(100*time.Millisecond, 2*time.Second)
+	before := f.win.paints
+	time.Sleep(700 * time.Millisecond)
+	f.s.Settle(50*time.Millisecond, time.Second)
+	if n := f.win.paints - before; n > 3 {
+		f.t.Fatalf("window repainted %d times while idle", n)
+	}
+}
+
 func (f *uiFixture) snap(name string) {
 	f.t.Helper()
 	if f.shot == "" {
@@ -174,9 +211,10 @@ func TestScreenshots(t *testing.T) {
 	f.win.openRepo(f.dir)
 	f.settle()
 	f.snap("01-main")
+	f.assertIdle()
 
 	f.click("main.go")
-	f.settle()
+	f.settleTab()
 	f.snap("02-diff")
 
 	f.click("Branch: main")
@@ -186,6 +224,7 @@ func TestScreenshots(t *testing.T) {
 	f.click("Merge branch 'feature/search'")
 	f.settle()
 	f.snap("04-log-selected")
+	f.assertIdle()
 
 	f.ws.Settings.DiffUnified = true
 	f.click("main.go")
@@ -209,6 +248,97 @@ func TestScreenshots(t *testing.T) {
 	f.win.Invalidate()
 	f.s.Settle(40*time.Millisecond, time.Second)
 	f.snap("08-light")
+}
+
+// TestMoreScreenshots covers the welcome screen, stashes, settings and the
+// conflict viewer.
+func TestMoreScreenshots(t *testing.T) {
+	f := newUIFixture(t)
+	f.git("stash", "push", "-q", "-m", "WIP on store length", "--", "internal/store/store.go")
+	f.ws.Settings.AddRecent(f.dir)
+	f.ws.Settings.AddRecent(filepath.Join(filepath.Dir(f.dir), "missing-project"))
+	f.start(1280, 800)
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	f.snap("20-welcome")
+
+	f.win.openRepo(f.dir)
+	f.settle()
+	f.win.commitTab = 1
+	f.win.Invalidate()
+	if err := f.s.WaitFor(func(app.Snapshot) bool { return f.win.st.forHash != "" && !f.win.st.loading }, 10*time.Second); err != nil {
+		t.Fatalf("stash files never loaded: %v (st=%+v stashes=%+v)", err, f.win.st, f.ws.Repo.Stashes)
+	}
+	f.settle()
+	found := false
+	for _, c := range f.win.st.files {
+		found = found || c.Path == "internal/store/store.go"
+	}
+	if !found {
+		t.Fatalf("stash files = %v, want store.go among them", f.win.st.files)
+	}
+	f.snap("21-stash")
+	f.assertIdle()
+	f.win.commitTab = 0
+
+	f.win.openSettings()
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.snap("22-settings")
+	f.s.Keys("escape")
+
+	f.win.openStashDialog()
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.snap("23-stash-dialog")
+	f.s.Keys("escape")
+
+	// A merge conflict in store.go.
+	f.git("checkout", "-q", "--", ".")
+	f.git("reset", "-q", "--hard")
+	f.write("internal/store/store.go", strings.Replace(storeV1, "in-memory key-value store", "tiny in-memory key-value store", 1)+"\n// Len reports the number of keys.\nfunc (s *Store) Len() int { return len(s.m) }\n")
+	f.commit("Add Store.Len", "2026-10-13T10:00:00")
+	cmd := exec.Command("git", "merge", "fix/store-locking")
+	cmd.Dir = f.dir
+	cmd.Env = append(append(os.Environ(), f.env...), "GIT_EDITOR=true")
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("merge unexpectedly succeeded: %s", out)
+	}
+	f.ws.Refresh(true)
+	f.win.Invalidate()
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.ws.Repo != nil && len(f.ws.Repo.Entries(domain.AreaConflicts)) > 0
+	}, 20*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	f.snap("24-merge-state")
+	f.click("store.go")
+	f.settleTab()
+	f.snap("25-conflict")
+	f.assertIdle()
+}
+
+// TestLogSearch types into the log's search field and checks the debounced
+// filter runs without any click.
+func TestLogSearch(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1280, 800)
+	f.win.openRepo(f.dir)
+	f.settle()
+	f.click("Text or hash")
+	if err := f.s.Type("mutex"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Wait(500 * time.Millisecond)
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		l := &f.ws.Repo.Log
+		return l.Filter.Text == "mutex" && l.Loaded() && !l.Loading
+	}, 10*time.Second); err != nil {
+		t.Fatalf("search never applied: filter=%q", f.ws.Repo.Log.Filter.Text)
+	}
+	f.settle()
+	if got := f.ws.Repo.Log.Commits; len(got) != 1 || got[0].Subject != "Guard the store with a mutex" {
+		t.Fatalf("filtered log = %v", got)
+	}
+	f.snap("26-log-search")
 }
 
 const mainV1 = `package main

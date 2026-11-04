@@ -262,7 +262,7 @@ func (w *Window) branchFilterMenu() []item {
 			name := ref.Short
 			icon := icons.BranchLabel
 			if ref.Kind == domain.RefTag {
-				icon = icons.Tag
+				icon = icons.BranchLabel
 			}
 			items = append(items, item{title: name, icon: icon, checked: cur == name, run: func() {
 				w.lg.brSel = ref.Name
@@ -337,7 +337,11 @@ func (w *Window) openPathFilter(anchor ui.Rect) {
 			f.w.dialog.focus = id
 		},
 		extra: "Clear", onExtra: func() { w.dialog = nil; w.setFilter(func(f *vapp.LogFilter) { f.Path = "" }) },
-		onOK:  func() bool { p := strings.Trim(strings.TrimSpace(ed.String()), "/"); w.setFilter(func(f *vapp.LogFilter) { f.Path = p }); return true },
+		onOK: func() bool {
+			p := strings.Trim(strings.TrimSpace(ed.String()), "/")
+			w.setFilter(func(f *vapp.LogFilter) { f.Path = p })
+			return true
+		},
 	})
 }
 
@@ -528,7 +532,7 @@ func (w *Window) paintRefLabels(refs []domain.Ref, r ui.Rect, rightAlign bool) f
 		case domain.RefRemote:
 			l.c = w.pal.RefRemote
 		case domain.RefTag:
-			l.icon, l.c = icons.Tag, w.pal.RefTag
+			l.icon, l.c = icons.BranchLabel, w.pal.RefTag
 		}
 		if ref.Current {
 			l.icon, l.c = icons.CurrentBranchLabel, w.pal.RefHead
@@ -709,7 +713,7 @@ func (w *Window) commitMenu() []item {
 	}
 	items = append(items, sep(),
 		item{title: "New Branch…", icon: icons.Add, disabled: !single, run: func() { w.openNewBranch(c.Hash, short) }},
-		item{title: "New Tag…", icon: icons.Tag, disabled: !single, run: func() { w.openNewTag(c.Hash, short) }},
+		item{title: "New Tag…", icon: icons.BranchLabel, disabled: !single, run: func() { w.openNewTag(c.Hash, short) }},
 	)
 	return items
 }
@@ -863,7 +867,7 @@ func (w *Window) paintBranches(r ui.Rect) {
 				case row.ref.Kind == domain.RefRemote:
 					tint = w.pal.RefRemote
 				case row.ref.Kind == domain.RefTag:
-					icon, tint = icons.Tag, w.pal.RefTag
+					icon, tint = icons.BranchLabel, w.pal.RefTag
 				}
 			} else {
 				tint = w.pal.RefHead

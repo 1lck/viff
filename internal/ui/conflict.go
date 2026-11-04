@@ -59,7 +59,7 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	cv := t.res.Conflict
 	rs := w.repo()
 	// Banner.
-	bh := float32(84)
+	bh := float32(88)
 	br := splitTop(&r, bh)
 	inner := rect(br.X+10, br.Y+8, br.Width-20, bh-16)
 	bg, border := w.pal.BannerWarn, w.pal.BannerWarnBorder
@@ -83,10 +83,12 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	} else if !cv.Conflict.Kind.Textual() {
 		sub = "There is no text to merge. Keep or delete the file on disk, then mark it as resolved."
 	}
-	w.p.iconIn(icon, rect(inner.X+8, inner.Y+6, 18, 22))
-	w.p.text(title, rect(inner.X+32, inner.Y+6, inner.Width-44, 22), fontUI, semibold, w.pal.Text)
-	w.p.text(sub, rect(inner.X+32, inner.Y+26, inner.Width-44, 18), fontSmall, regular, w.pal.TextMuted)
-	bx, by := inner.X+32, bottom(inner)-32
+	w.p.iconIn(icon, rect(inner.X+10, inner.Y+8, 18, 22))
+	tw := w.p.text(title, rect(inner.X+34, inner.Y+8, inner.Width-46, 22), fontUI, semibold, w.pal.Text)
+	if sx := inner.X + 34 + tw + 12; right(inner)-sx > 60 {
+		w.p.text(sub, rect(sx, inner.Y+8, right(inner)-sx-12, 22), fontUI, regular, w.pal.TextMuted)
+	}
+	bx, by := inner.X+34, inner.Y+38
 	label := "Mark as Resolved"
 	bw := w.buttonWidth(label)
 	if w.button(idConflictStage, rect(bx, by, bw, 26), label, btnDefault, !resolved && cv.Conflict.Kind.Textual()) {

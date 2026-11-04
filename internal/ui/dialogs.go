@@ -170,7 +170,7 @@ func (w *Window) openReset(c domain.Commit) {
 	mode := 1
 	modes := []struct {
 		title, desc string
-		m          gitcli.ResetMode
+		m           gitcli.ResetMode
 	}{
 		{"Soft", "Files are untouched; the differences are staged for commit.", gitcli.ResetSoft},
 		{"Mixed", "Files are untouched; the differences are not staged.", gitcli.ResetMixed},

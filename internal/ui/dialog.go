@@ -177,7 +177,7 @@ func (f *form) message(s string, c ui.Color) {
 	f.y += 4
 }
 
-func (f *form) text(s string) { f.message(s, f.w.pal.Text) }
+func (f *form) text(s string)  { f.message(s, f.w.pal.Text) }
 func (f *form) muted(s string) { f.message(s, f.w.pal.TextSecond) }
 
 // bold paints a one-line emphasized row.
@@ -268,7 +268,7 @@ func (f *form) custom(h float32, paint func(r ui.Rect)) {
 func (w *Window) confirm(title, message, ok string, run func()) {
 	w.openDialog(&dialog{
 		title: title, ok: ok, width: 440,
-		body:  func(f *form) { f.text(message) },
-		onOK:  func() bool { run(); return true },
+		body: func(f *form) { f.text(message) },
+		onOK: func() bool { run(); return true },
 	})
 }

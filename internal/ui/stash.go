@@ -24,8 +24,9 @@ func (w *Window) paintStash(r ui.Rect) {
 	v := &w.st
 	rs := w.repo()
 	stashes := rs.Stashes
-	if v.sel >= len(stashes) {
-		v.sel = len(stashes) - 1
+	if v.sel >= len(stashes) || (v.sel < 0 && len(stashes) > 0) {
+		// Like IntelliJ's shelf, keep a stash selected so its files show.
+		v.sel = min(max(v.sel, 0), len(stashes)-1)
 	}
 	tb := splitTop(&r, 34)
 	x, y := tb.X+8, tb.Y+(tb.Height-actionSize)/2

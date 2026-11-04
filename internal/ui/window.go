@@ -16,14 +16,18 @@ import (
 // Window is the one main window: it owns view state (selection, scroll,
 // open panels) and reads everything else from the workspace.
 type Window struct {
-	ws    *vapp.Workspace
-	inv   app.Invalidator
-	pal   *Palette
-	theme ui.Theme
-	p     pen
-	c     *ui.Canvas
-	size  ui.Size
-	mono  ui.MonoFace
+	ws  *vapp.Workspace
+	inv app.Invalidator
+	// deferred holds work scheduled by after(); see runDeferred.
+	deferred []func()
+	paints   int
+	painting bool
+	pal      *Palette
+	theme    ui.Theme
+	p        pen
+	c        *ui.Canvas
+	size     ui.Size
+	mono     ui.MonoFace
 
 	// Registries rebuilt by every paint; event handlers read the latest.
 	scrolls  []scrollRegion
@@ -42,9 +46,9 @@ type Window struct {
 	mouse     ui.Point
 	mods      ui.Modifiers
 	focusNext ui.ID
-	tipID    ui.ID
-	tipSince time.Duration
-	tipAt    ui.Point
+	tipID     ui.ID
+	tipSince  time.Duration
+	tipAt     ui.Point
 
 	popups []*popup // menu stack: popups[0] is the root, later ones are submenus
 	dialog *dialog
@@ -68,10 +72,10 @@ type Window struct {
 	favPtr        map[string]*bool
 	pendingRebase string
 
-	lastGen     uint64
-	saveTimer   *time.Timer
-	fetchTicker *time.Ticker
-	started     time.Duration
+	lastGen   uint64
+	saveTimer *time.Timer
+	fetchStop chan struct{}
+	started   time.Duration
 }
 
 type scrollRegion struct {
@@ -172,6 +176,7 @@ func (w *Window) Config() app.Config {
 
 func (w *Window) onWake() {
 	w.ws.Drain()
+	w.runDeferred()
 	w.runDue()
 }
 
@@ -189,9 +194,7 @@ func (w *Window) Start(dir string) {
 
 func (w *Window) onClosed() {
 	w.flushSettings()
-	if w.fetchTicker != nil {
-		w.fetchTicker.Stop()
-	}
+	w.stopAutoFetch()
 	w.ws.Close()
 }
 
@@ -220,6 +223,8 @@ func (w *Window) flushSettings() {
 // Paint draws the whole window.
 func (w *Window) Paint(c *ui.Canvas, size ui.Size) {
 	w.c, w.size = c, size
+	w.painting = true
+	defer func() { w.painting = false }()
 	w.p = pen{c: c, pal: w.pal, mono: w.mono}
 	w.scrolls = w.scrolls[:0]
 	w.lists = w.lists[:0]
@@ -256,11 +261,19 @@ func (w *Window) Paint(c *ui.Canvas, size ui.Size) {
 	if w.focusNext != (ui.ID{}) {
 		c.RequestFocus(w.focusNext)
 		next := w.focusNext
-		c.AfterPaint(func() {
+		w.after(func() {
 			if w.focusNext == next {
 				w.focusNext = ui.ID{}
 			}
 		})
+	}
+	w.paints++
+	if len(w.deferred) > 0 {
+		// Viva runs AfterPaint only in a click's event pass; any other paint
+		// drops it. Deferred work therefore runs either right after the event
+		// pass or on the wake this schedules, whichever comes first.
+		c.AfterPaint(w.runDeferred)
+		w.Invalidate()
 	}
 	if w.ws.Busy() || w.ws.Pending() {
 		c.RequestFrameIn(120 * time.Millisecond)
@@ -474,14 +487,29 @@ func (w *Window) textInput(ctx app.TextInputContext) *app.TextInput {
 // ---- helpers -------------------------------------------------------------
 
 // after defers a state change until the paint that detected it finishes.
-func (w *Window) after(fn func()) { w.c.AfterPaint(fn) }
+// after schedules fn to run on the UI thread once this paint is over.
+func (w *Window) after(fn func()) {
+	if fn != nil {
+		w.deferred = append(w.deferred, fn)
+		if !w.painting {
+			w.Invalidate() // called from an event handler: run on the next wake
+		}
+	}
+}
+
+// runDeferred runs the work scheduled by after, in order.
+func (w *Window) runDeferred() {
+	fns := w.deferred
+	w.deferred = nil
+	for _, fn := range fns {
+		fn()
+	}
+}
 
 // clicked reports a click on id and schedules fn.
 func (w *Window) clicked(id ui.ID, fn func()) bool {
 	if w.c.Clicked(id) {
-		if fn != nil {
-			w.c.AfterPaint(fn)
-		}
+		w.after(fn)
 		return true
 	}
 	return false

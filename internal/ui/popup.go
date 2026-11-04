@@ -23,13 +23,13 @@ type item struct {
 	sub      []item
 	subFn    func() []item // built lazily when the submenu opens
 	run      func()
-	star     *bool // favourite toggle (branch popup)
+	star     *bool  // favourite toggle (branch popup)
 	filter   string // text matched by the speed search; "" = title
 	bold     bool
 }
 
-func sep() item                 { return item{sep: true} }
-func header(title string) item  { return item{header: title} }
+func sep() item                  { return item{sep: true} }
+func header(title string) item   { return item{header: title} }
 func (it item) selectable() bool { return !it.sep && it.header == "" && !it.disabled }
 func (it item) hasSub() bool     { return len(it.sub) > 0 || it.subFn != nil }
 

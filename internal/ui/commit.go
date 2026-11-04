@@ -35,13 +35,13 @@ type commitView struct {
 
 // changeRow is one row of the staging tree.
 type changeRow struct {
-	key    string
-	area   domain.Area
-	kind   int // rowGroup, rowDir, rowFile
-	dir    string
-	entry  domain.StatusEntry
-	count  int
-	depth  int
+	key   string
+	area  domain.Area
+	kind  int // rowGroup, rowDir, rowFile
+	dir   string
+	entry domain.StatusEntry
+	count int
+	depth int
 }
 
 const (
@@ -68,7 +68,7 @@ func (v *commitView) init() {
 	v.msg = text.NewEditor("")
 	v.collapsed = map[string]bool{}
 	v.sel = map[string]bool{}
-	v.msgH = 150
+	v.msgH = 116
 }
 
 func (v *commitView) reset() {
@@ -197,13 +197,15 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 
 	// Message section and buttons at the bottom.
 	v := &w.cm
-	msgH := clampF(v.msgH, 90, max(90, content.Height-120))
+	// The changes tree keeps at least ~110px (a few rows) before the message
+	// area grows; a small window shrinks the message down to 60px first.
+	msgH := clampF(v.msgH, 60, max(60, content.Height-84-110))
 	bottomR := splitBottom(&content, msgH+40+44)
 	w.p.hline(bottomR.X, bottomR.Y, bottomR.Width, w.pal.Border)
 	startH := msgH
 	w.splitter(idSplitMessage, rect(bottomR.X, bottomR.Y-3, bottomR.Width, 6), false,
 		func() { startH = msgH },
-		func(d float32) { v.msgH = clampF(startH-d, 90, max(90, r.Height-260)) }, nil)
+		func(d float32) { v.msgH = clampF(startH-d, 60, max(60, content.Height+msgH-110)) }, nil)
 	w.paintChanges(content)
 	w.paintCommitMessage(bottomR, msgH)
 }

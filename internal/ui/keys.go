@@ -167,22 +167,35 @@ var fetchDue atomic.Bool
 
 // startAutoFetch (re)starts the background fetch timer from settings.
 func (w *Window) startAutoFetch() {
-	if w.fetchTicker != nil {
-		w.fetchTicker.Stop()
-		w.fetchTicker = nil
-	}
+	w.stopAutoFetch()
 	s := w.ws.Settings
 	if !s.AutoFetch || s.AutoFetchMins < 1 {
 		return
 	}
-	t := time.NewTicker(time.Duration(s.AutoFetchMins) * time.Minute)
-	w.fetchTicker = t
+	stop := make(chan struct{})
+	w.fetchStop = stop
+	every := time.Duration(s.AutoFetchMins) * time.Minute
 	go func() {
-		for range t.C {
-			fetchDue.Store(true)
-			w.Invalidate()
+		t := time.NewTicker(every)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				fetchDue.Store(true)
+				w.Invalidate()
+			}
 		}
 	}()
+}
+
+// stopAutoFetch ends the timer goroutine, if any.
+func (w *Window) stopAutoFetch() {
+	if w.fetchStop != nil {
+		close(w.fetchStop)
+		w.fetchStop = nil
+	}
 }
 
 // runDue performs timer work on the UI thread.
