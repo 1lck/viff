@@ -1,0 +1,82 @@
+package storage
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestGitSettingsRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := Load(path) // missing file: defaults
+	if s.SSHCommand != "" || s.GPGProgram != "" || s.SigningKey != "" || s.SignFormat != "" || s.CommitSigning || s.CredentialHelper != "" {
+		t.Fatalf("new settings should leave Git settings empty: %+v", s)
+	}
+	s.SSHCommand = "/usr/bin/ssh -i ~/.ssh/id_ed25519"
+	s.GPGProgram = "/opt/homebrew/bin/gpg"
+	s.SigningKey = "0123456789ABCDEF"
+	s.SignFormat = "ssh"
+	s.CommitSigning = true
+	s.CredentialHelper = "osxkeychain"
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	back := Load(path)
+	if back.Warning != "" {
+		t.Fatalf("unexpected warning: %s", back.Warning)
+	}
+	if back.SSHCommand != s.SSHCommand || back.GPGProgram != s.GPGProgram ||
+		back.SigningKey != s.SigningKey || back.SignFormat != s.SignFormat ||
+		back.CommitSigning != s.CommitSigning || back.CredentialHelper != s.CredentialHelper {
+		t.Fatalf("round trip lost values:\n got %+v\nwant %+v", back, s)
+	}
+}
+
+// An old settings file has none of the Git fields. It must load with empty
+// values and keep everything else, so upgrading never changes behaviour.
+func TestSettingsFileWithoutGitFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	old := `{"version":1,"theme":"light","fontSize":14,"pullMode":"rebase","autoFetchMins":5}`
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Load(path)
+	if s.Warning != "" {
+		t.Fatalf("unexpected warning: %s", s.Warning)
+	}
+	if s.Theme != "light" || s.FontSize != 14 || s.PullMode != "rebase" {
+		t.Fatalf("old values lost: %+v", s)
+	}
+	if s.SSHCommand != "" || s.GPGProgram != "" || s.SigningKey != "" || s.SignFormat != "" || s.CommitSigning || s.CredentialHelper != "" {
+		t.Fatalf("Git settings should default to empty: %+v", s)
+	}
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var probe map[string]any
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatal(err)
+	}
+	if probe["theme"] != "light" || probe["pullMode"] != "rebase" {
+		t.Fatalf("saved file lost old values: %s", raw)
+	}
+	if _, ok := probe["sshCommand"]; ok {
+		t.Fatalf("empty Git settings should be omitted: %s", raw)
+	}
+}
+
+func TestSignFormatSanitized(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"signFormat":"gpg"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(path).SignFormat; got != "" {
+		t.Fatalf("unknown signFormat = %q, want empty", got)
+	}
+}

@@ -32,6 +32,16 @@ type Settings struct {
 	FetchPrune    bool   `json:"fetchPrune"`
 	PullMode      string `json:"pullMode"` // "merge", "rebase", "ff-only"
 
+	// Git settings passed to every invocation. Empty values leave Git's own
+	// configuration and defaults in charge, so an old settings file (which
+	// has none of these fields) keeps behaving exactly as before.
+	SSHCommand       string `json:"sshCommand,omitempty"`
+	GPGProgram       string `json:"gpgProgram,omitempty"`
+	SigningKey       string `json:"signingKey,omitempty"`
+	SignFormat       string `json:"signFormat,omitempty"` // "", "openpgp" or "ssh"
+	CommitSigning    bool   `json:"commitSigning,omitempty"`
+	CredentialHelper string `json:"credentialHelper,omitempty"`
+
 	ExternalEditor string `json:"externalEditor"`
 
 	Recent []Recent `json:"recent"`
@@ -173,6 +183,11 @@ func (s *Settings) sanitize() {
 	case "merge", "rebase", "ff-only":
 	default:
 		s.PullMode = d.PullMode
+	}
+	switch s.SignFormat {
+	case "", "openpgp", "ssh":
+	default:
+		s.SignFormat = ""
 	}
 	if len(s.Recent) > 20 {
 		s.Recent = s.Recent[:20]

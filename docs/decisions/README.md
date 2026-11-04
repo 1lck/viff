@@ -19,3 +19,4 @@
 | [0013](0013-smart-checkout.md) | 先 stash 再检出 |
 | [0014](0014-push-variants.md) | 推送变体：推到某个提交、别的远端、删除远端标签 |
 | [0015](0015-branch-update.md) | 更新未检出的分支与反浅化 |
+| [0016](0016-git-settings.md) | Git 命令、签名与凭据设置 |

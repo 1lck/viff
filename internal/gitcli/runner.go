@@ -131,6 +131,38 @@ func classify(stderr string, exit int, ctxErr error) ErrorKind {
 	return ErrOther
 }
 
+// Config is the Git configuration Viff passes to its own invocations. It
+// comes from the user's settings and never changes files on disk: empty
+// fields are left out so Git's configuration and defaults still apply.
+type Config struct {
+	SSHCommand       string // GIT_SSH_COMMAND
+	GPGProgram       string // gpg.program
+	SigningKey       string // user.signingkey
+	SignFormat       string // gpg.format: "openpgp" or "ssh"
+	CommitSigning    bool   // commit.gpgsign=true
+	CredentialHelper string // credential.helper
+}
+
+// args renders the configuration as -c arguments. Git applies them after the
+// system and user configuration and before the command, so they win without
+// editing the repository or the user's config.
+func (c Config) args() []string {
+	var out []string
+	add := func(key, value string) {
+		if value != "" {
+			out = append(out, "-c", key+"="+value)
+		}
+	}
+	add("gpg.program", c.GPGProgram)
+	add("user.signingkey", c.SigningKey)
+	add("gpg.format", c.SignFormat)
+	add("credential.helper", c.CredentialHelper)
+	if c.CommitSigning {
+		out = append(out, "-c", "commit.gpgsign=true")
+	}
+	return out
+}
+
 // Runner executes git. The zero value uses "git" from PATH.
 type Runner struct {
 	// Path is the git executable; "" means look it up on PATH.
@@ -140,32 +172,66 @@ type Runner struct {
 	// Log, when set, receives one line per finished command.
 	Log func(dir string, args []string, took time.Duration, err error)
 
-	once     sync.Once
-	resolved string
-	findErr  error
+	resolveMu sync.Mutex
+	pathReady bool
+	resolved  string
+	findErr   error
+
+	cfgMu sync.Mutex
+	cfg   Config
+}
+
+// SetConfig replaces the configuration used by commands started afterwards.
+// A command already running keeps the configuration it started with, so a
+// concurrent refresh never sees a half-applied setting.
+func (r *Runner) SetConfig(c Config) {
+	r.cfgMu.Lock()
+	r.cfg = c
+	r.cfgMu.Unlock()
+}
+
+func (r *Runner) config() Config {
+	r.cfgMu.Lock()
+	defer r.cfgMu.Unlock()
+	return r.cfg
+}
+
+// SetPath changes the Git executable and forgets the path resolved before, so
+// the next command runs the new binary instead of the cached one.
+func (r *Runner) SetPath(path string) {
+	r.resolveMu.Lock()
+	r.Path = path
+	r.pathReady = false
+	r.resolved = ""
+	r.findErr = nil
+	r.resolveMu.Unlock()
 }
 
 func (r *Runner) git() (string, error) {
-	r.once.Do(func() {
-		if r.Path != "" {
-			r.resolved = r.Path
-			return
-		}
-		p, err := exec.LookPath("git")
-		if err != nil {
-			// GUI processes on macOS start without the user's shell PATH.
-			for _, c := range []string{"/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git"} {
-				if st, e := os.Stat(c); e == nil && !st.IsDir() {
-					r.resolved = c
-					return
-				}
+	r.resolveMu.Lock()
+	defer r.resolveMu.Unlock()
+	if r.pathReady {
+		return r.resolved, r.findErr
+	}
+	r.pathReady = true
+	if r.Path != "" {
+		r.resolved = r.Path
+		return r.resolved, nil
+	}
+	p, err := exec.LookPath("git")
+	if err != nil {
+		// GUI processes on macOS start without the user's shell PATH.
+		for _, c := range []string{"/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git"} {
+			if st, e := os.Stat(c); e == nil && !st.IsDir() {
+				r.resolved = c
+				return r.resolved, nil
 			}
-			r.findErr = &Error{Kind: ErrNoGit, Err: err}
-			return
 		}
-		r.resolved = p
-	})
-	return r.resolved, r.findErr
+		r.findErr = &Error{Kind: ErrNoGit, Err: err}
+		return "", r.findErr
+	}
+	r.resolved = p
+	return r.resolved, nil
 }
 
 // baseArgs are prepended to every command: stable, uncolored, unquoted
@@ -177,7 +243,11 @@ func (r *Runner) command(ctx context.Context, dir string, args []string) (*exec.
 	if err != nil {
 		return nil, err
 	}
-	full := append(append([]string{}, baseArgs...), args...)
+	cfg := r.config()
+	full := make([]string, 0, len(baseArgs)+len(args)+8)
+	full = append(full, baseArgs...)
+	full = append(full, cfg.args()...)
+	full = append(full, args...)
 	cmd := exec.CommandContext(ctx, git, full...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
@@ -187,6 +257,10 @@ func (r *Runner) command(ctx context.Context, dir string, args []string) (*exec.
 		"LANGUAGE=C",
 	)
 	cmd.Env = append(cmd.Env, r.Env...)
+	if cfg.SSHCommand != "" {
+		// After Env so the setting wins; Git hands this to its ssh invocation.
+		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND="+cfg.SSHCommand)
+	}
 	cmd.WaitDelay = 2 * time.Second
 	return cmd, nil
 }

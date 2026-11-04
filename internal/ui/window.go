@@ -205,8 +205,11 @@ func (w *Window) onResize(size ui.Size) {
 	w.saveSettings()
 }
 
-// saveSettings writes settings shortly after the last change.
+// saveSettings writes settings shortly after the last change. Git settings
+// reach the runner immediately: a command started before the write finishes
+// still uses the new values.
 func (w *Window) saveSettings() {
+	w.ws.ApplyGitSettings()
 	if w.saveTimer != nil {
 		w.saveTimer.Stop()
 	}
@@ -215,6 +218,7 @@ func (w *Window) saveSettings() {
 }
 
 func (w *Window) flushSettings() {
+	w.ws.ApplyGitSettings()
 	if w.saveTimer != nil {
 		w.saveTimer.Stop()
 	}

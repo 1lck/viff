@@ -109,6 +109,7 @@ type Watcher interface{ Close() }
 func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
 	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now}
 	git.Log = w.logCommand
+	w.ApplyGitSettings()
 	return w
 }
 

@@ -589,12 +589,36 @@ func (w *Window) openSettings() {
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
+	gitDraft := newGitSettingsDraft(s)
+	page := 0
 	themeTitle := map[string]string{"dark": "Islands Dark", "light": "Islands Light", "system": "Sync with OS"}
 	pullTitle := map[string]string{"merge": "Merge", "rebase": "Rebase", "ff-only": "Fast-forward only"}
 	w.openDialog(&dialog{
 		title: "Settings", ok: "OK", width: 600,
 		body: func(f *form) {
 			f.labelW = 170
+			settingsTabs(f, &page, []string{"General", "Git"})
+			if page == 1 {
+				f.bold("Commands and signing")
+				gitDraft.form(f)
+				f.gap(6)
+				f.bold("Remote")
+				f.combo("Update method:", pullTitle[pull], func() []item {
+					var items []item
+					for _, k := range []string{"merge", "rebase", "ff-only"} {
+						k := k
+						items = append(items, item{title: pullTitle[k], checked: pull == k, run: func() { pull = k }})
+					}
+					return items
+				})
+				f.check("Prune remote branches on fetch", &prune)
+				f.check("Fetch in the background", &autoFetch)
+				if autoFetch {
+					m, err := strconv.Atoi(strings.TrimSpace(mins.String()))
+					f.field("Every (minutes):", mins, "10", err != nil || m < 1)
+				}
+				return
+			}
 			f.bold("Appearance")
 			f.combo("Theme:", themeTitle[theme], func() []item {
 				var items []item
@@ -607,22 +631,8 @@ func (w *Window) openSettings() {
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
 			f.field("Editor font size:", font, "13", err != nil || n < 8 || n > 32)
 			f.gap(6)
-			f.bold("Git")
-			f.field("Path to Git executable:", gitPath, "Detected automatically", false)
-			f.combo("Update method:", pullTitle[pull], func() []item {
-				var items []item
-				for _, k := range []string{"merge", "rebase", "ff-only"} {
-					k := k
-					items = append(items, item{title: pullTitle[k], checked: pull == k, run: func() { pull = k }})
-				}
-				return items
-			})
-			f.check("Prune remote branches on fetch", &prune)
-			f.check("Fetch in the background", &autoFetch)
-			if autoFetch {
-				m, err := strconv.Atoi(strings.TrimSpace(mins.String()))
-				f.field("Every (minutes):", mins, "10", err != nil || m < 1)
-			}
+			f.bold("Git executable")
+			f.field("Path to Git:", gitPath, "Detected automatically", false)
 			f.gap(6)
 			f.bold("Tools")
 			f.field("External editor command:", editor, "code -g {file}:{line}", false)
@@ -652,8 +662,9 @@ func (w *Window) openSettings() {
 			s.Theme = theme
 			s.FontSize = float32(n)
 			s.GitPath = strings.TrimSpace(gitPath.String())
-			w.ws.Git.Path = s.GitPath
+			w.ws.Git.SetPath(s.GitPath)
 			s.ExternalEditor = strings.TrimSpace(editor.String())
+			gitDraft.commit(s)
 			s.AutoFetch, s.FetchPrune, s.PullMode = autoFetch, prune, pull
 			if m > 0 {
 				s.AutoFetchMins = m
