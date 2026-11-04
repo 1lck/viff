@@ -30,6 +30,7 @@
   - 直接编辑历史：修改提交信息、把提交 squash 进父提交、删除提交（drop），冲突时自动 abort 并保持分支不变。
   - Console 显示所有执行过的 Git 命令及其输出；Reflog 页签可以查看 reflog。
 - **分支弹窗**（⌥⇧`）：速搜、收藏、本地和远程分支的子菜单，可执行检出、新建、重命名、合并、rebase、比较、设置上游、推送、删除；“Show Changed Files”列出两个分支 tip 之间的文件，双击打开 diff。
+- **工作树（Worktrees）**：分支弹窗底部的“Worktrees…”列出仓库的所有工作树（分支、短 HEAD、路径，当前工作树有标记），可以新建（分支名、路径、起点，路径按分支名建议）、删除（可强制丢弃改动，分支保留）、打开为当前仓库、复制路径；已被其他工作树检出的分支在分支菜单里标注，检出会打开那个工作树。
 - **推送和更新**：推送对话框列出待推送的提交，可选推送标签和 force-with-lease；更新支持 merge 或 rebase 方式；也支持 Fetch、后台定时 Fetch 和管理远程仓库。
 - **通知**：右下角气泡（成功消息 10 秒后自动隐藏），以及通知工具窗口。
 - **主题**：Islands Dark、Islands Light，或跟随系统。
@@ -75,4 +76,4 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - 目前只在 macOS 上验证过。Linux 和 Windows 的文件监听仍是轮询，见 [0003](docs/decisions/0003-file-watching.md)。
 - 界面字体使用系统字体（SF Pro），没有使用 Inter，见 [0002](docs/decisions/0002-fonts.md)。
 - 冲突需要在外部编辑器里解决，见 [0005](docs/decisions/0005-read-only-conflicts.md)。
-- 还不支持多 worktree 的专门界面；子模块只能查看状态、更新和同步，不能在应用内添加或删除，见 [0010](docs/decisions/0010-submodule-status.md)。
+- 新建工作树只能创建新分支，不能把已有分支检出到新工作树；prunable 工作树只能查看、不能删除。子模块不能在应用内添加或删除，见 [0010](docs/decisions/0010-submodule-status.md)。

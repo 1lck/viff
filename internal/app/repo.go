@@ -33,6 +33,12 @@ type RepoState struct {
 	// RefsByHash maps a commit to the refs pointing at it, for the log.
 	RefsByHash map[string][]domain.Ref
 
+	// Worktrees are the linked checkouts of this repository. A branch can be
+	// checked out in only one worktree, so the branch popup needs the list to
+	// say where a branch lives and where to open it.
+	Worktrees       []domain.Worktree
+	WorktreesLoaded bool
+
 	Log LogState
 
 	// Detail is the selected commit's detail in the log.
@@ -164,6 +170,7 @@ func (w *Workspace) Refresh(meta bool) {
 			remotes, _ = w.Git.Remotes(ctx, repo)
 			stashes, _ = w.Git.Stashes(ctx, repo)
 		}
+		worktrees, worktreesErr := w.Git.Worktrees(ctx, repo)
 		w.post(func() {
 			if w.Repo != rs || rs.statusSeq != seq {
 				return
@@ -195,6 +202,9 @@ func (w *Workspace) Refresh(meta bool) {
 						w.ReloadLog()
 					}
 				}
+			}
+			if worktreesErr == nil {
+				rs.Worktrees, rs.WorktreesLoaded = worktrees, true
 			}
 			if rs.refreshMore {
 				rs.refreshMore = false
@@ -256,6 +266,54 @@ func (rs *RepoState) CurrentRef() (domain.Ref, bool) {
 		}
 	}
 	return domain.Ref{}, false
+}
+
+// WorktreeOf returns the worktree that has branch checked out.
+func (rs *RepoState) WorktreeOf(branch string) (domain.Worktree, bool) {
+	if branch == "" {
+		return domain.Worktree{}, false
+	}
+	for _, wt := range rs.Worktrees {
+		// A prunable worktree's directory is gone, so it cannot be opened and
+		// no longer holds the branch in practice.
+		if wt.Prunable || wt.Bare {
+			continue
+		}
+		if wt.Branch == branch {
+			return wt, true
+		}
+	}
+	return domain.Worktree{}, false
+}
+
+// WorktreeElsewhere returns the other worktree that has branch checked out,
+// that is, not the checkout this state belongs to. A branch can be checked
+// out once, so the popup opens that worktree instead of failing a checkout.
+func (rs *RepoState) WorktreeElsewhere(branch string) (domain.Worktree, bool) {
+	wt, ok := rs.WorktreeOf(branch)
+	if !ok || samePath(wt.Path, rs.Repo.Root) {
+		return domain.Worktree{}, false
+	}
+	return wt, true
+}
+
+// IsCurrentWorktree reports whether wt is the checkout this state belongs to.
+func (rs *RepoState) IsCurrentWorktree(wt domain.Worktree) bool {
+	return samePath(wt.Path, rs.Repo.Root)
+}
+
+// samePath reports whether two paths name one directory, following symlinks
+// (on macOS /tmp is a link to /private/tmp).
+func samePath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	return errA == nil && errB == nil && ra == rb
 }
 
 // HeadLabel is the branch widget text: the branch, or the short hash when

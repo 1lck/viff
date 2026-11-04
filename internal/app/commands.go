@@ -699,7 +699,7 @@ func (w *Workspace) ApplyPatchFile(path string, cached bool, done func(error)) {
 	})
 }
 
-// Worktrees loads the worktree list.
+// Worktrees loads the worktree list and remembers it in the repository state.
 func (w *Workspace) Worktrees(done func([]domain.Worktree, error)) {
 	rs := w.Repo
 	if rs == nil {
@@ -709,8 +709,76 @@ func (w *Workspace) Worktrees(done func([]domain.Worktree, error)) {
 	go func() {
 		list, err := w.Git.Worktrees(context.Background(), repo)
 		w.post(func() {
-			if w.Repo == rs {
+			if w.Repo != rs {
+				return
+			}
+			if err == nil {
+				rs.Worktrees, rs.WorktreesLoaded = list, true
+			}
+			if done != nil {
 				done(list, err)
+			}
+		})
+	}()
+}
+
+// AddWorktree creates a worktree at path with a new branch, starting at
+// start ("" means HEAD). It reports the git error, then reloads the state.
+func (w *Workspace) AddWorktree(path, branch, start string, done func(error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	_, ctx, finish := w.startTask("New worktree "+branch, true)
+	repo := rs.Repo
+	go func() {
+		lock := writeLock(repo)
+		lock.Lock()
+		err := w.Git.AddWorktree(ctx, repo, path, branch, start)
+		lock.Unlock()
+		w.post(func() {
+			finish()
+			if w.Repo == rs {
+				if err != nil {
+					w.NotifyError("Cannot create worktree", err)
+				} else {
+					w.Notify(NoticeSuccess, "Worktree created", path)
+					w.Refresh(true)
+				}
+			}
+			if done != nil {
+				done(err)
+			}
+		})
+	}()
+}
+
+// RemoveWorktree deletes the worktree at path. Without force Git refuses to
+// delete one with modified or untracked files. The branch stays.
+func (w *Workspace) RemoveWorktree(path string, force bool, done func(error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	_, ctx, finish := w.startTask("Delete worktree", true)
+	repo := rs.Repo
+	go func() {
+		lock := writeLock(repo)
+		lock.Lock()
+		err := w.Git.RemoveWorktree(ctx, repo, path, force)
+		lock.Unlock()
+		w.post(func() {
+			finish()
+			if w.Repo == rs {
+				if err != nil {
+					w.NotifyError("Cannot delete worktree", err)
+				} else {
+					w.Notify(NoticeSuccess, "Worktree deleted", path)
+					w.Refresh(true)
+				}
+			}
+			if done != nil {
+				done(err)
 			}
 		})
 	}()

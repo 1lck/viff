@@ -163,6 +163,14 @@ var (
 	scDialogLinks  = tree.Sub(fDialog, tree.Name("links"))
 	idDialogList   = tree.ID(fDialog, "list")
 
+	// Worktrees dialog.
+	idWorktreeNew    = tree.ID(fDialog, "worktree-new")
+	idWorktreeOpen   = tree.ID(fDialog, "worktree-open")
+	idWorktreeCopy   = tree.ID(fDialog, "worktree-copy")
+	idWorktreeDelete = tree.ID(fDialog, "worktree-delete")
+	scWorktreeRows   = tree.Sub(fDialog, tree.Name("worktree-rows"))
+	scWorktreeBar    = tree.Sub(fDialog, tree.Name("worktree-scroll"))
+
 	// Notifications.
 	scNoticeClose   = tree.Sub(fNotify, tree.Name("close"))
 	scNoticeAction  = tree.Sub(fNotify, tree.Name("action"))

@@ -587,3 +587,153 @@ func TestCommitFlow(t *testing.T) {
 	}
 	f.snap("11-committed")
 }
+
+// TestWorktreesDialog covers the Worktrees dialog, the marker the branch
+// popup puts on a branch that another worktree has checked out, and creating
+// a worktree through the form.
+func TestWorktreesDialog(t *testing.T) {
+	f := newUIFixture(t)
+	wt := filepath.Join(t.TempDir(), "viff-demo-wt")
+	f.git("worktree", "add", "-q", "-b", "wt-feature", wt)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	// The branch popup says where a branch checked out elsewhere lives.
+	f.win.openBranchPopup(rect(240, 60, 160, 24))
+	f.win.Invalidate()
+	f.s.Settle(40*time.Millisecond, time.Second)
+	if !f.s.HasText("in viff-demo-wt") {
+		t.Fatalf("popup does not mark the other worktree: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.snap("40-worktree-branch")
+
+	f.click("Worktrees…")
+	if f.win.dialog == nil || f.win.dialog.title != "Worktrees" {
+		t.Fatalf("worktrees dialog = %+v", f.win.dialog)
+	}
+	if !f.s.HasText("2 worktrees") || !f.s.HasText("wt-feature") || !f.s.HasText("viff-demo-wt") || !f.s.HasText("current") {
+		t.Fatalf("worktrees rows: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.snap("41-worktrees")
+
+	// The form suggests a sibling path from the branch name.
+	f.click("New Worktree…")
+	if f.win.dialog == nil || f.win.dialog.title != "New Worktree" {
+		t.Fatalf("new worktree dialog = %+v", f.win.dialog)
+	}
+	f.click("Branch name:")
+	if err := f.s.Type("ui-wt"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.snap("42-new-worktree")
+	f.click("Create")
+
+	want := filepath.Join(filepath.Dir(f.dir), filepath.Base(f.dir)+"-ui-wt")
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.ws.Repo.WorktreesLoaded && len(f.ws.Repo.Worktrees) == 3 && !f.ws.Busy()
+	}, 20*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.win.dialog != nil && f.win.dialog.title == "Worktrees"
+	}, 10*time.Second); err != nil {
+		t.Fatalf("the worktrees dialog did not come back: %v", f.win.dialog)
+	}
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	if out := f.git("worktree", "list", "--porcelain"); !strings.Contains(out, want) {
+		t.Fatalf("worktree %s not created:\n%s", want, out)
+	}
+	if !f.s.HasText("3 worktrees") || !f.s.HasText("ui-wt") || !f.s.HasText("viff-demo-ui-wt") {
+		t.Fatalf("the new worktree is not listed: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.snap("43-worktree-created")
+
+	rowOf := func(branch string) string {
+		for _, wt := range f.ws.Repo.Worktrees {
+			if wt.Branch == branch {
+				return worktreeLabel(wt)
+			}
+		}
+		return ""
+	}
+
+	// Select the other worktree and delete it with the toolbar action.
+	f.click(rowOf("wt-feature"))
+	if !f.s.HasText("Copy Path") || !f.s.HasText("Delete…") {
+		t.Fatalf("actions missing: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.click("Delete…")
+	if f.win.dialog == nil || f.win.dialog.title != "Delete Worktree" {
+		t.Fatalf("delete dialog = %+v", f.win.dialog)
+	}
+	f.snap("44-delete-worktree")
+	f.click("Delete")
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return len(f.ws.Repo.Worktrees) == 2 && !f.ws.Busy()
+	}, 20*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if out := f.git("worktree", "list", "--porcelain"); strings.Contains(out, wt) {
+		t.Fatalf("worktree still listed:\n%s", out)
+	}
+	if !f.s.HasText("2 worktrees") {
+		t.Fatalf("the deleted worktree is still listed: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.snap("45-worktree-deleted")
+
+	// Open the new worktree: the window switches to it.
+	f.click(rowOf("ui-wt"))
+	f.click("Open")
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.ws.Repo != nil && f.ws.Repo.Repo.Root == want && !f.ws.Busy()
+	}, 20*time.Second); err != nil {
+		t.Fatalf("did not open %s: %v", want, err)
+	}
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	if f.win.dialog != nil {
+		t.Fatalf("the worktrees dialog stayed open: %+v", f.win.dialog)
+	}
+	if !f.s.HasText("ui-wt") {
+		t.Fatalf("the branch widget does not show ui-wt: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.snap("46-worktree-opened")
+	f.assertIdle()
+}
+
+// TestCheckoutOpensOtherWorktree checks that checking out a branch another
+// worktree holds opens that worktree instead of failing.
+func TestCheckoutOpensOtherWorktree(t *testing.T) {
+	f := newUIFixture(t)
+	wt := filepath.Join(t.TempDir(), "viff-demo-wt")
+	f.git("worktree", "add", "-q", "-b", "wt-feature", wt)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	f.win.openBranchPopup(rect(240, 60, 160, 24))
+	f.win.Invalidate()
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.click("wt-feature")
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.click("Checkout")
+	real, err := filepath.EvalSymlinks(wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.ws.Repo != nil && f.ws.Repo.Repo.Root == real && !f.ws.Busy()
+	}, 20*time.Second); err != nil {
+		t.Fatalf("checkout did not open %s: %v", real, err)
+	}
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	if len(f.ws.Repo.Worktrees) != 2 {
+		t.Fatalf("worktrees = %+v", f.ws.Repo.Worktrees)
+	}
+	if !f.s.HasText("feature") && !f.s.HasText("wt-feature") {
+		t.Fatalf("branch widget: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.snap("47-checkout-other-worktree")
+	f.assertIdle()
+}

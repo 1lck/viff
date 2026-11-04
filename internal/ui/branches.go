@@ -1,6 +1,7 @@
 package viffui
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/vivaui/viva/text"
@@ -69,6 +70,7 @@ func (w *Window) openBranchPopup(anchor ui.Rect) {
 			items = append(items, w.branchItem(r))
 		}
 	}
+	items = append(items, sep(), item{title: "Worktrees…", icon: icons.Folder, run: w.openWorktrees})
 	p := &popup{x: anchor.X, y: bottom(anchor) + 4, items: items, sel: -1, minWidth: 340, title: "Git Branches", search: text.NewEditor("")}
 	if anchor.Height == 0 {
 		// Opened from the status bar: grow upwards.
@@ -100,6 +102,14 @@ func (w *Window) branchItem(r domain.Ref) item {
 	}
 	if r.Gone {
 		it.hint = strings.TrimSpace(it.hint + " (gone)")
+	}
+	// A branch can be checked out in one worktree only; say where it lives so
+	// the checkout action's behaviour is not a surprise.
+	if r.Kind == domain.RefLocal && !r.Current {
+		if wt, ok := w.repo().WorktreeElsewhere(r.Short); ok {
+			where := "in " + filepath.Base(wt.Path)
+			it.hint = strings.TrimSpace(it.hint + " · " + where)
+		}
 	}
 	ref := r
 	it.subFn = func() []item { return w.refActions(ref) }
@@ -157,7 +167,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 		return items
 	}
 	items = append(items,
-		item{title: "Checkout", disabled: busy, run: func() { w.ws.Checkout(r) }},
+		item{title: "Checkout", disabled: busy, run: func() { w.checkoutBranch(r) }},
 		item{title: "New Branch from " + q + "…", icon: icons.Add, run: func() { w.openNewBranch(r.Name, name) }},
 	)
 	if cur != "" {
@@ -189,6 +199,17 @@ func (w *Window) refActions(r domain.Ref) []item {
 		}})
 	}
 	return items
+}
+
+// checkoutBranch checks a branch out here. A branch can be checked out in one
+// worktree only, so when another worktree already has it, IntelliJ opens that
+// worktree instead of failing the checkout.
+func (w *Window) checkoutBranch(r domain.Ref) {
+	if wt, ok := w.repo().WorktreeElsewhere(r.Short); ok {
+		w.openRepo(wt.Path)
+		return
+	}
+	w.ws.Checkout(r)
 }
 
 // compareBranches shows the commits of one branch missing from the other
