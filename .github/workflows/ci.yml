@@ -35,6 +35,8 @@ jobs:
             echo "$files"
             exit 1
           fi
+      - name: Test release API reconciliation
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Verify module integrity
         run: go mod verify
       - name: Check module tidiness
