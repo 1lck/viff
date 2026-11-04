@@ -13,3 +13,4 @@
 | [0007](0007-read-only-file-view.md) | 只读文件查看与 blame |
 | [0008](0008-compare-commits.md) | 提交比较视图 |
 | [0009](0009-patch.md) | 补丁的创建与应用 |
+| [0010](0010-submodule-status.md) | 子模块的状态、更新与同步 |

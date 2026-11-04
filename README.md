@@ -22,6 +22,7 @@
 - **冲突查看器**：Ours / Result / Theirs 三栏，在冲突块间跳转，在编辑器中打开，确认无冲突标记后才能标记为已解决。
 - **文件查看**：只读打开某个提交里的文件（“Open Repository Version”），显示行数、换行符，以及二进制、超大文件和子模块的说明；可定位到当前行用外部编辑器打开。
   - **Git blame 注解**：按提交新旧着色，显示作者与日期；点击注解在 Log 中定位该提交，右键可看该提交的 diff 或注解上一个版本。
+- **子模块**：Git 工具窗口的 ⋯ 菜单列出子模块的状态（未初始化 / 已修改 / 冲突）、当前提交和 describe，可 Update、Sync 或打开子模块；变更列表里子模块条目的右键菜单也有 Update Submodule 与 Open Submodule。递归子模块一并列出。
 - **Git 工具窗口**
   - Log：分支树；提交图；引用标签；按文本或哈希、分支、作者、日期、路径过滤；懒加载。
   - 提交详情：文件列表和完整提交信息。
@@ -73,4 +74,4 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - 目前只在 macOS 上验证过。Linux 和 Windows 的文件监听仍是轮询，见 [0003](docs/decisions/0003-file-watching.md)。
 - 界面字体使用系统字体（SF Pro），没有使用 Inter，见 [0002](docs/decisions/0002-fonts.md)。
 - 冲突需要在外部编辑器里解决，见 [0005](docs/decisions/0005-read-only-conflicts.md)。
-- 还不支持子模块和多 worktree 的专门界面，也没有交互式 rebase 编辑器。
+- 还不支持多 worktree 的专门界面；子模块只能查看状态、更新和同步，不能在应用内添加或删除，见 [0010](docs/decisions/0010-submodule-status.md)。

@@ -812,6 +812,13 @@ func (w *Window) changesMenu() []item {
 	items := []item{
 		{title: "Show Diff", icon: icons.Diff, shortcut: "⌘D", run: func() { w.showDiff(w.sourceFor(first), true) }},
 	}
+	if len(sel) == 1 && first.entry.IsSubmodule() {
+		sub := first.entry.Path
+		items = append(items,
+			item{title: "Update Submodule", icon: icons.Download, run: func() { w.ws.UpdateSubmodule(sub, true, nil) }},
+			item{title: "Open Submodule", icon: icons.Folder, run: func() { w.openSubmodule(sub) }},
+		)
+	}
 	if stage {
 		items = append(items, item{title: "Stage", icon: icons.Add, shortcut: "Space", run: w.toggleStageSelection})
 	}

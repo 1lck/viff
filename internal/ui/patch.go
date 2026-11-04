@@ -100,10 +100,12 @@ func (w *Window) gitWindowMenu() []item {
 	if w.repo() == nil {
 		return nil
 	}
-	return []item{
+	items := []item{
 		{title: "Apply Patch…", icon: icons.Patch, run: func() { w.choosePatch(false) }},
 		{title: "Apply Patch to Index…", icon: icons.Patch, run: func() { w.choosePatch(true) }},
 	}
+	// The submodule actions share this one menu.
+	return append(append(items, sep()), w.gitMenu()...)
 }
 
 // choosePatch asks for a saved patch and applies it.

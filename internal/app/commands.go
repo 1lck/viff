@@ -715,6 +715,64 @@ func (w *Workspace) Worktrees(done func([]domain.Worktree, error)) {
 	}()
 }
 
+// Submodules lists the repository's submodules in the background.
+func (w *Workspace) Submodules(done func([]domain.Submodule, error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	repo := rs.Repo
+	go func() {
+		list, err := w.Git.Submodules(context.Background(), repo)
+		w.post(func() {
+			if w.Repo == rs {
+				done(list, err)
+			}
+		})
+	}()
+}
+
+// UpdateSubmodule checks out the commit recorded in the index, initializing
+// the submodule when init is set. An empty path updates every submodule.
+func (w *Workspace) UpdateSubmodule(path string, init bool, done func(error)) {
+	name := "all submodules"
+	if path != "" {
+		name = path
+	}
+	var runErr error
+	w.Run("Update "+name, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
+		return w.Git.UpdateSubmodule(ctx, repo, path, init, progress)
+	}, RunOptions{
+		Success: "Updated " + name,
+		OnError: func(err error) bool { runErr = err; return false },
+		Always: func() {
+			if done != nil {
+				done(runErr)
+			}
+		},
+	})
+}
+
+// SyncSubmodules copies the URLs from .gitmodules into .git/config.
+func (w *Workspace) SyncSubmodules(path string, done func(error)) {
+	name := "all submodules"
+	if path != "" {
+		name = path
+	}
+	var runErr error
+	w.Run("Sync "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		return w.Git.SyncSubmodules(ctx, repo, path)
+	}, RunOptions{
+		Success: "Synced " + name,
+		OnError: func(err error) bool { runErr = err; return false },
+		Always: func() {
+			if done != nil {
+				done(runErr)
+			}
+		},
+	})
+}
+
 // Clone clones into parent/dir and opens the result.
 func (w *Workspace) Clone(url, parent, dir string, done func(error)) {
 	task, ctx, finish := w.startTask("Cloning "+url, true)
