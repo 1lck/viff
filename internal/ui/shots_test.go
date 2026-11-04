@@ -398,6 +398,62 @@ func TestStageBlockAndNewBranch(t *testing.T) {
 	f.snap("31-new-branch-done")
 }
 
+// TestInteractiveRebaseDialog fixes up and rewords commits through the
+// dialog opened from the log, then checks the history with git.
+func TestInteractiveRebaseDialog(t *testing.T) {
+	f := newUIFixture(t)
+	for _, c := range []struct{ file, msg, date string }{{"docs/a.md", "Docs A", "2026-10-12T10:00:00"}, {"docs/b.md", "Docs B", "2026-10-12T11:00:00"}} {
+		f.write(c.file, c.msg+"\n")
+		f.git("add", c.file)
+		f.gitDated(c.date, "commit", "-q", "-m", c.msg, "--", c.file)
+	}
+	before := strings.TrimSpace(f.git("rev-list", "--count", "HEAD"))
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+	if err := f.s.RightClickLabel("Docs A"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.click("Interactively Rebase from Here…")
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.win.dialog != nil && strings.HasPrefix(f.win.dialog.title, "Rebasing 2 Commits")
+	}, 10*time.Second); err != nil {
+		t.Fatalf("rebase dialog did not open: %v", f.win.dialog)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.click("Docs B")
+	f.s.Keys("Meta+f")
+	f.click("Docs A")
+	f.s.Keys("Meta+r")
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.click("Commit message") // the dialog's field is on top of the Commit window's
+	if err := f.s.Type(" (reworded)"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.snap("32-rebase-dialog")
+	f.click("Start Rebasing")
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.win.dialog == nil && !f.ws.Busy()
+	}, 20*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	after := strings.TrimSpace(f.git("rev-list", "--count", "HEAD"))
+	subject := strings.TrimSpace(f.git("log", "-1", "--format=%s"))
+	files := f.git("show", "--name-only", "--format=", "HEAD")
+	if after == before || !strings.Contains(subject, "reworded") || !strings.Contains(files, "docs/a.md") || !strings.Contains(files, "docs/b.md") {
+		t.Fatalf("rebase result: %s→%s commits, subject %q, files %q", before, after, subject, files)
+	}
+	// Local changes survived through --autostash.
+	if data, _ := os.ReadFile(filepath.Join(f.dir, "main.go")); string(data) != mainV3 {
+		t.Fatal("local change to main.go lost")
+	}
+	f.snap("33-rebased")
+	f.assertIdle()
+}
+
 const mainV1 = `package main
 
 import (

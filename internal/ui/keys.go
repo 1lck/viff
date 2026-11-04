@@ -63,6 +63,9 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 	shift := e.Modifiers&ui.ModifierShift != 0
 	alt := e.Modifiers&ui.ModifierAlt != 0
 	ch := keyChar(e)
+	if w.dialog != nil && w.dialog.shortcut != nil && len(w.popups) == 0 {
+		return w.dialog.shortcut(e)
+	}
 	if w.dialog != nil || len(w.popups) > 0 {
 		return false
 	}

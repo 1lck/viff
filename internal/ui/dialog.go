@@ -9,6 +9,10 @@ import (
 
 // dialog is a modal IntelliJ dialog: a title, a form body and a button row.
 type dialog struct {
+	// textarea, when set, is a multi-line field where Enter types a newline.
+	textarea ui.ID
+	// shortcut, when set, gets Cmd/Ctrl chords while the dialog is open.
+	shortcut   func(e ui.KeyEvent) bool
 	title      string
 	width      float32
 	contentH   float32
@@ -82,6 +86,9 @@ func (w *Window) dialogKey(e ui.KeyEvent) bool {
 	case ui.KeyEnter:
 		if e.Modifiers&(ui.ModifierShift|ui.ModifierAlt) != 0 {
 			return false
+		}
+		if d := w.dialog; d != nil && d.textarea != (ui.ID{}) && e.Target == d.textarea {
+			return false // Enter starts a new line in the dialog's text area
 		}
 		w.submitDialog()
 		return true

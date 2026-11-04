@@ -703,6 +703,7 @@ func (w *Window) commitMenu() []item {
 		sep(),
 		{title: "Reset Current Branch to Here…", icon: icons.Reset, disabled: !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
 		{title: "Revert Commit", icon: icons.Revert, disabled: rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
+		{title: "Interactively Rebase from Here…", disabled: !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
 	}
 	if single && isHead && len(c.Parents) == 1 && rs.Status.Branch.Ahead > 0 {
 		items = append(items, item{title: "Undo Commit…", icon: icons.Undo, run: func() {

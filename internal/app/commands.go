@@ -703,3 +703,33 @@ func (w *Workspace) CompareWith(from, to string, done func([]domain.Change, erro
 		})
 	}()
 }
+
+// RebaseCommits loads the commits an interactive rebase starting at from
+// would replay, oldest first, and the base it rebases onto.
+func (w *Workspace) RebaseCommits(from string, done func(list []gitcli.RebaseCommit, base string, err error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	repo := rs.Repo
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		list, base, err := w.Git.RebaseCommits(ctx, repo, from)
+		w.post(func() {
+			if w.Repo == rs {
+				done(list, base, err)
+			}
+		})
+	}()
+}
+
+// InteractiveRebase replays the commits after base following the plan.
+// Conflicts stop it like any rebase; the operation banner then offers
+// Continue, Skip and Abort.
+func (w *Workspace) InteractiveRebase(base string, steps []gitcli.RebaseStep) {
+	w.Run("Interactive rebase", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		_, err := w.Git.InteractiveRebase(ctx, repo, base, steps)
+		return err
+	}, RunOptions{OnError: w.operationError("Rebase"), Success: "Rebase finished"})
+}
