@@ -1,0 +1,97 @@
+name: Run a Go test shard
+description: >-
+  Runs every Nth top-level test of the given Go packages. The split is derived
+  from "go test -list", so all shards together still cover every test exactly
+  once and new tests are picked up automatically.
+
+inputs:
+  packages:
+    description: Go package pattern to test, for example ./internal/ui.
+    required: true
+  tags:
+    description: Build tags passed to go test, for example "vivahead litheaudit".
+    required: false
+    default: ""
+  shard:
+    description: One-based shard number.
+    required: true
+  shards:
+    description: Total number of shards.
+    required: true
+  timeout:
+    description: Per-shard go test timeout.
+    required: false
+    default: 10m
+  log-file:
+    description: File that receives the JSON test stream.
+    required: true
+
+outputs:
+  tests:
+    description: Number of tests assigned to this shard.
+    value: ${{ steps.select.outputs.tests }}
+
+runs:
+  using: composite
+  steps:
+    - name: Select tests for this shard
+      id: select
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        TAGS: ${{ inputs.tags }}
+        SHARD: ${{ inputs.shard }}
+        SHARDS: ${{ inputs.shards }}
+      run: |
+        set -euo pipefail
+        # bash 3.2 (the macOS default) treats "${empty[@]}" as unbound under
+        # set -u, and it has no mapfile, so branch instead of using arrays.
+        if [ -n "$TAGS" ]; then
+          listed=$(go test -tags "$TAGS" -list '^Test' "$PACKAGES")
+        else
+          listed=$(go test -list '^Test' "$PACKAGES")
+        fi
+        # bash 3.2 (the macOS default) has no mapfile, so collect line by line.
+        tests=()
+        while IFS= read -r line; do
+          tests+=("$line")
+        done < <(printf '%s\n' "$listed" | grep -E '^Test' || true)
+        total=${#tests[@]}
+        if [ "$total" -eq 0 ]; then
+          echo "::error::go test -list found no tests in $PACKAGES"
+          exit 1
+        fi
+        if [ "$SHARDS" -gt "$total" ]; then
+          echo "::error::cannot split $total tests into $SHARDS shards"
+          exit 1
+        fi
+        regex=""
+        selected=0
+        for index in "${!tests[@]}"; do
+          if [ $((index % SHARDS)) -eq $((SHARD - 1)) ]; then
+            regex+="${tests[$index]}|"
+            selected=$((selected + 1))
+          fi
+        done
+        regex="^(${regex%|})$"
+        echo "Shard $SHARD/$SHARDS runs $selected of $total top-level tests"
+        echo "regex=$regex" >> "$GITHUB_OUTPUT"
+        echo "tests=$selected" >> "$GITHUB_OUTPUT"
+    - name: Run shard
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        TAGS: ${{ inputs.tags }}
+        TIMEOUT: ${{ inputs.timeout }}
+        TEST_REGEX: ${{ steps.select.outputs.regex }}
+        LOG_FILE: ${{ inputs.log-file }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$(dirname "$LOG_FILE")"
+        if [ -n "$TAGS" ]; then
+          go test -json -count=1 -timeout "$TIMEOUT" -tags "$TAGS" \
+            -run "$TEST_REGEX" "$PACKAGES" > "$LOG_FILE"
+        else
+          go test -json -count=1 -timeout "$TIMEOUT" \
+            -run "$TEST_REGEX" "$PACKAGES" > "$LOG_FILE"
+        fi
