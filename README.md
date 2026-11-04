@@ -12,7 +12,7 @@ Go + Viva. No Electron. No WebView. No bundled browser.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.27.3%2B-00ADD8.svg)](https://go.dev/dl/)
 
-[Get started](#get-started) · [Features](#a-full-git-workflow) · [Contribute](CONTRIBUTING.md) · [Releases](https://github.com/1lck/viff/releases)
+[Features](#a-full-git-workflow) · [Contribute](CONTRIBUTING.md) · [Releases](https://github.com/1lck/viff/releases)
 
 </div>
 
@@ -64,51 +64,6 @@ staging only stages visible files.
 
 Screenshots come from real Viva headless tests using disposable demo repositories.
 
-## Get started
-
-### Build from source
-
-Install **Go 1.27.3 or newer** and **Git**. macOS also needs Xcode Command Line
-Tools (`xcode-select --install`) because font registration and file watching use cgo.
-
-```sh
-git clone https://github.com/1lck/viff.git
-cd viff
-go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
-./build/viff /path/to/repository
-```
-
-On Windows, run these commands in PowerShell after cloning:
-
-```powershell
-go build -trimpath -ldflags="-s -w -H=windowsgui" -o build/viff.exe ./cmd/viff
-.\build\viff.exe C:\path\to\repository
-```
-
-Launch without a path to reopen the last project or show the welcome screen.
-You can also open, clone, or initialize a repository there.
-
-### Download a release
-
-Download your platform's package from [GitHub Releases](https://github.com/1lck/viff/releases).
-Starting with **v0.1.0-alpha.2**, releases include native installation formats:
-
-| Platform  | Architecture          | Package      | Install                                                           |
-| --------- | --------------------- | ------------ | ----------------------------------------------------------------- |
-| macOS 13+ | Apple Silicon (arm64) | `.dmg`       | Open the disk image and drag **Viff** to **Applications**.        |
-| Windows   | x64 (amd64)           | `-setup.exe` | Run the per-user installer.                                       |
-| Linux     | x64 (amd64)           | `.deb`       | On Debian/Ubuntu, run `sudo apt install ./viff-*.deb`.            |
-| Linux     | x64 (amd64)           | `.tar.gz`    | Extract the portable archive and run `./viff` from its directory. |
-
-Git must be installed separately and available on `PATH`. Linux also needs the
-system rendering libraries listed in the [release guide](docs/releases.md).
-Each release includes `SHA256SUMS` for download verification; the original
-`alpha.1` release only contains portable ZIPs.
-
-These are **pre-release builds**. The macOS app uses an ad-hoc signature, without
-Developer ID signing or notarization. Windows installers are not Authenticode
-signed. Operating systems may show security warnings.
-
 ## If macOS says it cannot open `Viff.app`
 
 If macOS says that Apple cannot verify whether `Viff.app` contains malware, the
@@ -129,52 +84,6 @@ then use one of these methods:
    ```
 
 Only use these steps for an app whose source you trust.
-
-## Platform status
-
-| Platform | Verification                                                                    |
-| -------- | ------------------------------------------------------------------------------- |
-| macOS    | Native development and Git / headless UI tests                                  |
-| Windows  | Real Git and Viva headless UI tests on Windows Server 2022 x64; Windows CI      |
-| Linux    | Ubuntu Git and Viva headless UI CI; interactive desktop acceptance remains open |
-
-Windows 10/11 desktop interaction, IME input, and signing still need
-dedicated acceptance testing. Some shortcut labels still use macOS symbols.
-Windows and Linux file watching uses polling.
-
-The pre-publication acceptance suite covered **298 top-level tests**, including
-**80 headless UI tests**, and captured **194 Windows screenshots**. These are
-dated verification results, not a claim that every platform or edge case is covered.
-See [testing and platform notes](docs/testing.md).
-
-## Develop and test
-
-```sh
-go test ./...
-go vet -tags "vivahead litheaudit" ./...
-go test -tags "vivahead litheaudit" ./internal/ui
-```
-
-The UI suite runs **without opening application windows**. To keep screenshots:
-
-```sh
-VIFF_SHOTS="$PWD/.viff-test/shots" VIFF_SHOTS_BY_TEST=1 \
-  go test -count=1 -tags "vivahead litheaudit" ./internal/ui
-```
-
-Tests create disposable repositories and use isolated Git configuration. CI runs
-on macOS, Windows, and Linux and retains test evidence as workflow artifacts.
-Native packaging is checked without opening application windows.
-
-- [Contributing / 参与贡献](CONTRIBUTING.md)
-- [Security policy / 安全问题](SECURITY.md)
-- [Detailed feature guide (中文)](docs/features.zh-CN.md)
-- [Design (中文)](docs/design.md) and [architecture decisions](docs/decisions/README.md)
-
-Settings live in your OS user configuration directory under `Viff/settings.json`.
-The Settings dialog shows the actual path. Repository writes target the active
-repository; inactive repositories refresh when requested. Free-form conflict
-editing and unsupported binary conflicts use an external editor.
 
 ## ⭐ Special thanks
 
