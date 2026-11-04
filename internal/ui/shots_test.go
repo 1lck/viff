@@ -239,6 +239,7 @@ func TestScreenshots(t *testing.T) {
 
 	f.win.openNewBranch("", "main")
 	f.win.Invalidate()
+	f.win.Invalidate()
 	f.s.Settle(40*time.Millisecond, time.Second)
 	f.snap("07-new-branch")
 	f.s.Keys("escape")
@@ -281,11 +282,13 @@ func TestMoreScreenshots(t *testing.T) {
 	f.win.commitTab = 0
 
 	f.win.openSettings()
+	f.win.Invalidate()
 	f.s.Settle(40*time.Millisecond, time.Second)
 	f.snap("22-settings")
 	f.s.Keys("escape")
 
 	f.win.openStashDialog()
+	f.win.Invalidate()
 	f.s.Settle(40*time.Millisecond, time.Second)
 	f.snap("23-stash-dialog")
 	f.s.Keys("escape")

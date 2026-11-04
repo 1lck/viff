@@ -628,7 +628,7 @@ func (w *Window) openSettings() {
 			f.field("External editor command:", editor, "code -g {file}:{line}", false)
 			f.y -= 8
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Empty opens files with the system default. {file} and {line} are replaced.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text("Empty: system default. {file} and {line} are filled in.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
 			f.gap(4)
 			f.custom(22, func(r ui.Rect) {
