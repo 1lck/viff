@@ -626,6 +626,25 @@ func (w *Workspace) Reflog(done func([]domain.ReflogEntry, error)) {
 	}()
 }
 
+// Blame annotates a file at rev ("" for the working tree) in the background.
+func (w *Workspace) Blame(rev, path string, done func(*domain.Blame, error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	repo := rs.Repo
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		b, err := w.Git.Blame(ctx, repo, rev, path)
+		w.post(func() {
+			if w.Repo == rs {
+				done(b, err)
+			}
+		})
+	}()
+}
+
 // Worktrees loads the worktree list.
 func (w *Workspace) Worktrees(done func([]domain.Worktree, error)) {
 	rs := w.Repo

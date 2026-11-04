@@ -31,6 +31,13 @@ type logView struct {
 	msgScroll scroller
 	favorites map[string]bool
 	brRows    []brRow
+	// reveal is a commit to select once the log shows it; viewH is the
+	// table's last painted height. revealTries bounds how often showInLog
+	// re-filters when the commit stays out of reach.
+	reveal      string
+	revealGen   uint64
+	revealTries int
+	viewH       float32
 }
 
 type brRow struct {
@@ -375,6 +382,14 @@ func (w *Window) paintLogTable(r ui.Rect) {
 	}
 	w.list(idLogTable, scLogRows, r, "Commits")
 	w.onKeys(idLogTable, w.logKey)
+	v.viewH = r.Height
+	if v.reveal != "" && l.Gen != v.revealGen && l.Loaded() && !l.Loading {
+		h := v.reveal
+		v.reveal = ""
+		if _, ok := l.IndexOf(h); ok {
+			w.after(func() { w.showInLog(h) })
+		}
+	}
 	n := len(l.Commits)
 	content := float32(n) * logRowH
 	if !l.Done {
@@ -695,9 +710,7 @@ func (w *Window) commitMenu() []item {
 		sep(),
 		{title: "Cherry-Pick", icon: icons.CherryPick, disabled: rs.Operation.Active(), run: func() { w.ws.CherryPick(hashes) }},
 		{title: "Checkout Revision '" + short + "'", disabled: !single, run: func() {
-			w.confirm("Checkout Revision", "Check out "+short+" in detached HEAD state? Commits made there belong to no branch until you create one.", "Checkout", func() {
-				w.ws.CheckoutRevision(c.Hash)
-			})
+			w.confirmCheckoutRevision(c.Hash)
 		}},
 		{title: "Show Diff with Working Tree", icon: icons.Diff, disabled: !single, run: func() { w.compareWithWorking(c.Hash) }},
 		sep(),
@@ -729,6 +742,13 @@ func reverse(s []string) []string {
 
 // compareWithWorking lists files that differ between a commit and the
 // working tree and opens the first.
+func (w *Window) confirmCheckoutRevision(hash string) {
+	short := domain.ShortHash(hash)
+	w.confirm("Checkout Revision", "Check out "+short+" in detached HEAD state? Commits made there belong to no branch until you create one.", "Checkout", func() {
+		w.ws.CheckoutRevision(hash)
+	})
+}
+
 func (w *Window) compareWithWorking(hash string) {
 	w.ws.CompareWith(hash, "", func(changes []domain.Change, err error) {
 		if err != nil {
@@ -1026,10 +1046,14 @@ func (w *Window) paintDetails(r ui.Rect) {
 		ii := i
 		w.onDouble(id, func() { v.dtSel = ii; w.showCommitFile(d, ii, true) })
 		chPath := ch.Path
+		deleted := ch.Kind == domain.ChangeDeleted
+		hash := d.Hash
 		w.onContext(id, func(x, y float32) {
 			v.dtSel = ii
 			w.openMenu(x, y, []item{
 				{title: "Show Diff", icon: icons.Diff, shortcut: "⌘D", run: func() { w.showCommitFile(d, ii, true) }},
+				{title: "Open Repository Version", disabled: deleted, run: func() { w.openFileView(chPath, hash, false) }},
+				{title: "Annotate Revision", disabled: deleted, run: func() { w.openFileView(chPath, hash, true) }},
 				{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(chPath) }},
 				sep(),
 				{title: "Copy Relative Path", icon: icons.Copy, run: func() { w.copyText(chPath) }},
@@ -1233,7 +1257,7 @@ func (w *Window) paintReflog(r ui.Rect) {
 			w.openMenu(x, y, []item{
 				{title: "Copy Revision Number", icon: icons.Copy, run: func() { w.copyText(hash) }},
 				{title: "New Branch…", icon: icons.Add, run: func() { w.openNewBranch(hash, short) }},
-				{title: "Checkout Revision '" + short + "'", run: func() { w.ws.CheckoutRevision(hash) }},
+				{title: "Checkout Revision '" + short + "'", run: func() { w.confirmCheckoutRevision(hash) }},
 				{title: "Reset Current Branch to Here…", icon: icons.Reset, run: func() { w.openReset(domain.Commit{Hash: hash, Subject: e.Message}) }},
 			})
 		})

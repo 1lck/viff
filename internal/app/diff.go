@@ -24,10 +24,16 @@ type DiffSource struct {
 	Commit  string
 	Parent  string // "" for a root commit
 	Kind    domain.ChangeKind
+	// View shows one version of Path instead of a comparison: the file at
+	// Commit, or the working-tree file when Commit is "".
+	View bool
 }
 
 // Key identifies a source for caching and tab identity.
 func (s DiffSource) Key() string {
+	if s.View {
+		return "v" + s.Commit + ":" + s.Path
+	}
 	if s.Working {
 		return fmt.Sprintf("w%d:%s", s.Area, s.Path)
 	}
@@ -131,6 +137,9 @@ func (w *Workspace) LoadDiff(src DiffSource, mode domain.WhitespaceMode, done fu
 }
 
 func loadDiff(ctx context.Context, git Git, repo domain.Repo, src DiffSource, mode domain.WhitespaceMode) (*DiffResult, error) {
+	if src.View {
+		return loadView(ctx, git, repo, src)
+	}
 	oldRev, newRev, oldTitle, newTitle := revisions(src)
 	oldPath := src.Path
 	if src.OldPath != "" {
@@ -150,6 +159,32 @@ func loadDiff(ctx context.Context, git Git, repo domain.Repo, src DiffSource, mo
 	}
 	res.Old.Title, res.New.Title = oldTitle, newTitle
 	finishDiff(res)
+	return res, nil
+}
+
+// loadView reads one version of a file for the read-only file viewer.
+func loadView(ctx context.Context, git Git, repo domain.Repo, src DiffSource) (*DiffResult, error) {
+	rev, title := gitcli.RevWorktree, "Your version"
+	if src.Commit != "" {
+		rev, title = gitcli.RevCommit(src.Commit), domain.ShortHash(src.Commit)
+	}
+	c, err := git.Read(ctx, repo, rev, src.Path)
+	if err != nil {
+		return nil, err
+	}
+	res := &DiffResult{Source: src, Mode: domain.WhitespaceExact}
+	res.New = SideFrom(title, c)
+	res.Old = Side{Text: true}
+	switch {
+	case !c.Exists:
+		res.Notice = "The file does not exist in this revision."
+	case c.Binary:
+		res.Notice = fmt.Sprintf("Binary file (%s)", sizeText(c.Size))
+	case c.TooLarge:
+		res.Notice = fmt.Sprintf("File is too large to show (%s). Open it in an external tool.", sizeText(c.Size))
+	case c.Submodule:
+		res.Notice = "Submodule. Open the submodule to see its files."
+	}
 	return res, nil
 }
 

@@ -1,6 +1,7 @@
 package viffui
 
 import (
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -826,6 +827,7 @@ func (w *Window) changesMenu() []item {
 	}
 	items = append(items,
 		item{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(first.entry.Path) }},
+		item{title: "Annotate with Git Blame", disabled: !canAnnotate(first, full), run: func() { w.openFileView(first.entry.Path, "", true) }},
 		item{title: "Open in External Editor", icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(first.entry.Path, 0) }},
 		item{title: "Show in Finder", icon: icons.Folder, run: func() { revealPath(full) }},
 		sep(),
@@ -983,4 +985,14 @@ func runeToByte(s string, r int) int {
 		n++
 	}
 	return len(s)
+}
+
+// canAnnotate reports whether a working-tree file has history to blame: it
+// is tracked, not conflicted and still on disk.
+func canAnnotate(r changeRow, full string) bool {
+	if r.area == domain.AreaUntracked || r.area == domain.AreaConflicts {
+		return false
+	}
+	st, err := os.Stat(full)
+	return err == nil && st.Mode().IsRegular()
 }

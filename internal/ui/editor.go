@@ -52,6 +52,14 @@ type diffTab struct {
 
 	conflictBlock int
 	busy          bool
+
+	// File view annotations (Git blame).
+	annotate  bool
+	blame     *domain.Blame
+	blameErr  error
+	blameSeq  uint64
+	blameRank []int
+	blameN    int
 }
 
 // uline is one row of the unified view.
@@ -79,6 +87,9 @@ func (v *editorView) cur() *diffTab {
 
 func (t *diffTab) title() string {
 	name := domain.FileName(t.src.Path)
+	if t.src.View && t.src.Commit != "" {
+		name += " (" + domain.ShortHash(t.src.Commit) + ")"
+	}
 	return name
 }
 
@@ -252,7 +263,15 @@ func (w *Window) refreshTabs() {
 	v := &w.ed
 	for i := len(v.tabs) - 1; i >= 0; i-- {
 		t := v.tabs[i]
-		if !t.src.Working || t.loading || !t.statusAt.Before(rs.StatusTime) {
+		live := t.src.Working || t.src.View && t.src.Commit == ""
+		if !live || t.loading || !t.statusAt.Before(rs.StatusTime) {
+			continue
+		}
+		if t.src.View {
+			w.loadTab(t)
+			if t.annotate {
+				w.loadBlame(t)
+			}
 			continue
 		}
 		if t.preview && !inArea(rs.Entries(t.src.Area), t.src.Path) {
@@ -293,6 +312,8 @@ func (w *Window) paintEditor(r ui.Rect) {
 		}
 	case t.res.Conflict != nil:
 		w.paintConflict(t, r)
+	case t.src.View:
+		w.paintFileView(t, r)
 	default:
 		w.paintDiff(t, r)
 	}
