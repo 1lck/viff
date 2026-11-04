@@ -1,0 +1,471 @@
+package gitcli
+
+import (
+	"context"
+	"strings"
+
+	"viff/internal/domain"
+)
+
+// Output is what a write command printed, for the console and notifications.
+type Output struct {
+	Stdout string
+	Stderr string
+}
+
+func (r *Runner) write(ctx context.Context, repo domain.Repo, args ...string) error {
+	_, err := r.Run(ctx, repo.Root, args...)
+	return err
+}
+
+// Stage adds paths (including deletions) to the index.
+func (r *Runner) Stage(ctx context.Context, repo domain.Repo, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	return r.writePaths(ctx, repo, []string{"add", "-A"}, paths)
+}
+
+// Unstage resets paths in the index to HEAD (or removes them before the first
+// commit).
+func (r *Runner) Unstage(ctx context.Context, repo domain.Repo, paths []string, hasHead bool) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	if !hasHead {
+		return r.writePaths(ctx, repo, []string{"rm", "--cached", "-r", "-q"}, paths)
+	}
+	return r.writePaths(ctx, repo, []string{"restore", "--staged"}, paths)
+}
+
+// Discard restores tracked paths in the working tree from the index.
+func (r *Runner) Discard(ctx context.Context, repo domain.Repo, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	return r.writePaths(ctx, repo, []string{"restore", "--worktree"}, paths)
+}
+
+// Revert restores tracked paths in both index and working tree from HEAD.
+func (r *Runner) Revert(ctx context.Context, repo domain.Repo, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	return r.writePaths(ctx, repo, []string{"restore", "--staged", "--worktree", "--source=HEAD"}, paths)
+}
+
+// writePaths passes paths through a pathspec file on stdin, so any number of
+// paths with any characters reach Git unchanged and literal.
+func (r *Runner) writePaths(ctx context.Context, repo domain.Repo, args []string, paths []string) error {
+	input := strings.Join(paths, "\x00")
+	full := append([]string{"--literal-pathspecs"}, args...)
+	full = append(full, "--pathspec-from-file=-", "--pathspec-file-nul")
+	_, err := r.RunInput(ctx, repo.Root, []byte(input), full...)
+	return err
+}
+
+// CommitOptions configures a commit.
+type CommitOptions struct {
+	Message string
+	Amend   bool
+	SignOff bool
+	NoVerify bool
+	// Paths, when set, commits only these paths (git commit --only).
+	Paths []string
+}
+
+// Commit records the index (or Paths) with the message.
+func (r *Runner) Commit(ctx context.Context, repo domain.Repo, o CommitOptions) (Output, error) {
+	args := []string{"commit", "--file=-", "--cleanup=strip"}
+	if o.Amend {
+		args = append(args, "--amend")
+	}
+	if o.SignOff {
+		args = append(args, "--signoff")
+	}
+	if o.NoVerify {
+		args = append(args, "--no-verify")
+	}
+	out, err := r.RunInput(ctx, repo.Root, []byte(o.Message), args...)
+	return Output{Stdout: string(out)}, err
+}
+
+// LastCommitMessage returns HEAD's full message, for amend.
+func (r *Runner) LastCommitMessage(ctx context.Context, repo domain.Repo) (string, error) {
+	out, err := r.Run(ctx, repo.Root, "log", "-1", "--format=%B", "HEAD", "--")
+	return strings.TrimRight(string(out), "\n"), err
+}
+
+// Checkout switches to a branch, or detaches at a revision.
+func (r *Runner) Checkout(ctx context.Context, repo domain.Repo, ref domain.Ref) error {
+	switch ref.Kind {
+	case domain.RefLocal:
+		return r.write(ctx, repo, "switch", "--no-guess", ref.Short)
+	case domain.RefRemote:
+		// Checking out a remote branch creates a tracking local branch, as
+		// IntelliJ does; an existing local branch of that name is switched to.
+		return r.write(ctx, repo, "switch", "--track", "-c", ref.BranchName(), ref.Short)
+	}
+	return r.write(ctx, repo, "switch", "--detach", ref.Target)
+}
+
+// CheckoutRevision detaches HEAD at rev.
+func (r *Runner) CheckoutRevision(ctx context.Context, repo domain.Repo, rev string) error {
+	return r.write(ctx, repo, "switch", "--detach", rev)
+}
+
+// CreateBranch creates name at start, optionally switching to it.
+func (r *Runner) CreateBranch(ctx context.Context, repo domain.Repo, name, start string, checkout, force bool) error {
+	if checkout {
+		flag := "-c"
+		if force {
+			flag = "-C"
+		}
+		args := []string{"switch", "--no-track", flag, name}
+		if start != "" {
+			args = append(args, start)
+		}
+		return r.write(ctx, repo, args...)
+	}
+	args := []string{"branch", "--no-track"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, name)
+	if start != "" {
+		args = append(args, start)
+	}
+	return r.write(ctx, repo, args...)
+}
+
+// RenameBranch renames a local branch.
+func (r *Runner) RenameBranch(ctx context.Context, repo domain.Repo, old, name string) error {
+	return r.write(ctx, repo, "branch", "-m", old, name)
+}
+
+// DeleteBranch deletes a local branch; force deletes it even if unmerged.
+func (r *Runner) DeleteBranch(ctx context.Context, repo domain.Repo, name string, force bool) error {
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	return r.write(ctx, repo, "branch", flag, name)
+}
+
+// DeleteRemoteBranch deletes a branch on its remote.
+func (r *Runner) DeleteRemoteBranch(ctx context.Context, repo domain.Repo, remote, branch string, progress func(string)) error {
+	_, err := r.RunProgress(ctx, repo.Root, progress, "push", "--porcelain", remote, "--delete", branch)
+	return err
+}
+
+// SetUpstream sets the upstream of a local branch.
+func (r *Runner) SetUpstream(ctx context.Context, repo domain.Repo, branch, upstream string) error {
+	if upstream == "" {
+		return r.write(ctx, repo, "branch", "--unset-upstream", branch)
+	}
+	return r.write(ctx, repo, "branch", "--set-upstream-to="+upstream, branch)
+}
+
+// CreateTag creates a lightweight tag, or an annotated one with a message.
+func (r *Runner) CreateTag(ctx context.Context, repo domain.Repo, name, rev, message string) error {
+	if message != "" {
+		_, err := r.RunInput(ctx, repo.Root, []byte(message), "tag", "-a", "-F", "-", name, rev)
+		return err
+	}
+	return r.write(ctx, repo, "tag", name, rev)
+}
+
+// DeleteTag deletes a local tag.
+func (r *Runner) DeleteTag(ctx context.Context, repo domain.Repo, name string) error {
+	return r.write(ctx, repo, "tag", "-d", name)
+}
+
+// Fetch fetches all remotes (or one), optionally pruning.
+func (r *Runner) Fetch(ctx context.Context, repo domain.Repo, remote string, prune bool, progress func(string)) error {
+	args := []string{"fetch", "--progress"}
+	if prune {
+		args = append(args, "--prune")
+	}
+	if remote == "" {
+		args = append(args, "--all")
+	} else {
+		args = append(args, remote)
+	}
+	_, err := r.RunProgress(ctx, repo.Root, progress, args...)
+	return err
+}
+
+// PullMode decides how pull integrates the upstream.
+type PullMode uint8
+
+const (
+	PullMerge PullMode = iota
+	PullRebase
+	PullFastForwardOnly
+)
+
+// Pull fetches and integrates the upstream of the current branch.
+func (r *Runner) Pull(ctx context.Context, repo domain.Repo, mode PullMode, progress func(string)) (Output, error) {
+	args := []string{"pull", "--progress", "--no-edit"}
+	switch mode {
+	case PullRebase:
+		args = append(args, "--rebase")
+	case PullFastForwardOnly:
+		args = append(args, "--ff-only")
+	default:
+		args = append(args, "--no-rebase")
+	}
+	out, err := r.RunProgress(ctx, repo.Root, progress, args...)
+	return Output{Stdout: string(out)}, err
+}
+
+// PushOptions configures a push.
+type PushOptions struct {
+	Remote      string
+	Branch      string // local branch
+	RemoteName  string // remote branch name; defaults to Branch
+	SetUpstream bool
+	// ForceWithLease protects against overwriting work pushed by others.
+	ForceWithLease bool
+	Tags           bool
+	NoVerify       bool
+}
+
+// Push pushes a branch.
+func (r *Runner) Push(ctx context.Context, repo domain.Repo, o PushOptions, progress func(string)) (Output, error) {
+	args := []string{"push", "--progress", "--porcelain"}
+	if o.SetUpstream {
+		args = append(args, "--set-upstream")
+	}
+	if o.ForceWithLease {
+		args = append(args, "--force-with-lease")
+	}
+	if o.Tags {
+		args = append(args, "--follow-tags")
+	}
+	if o.NoVerify {
+		args = append(args, "--no-verify")
+	}
+	if o.Remote != "" {
+		args = append(args, o.Remote)
+		if o.Branch != "" {
+			dst := o.RemoteName
+			if dst == "" {
+				dst = o.Branch
+			}
+			args = append(args, "refs/heads/"+o.Branch+":refs/heads/"+dst)
+		}
+	}
+	out, err := r.RunProgress(ctx, repo.Root, progress, args...)
+	return Output{Stdout: string(out)}, err
+}
+
+// PushTag pushes one tag to a remote.
+func (r *Runner) PushTag(ctx context.Context, repo domain.Repo, remote, tag string, progress func(string)) error {
+	_, err := r.RunProgress(ctx, repo.Root, progress, "push", "--progress", remote, "refs/tags/"+tag)
+	return err
+}
+
+// AddRemote adds a remote.
+func (r *Runner) AddRemote(ctx context.Context, repo domain.Repo, name, url string) error {
+	return r.write(ctx, repo, "remote", "add", name, url)
+}
+
+// RemoveRemote removes a remote.
+func (r *Runner) RemoveRemote(ctx context.Context, repo domain.Repo, name string) error {
+	return r.write(ctx, repo, "remote", "remove", name)
+}
+
+// SetRemoteURL changes a remote's URL.
+func (r *Runner) SetRemoteURL(ctx context.Context, repo domain.Repo, name, url string) error {
+	return r.write(ctx, repo, "remote", "set-url", name, url)
+}
+
+// Merge merges rev into the current branch.
+func (r *Runner) Merge(ctx context.Context, repo domain.Repo, rev string, noFF, squash bool) (Output, error) {
+	args := []string{"merge", "--no-edit"}
+	if noFF {
+		args = append(args, "--no-ff")
+	}
+	if squash {
+		args = append(args, "--squash")
+	}
+	out, err := r.Run(ctx, repo.Root, append(args, rev)...)
+	return Output{Stdout: string(out)}, err
+}
+
+// Rebase rebases the current branch onto rev.
+func (r *Runner) Rebase(ctx context.Context, repo domain.Repo, onto string) (Output, error) {
+	out, err := r.Run(ctx, repo.Root, "-c", "core.editor=true", "rebase", onto)
+	return Output{Stdout: string(out)}, err
+}
+
+// CherryPick applies commits onto HEAD.
+func (r *Runner) CherryPick(ctx context.Context, repo domain.Repo, hashes []string) (Output, error) {
+	out, err := r.Run(ctx, repo.Root, append([]string{"cherry-pick", "--allow-empty"}, hashes...)...)
+	return Output{Stdout: string(out)}, err
+}
+
+// RevertCommits creates commits reverting hashes.
+func (r *Runner) RevertCommits(ctx context.Context, repo domain.Repo, hashes []string) (Output, error) {
+	out, err := r.Run(ctx, repo.Root, append([]string{"revert", "--no-edit"}, hashes...)...)
+	return Output{Stdout: string(out)}, err
+}
+
+// ResetMode is git reset's mode.
+type ResetMode string
+
+const (
+	ResetSoft  ResetMode = "--soft"
+	ResetMixed ResetMode = "--mixed"
+	ResetHard  ResetMode = "--hard"
+	ResetKeep  ResetMode = "--keep"
+)
+
+// Reset moves the current branch to rev.
+func (r *Runner) Reset(ctx context.Context, repo domain.Repo, mode ResetMode, rev string) error {
+	return r.write(ctx, repo, "reset", "-q", string(mode), rev, "--")
+}
+
+// Continue, Skip and Abort drive an in-progress operation. The editor is
+// replaced by "true" so Git keeps its prepared message instead of waiting for
+// a terminal editor the GUI cannot show.
+func (r *Runner) OperationCommand(ctx context.Context, repo domain.Repo, op domain.OperationKind, action string) (Output, error) {
+	var args []string
+	switch op {
+	case domain.OpMerge:
+		args = []string{"merge", "--" + action}
+	case domain.OpRebase:
+		args = []string{"rebase", "--" + action}
+	case domain.OpCherryPick:
+		args = []string{"cherry-pick", "--" + action}
+	case domain.OpRevert:
+		args = []string{"revert", "--" + action}
+	case domain.OpApplyMailbox:
+		args = []string{"am", "--" + action}
+	case domain.OpBisect:
+		args = []string{"bisect", "reset"}
+	default:
+		return Output{}, nil
+	}
+	if action == "continue" {
+		args = append([]string{"-c", "core.editor=true"}, args...)
+	}
+	out, err := r.Run(ctx, repo.Root, args...)
+	return Output{Stdout: string(out)}, err
+}
+
+// StashPush stashes local changes.
+func (r *Runner) StashPush(ctx context.Context, repo domain.Repo, message string, untracked, keepIndex bool) error {
+	args := []string{"stash", "push"}
+	if message != "" {
+		args = append(args, "-m", message)
+	}
+	if untracked {
+		args = append(args, "--include-untracked")
+	}
+	if keepIndex {
+		args = append(args, "--keep-index")
+	}
+	return r.write(ctx, repo, args...)
+}
+
+// StashApply applies (or pops) a stash entry.
+func (r *Runner) StashApply(ctx context.Context, repo domain.Repo, ref string, pop, index bool) (Output, error) {
+	verb := "apply"
+	if pop {
+		verb = "pop"
+	}
+	args := []string{"stash", verb}
+	if index {
+		args = append(args, "--index")
+	}
+	out, err := r.Run(ctx, repo.Root, append(args, ref)...)
+	return Output{Stdout: string(out)}, err
+}
+
+// StashDrop removes a stash entry.
+func (r *Runner) StashDrop(ctx context.Context, repo domain.Repo, ref string) error {
+	return r.write(ctx, repo, "stash", "drop", ref)
+}
+
+// StashBranch creates a branch from a stash entry.
+func (r *Runner) StashBranch(ctx context.Context, repo domain.Repo, branch, ref string) error {
+	return r.write(ctx, repo, "stash", "branch", branch, ref)
+}
+
+// Init creates a repository in dir.
+func (r *Runner) Init(ctx context.Context, dir string) error {
+	_, err := r.Run(ctx, dir, "init")
+	return err
+}
+
+// Clone clones url into dir with progress.
+func (r *Runner) Clone(ctx context.Context, parent, url, dir string, progress func(string)) error {
+	_, err := r.RunProgress(ctx, parent, progress, "clone", "--progress", "--", url, dir)
+	return err
+}
+
+// ApplyPatch applies a patch to the index (cached) or the working tree,
+// optionally in reverse. It checks first so a stale patch never half-applies.
+func (r *Runner) ApplyPatch(ctx context.Context, repo domain.Repo, patch []byte, cached, reverse bool) error {
+	args := []string{"apply", "--whitespace=nowarn", "--recount"}
+	if cached {
+		args = append(args, "--cached")
+	}
+	if reverse {
+		args = append(args, "--reverse")
+	}
+	if _, err := r.RunInput(ctx, repo.Root, patch, append(args, "--check", "-")...); err != nil {
+		return err
+	}
+	_, err := r.RunInput(ctx, repo.Root, patch, append(args, "-")...)
+	return err
+}
+
+// AddWorktree, RemoveWorktree manage linked worktrees.
+func (r *Runner) AddWorktree(ctx context.Context, repo domain.Repo, path, branch, start string) error {
+	args := []string{"worktree", "add"}
+	if branch != "" {
+		args = append(args, "-b", branch)
+	}
+	args = append(args, path)
+	if start != "" {
+		args = append(args, start)
+	}
+	return r.write(ctx, repo, args...)
+}
+
+func (r *Runner) RemoveWorktree(ctx context.Context, repo domain.Repo, path string, force bool) error {
+	args := []string{"worktree", "remove"}
+	if force {
+		args = append(args, "--force")
+	}
+	return r.write(ctx, repo, append(args, path)...)
+}
+
+// IsAncestor reports whether a is an ancestor of b.
+func (r *Runner) IsAncestor(ctx context.Context, repo domain.Repo, a, b string) bool {
+	_, err := r.Run(ctx, repo.Root, "merge-base", "--is-ancestor", a, b)
+	return err == nil
+}
+
+// ResolveRef returns the commit a revision points at.
+func (r *Runner) ResolveRef(ctx context.Context, repo domain.Repo, rev string) (string, error) {
+	out, err := r.Run(ctx, repo.Root, "rev-parse", "--verify", "--quiet", rev+"^{commit}")
+	return strings.TrimSpace(string(out)), err
+}
+
+// IndexBlob returns the blob id recorded in the index for path ("" if none),
+// used to detect that the index changed since a patch was built.
+func (r *Runner) IndexBlob(ctx context.Context, repo domain.Repo, path string) string {
+	out, err := r.Run(ctx, repo.Root, "--literal-pathspecs", "ls-files", "-s", "-z", "--", path)
+	if err != nil {
+		return ""
+	}
+	f := strings.Fields(strings.SplitN(string(out), "\t", 2)[0])
+	if len(f) >= 2 {
+		return f[1]
+	}
+	return ""
+}
