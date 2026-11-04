@@ -109,6 +109,27 @@ These are **pre-release builds**. The macOS app uses an ad-hoc signature, withou
 Developer ID signing or notarization. Windows installers are not Authenticode
 signed. Operating systems may show security warnings.
 
+## If macOS says it cannot open `Viff.app`
+
+If macOS says that Apple cannot verify whether `Viff.app` contains malware, the
+manually downloaded package may not yet be notarized by Apple. First confirm that
+the app came from the trusted [GitHub Releases](https://github.com/1lck/viff/releases),
+then use one of these methods:
+
+<p align="center">
+  <img src="./docs/assets/screenshots/macos-app-verification-warning.png" width="492" alt="macOS warning that Viff.app cannot be opened">
+</p>
+
+1. In **Applications**, Control-click `Viff.app`, choose **Open**, and choose **Open** again in the confirmation dialog.
+2. If macOS still blocks it, open **System Settings > Privacy & Security**, click **Open Anyway** next to the security warning, and launch the app again.
+3. You can also remove the quarantine attribute in Terminal:
+
+   ```bash
+   sudo xattr -dr com.apple.quarantine /Applications/Viff.app
+   ```
+
+Only use these steps for an app whose source you trust.
+
 ## Platform status
 
 | Platform | Verification                                                                    |
@@ -155,6 +176,26 @@ The Settings dialog shows the actual path. Repository writes target the active
 repository; inactive repositories refresh when requested. Free-form conflict
 editing and unsupported binary conflicts use an external editor.
 
+## ⭐ Special thanks
+
+<p align="center">
+  <a href="https://linux.do/">
+    <img src="./docs/assets/special-thanks/linux-do.png" width="42%" alt="LINUX DO">
+  </a>
+</p>
+
+<p align="center">
+  <strong>For all things AI, head to <a href="https://linux.do/">LINUX DO</a>. Wishing the community ever greater success.</strong>
+</p>
+
+## Contributors
+
+Thank you to everyone who contributes to and improves Viff.
+
+<a href="https://github.com/1lck/viff/graphs/contributors">
+  <img src="https://raw.githubusercontent.com/1lck/viff/chart-assets/contributors.svg" alt="Contributors">
+</a>
+
 ## License and credits
 
 Viff's original code is [MIT licensed](LICENSE). Viva, JetBrains Mono, IntelliJ
@@ -163,3 +204,9 @@ Platform icons, and other dependencies retain their own licenses; see
 
 The interface takes inspiration from IntelliJ IDEA's Git workflow. Viff is an
 independent project and is not affiliated with or endorsed by JetBrains.
+
+## Star History
+
+<a href="https://www.star-history.com/#1lck/viff&Date">
+  <img alt="Star History Chart" src="https://raw.githubusercontent.com/1lck/viff/chart-assets/star-history-light.svg" width="100%" />
+</a>
