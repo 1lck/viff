@@ -6,9 +6,13 @@ from pathlib import Path
 import subprocess
 import time
 
+from release_notes import load_notes
+
 repo = os.environ['GH_REPO']
 tag = os.environ['GITHUB_REF_NAME']
 endpoint = f'repos/{repo}/releases'
+notes_path = Path(__file__).resolve().parent.parent / 'docs/releases' / f'{tag}.md'
+notes = load_notes(notes_path, tag, repo)
 expected = {
     f'viff-{tag}-darwin-arm64.dmg',
     f'viff-{tag}-windows-amd64-setup.exe',
@@ -54,12 +58,25 @@ for attempt in range(5):
         break
     flags = ['--prerelease'] if '-' in tag else []
     result = gh('release', 'create', tag, '--verify-tag', '--draft',
-                '--generate-notes', '--title', f'Viff {tag}', *flags)
+                '--notes-file', str(notes_path), '--title', f'Viff {tag}', *flags)
     if result.returncode:
         print('Create response uncertain; checking release state before retrying.', flush=True)
     time.sleep(5)
 else:
     raise SystemExit('Could not create or retrieve draft release')
+
+# Reconcile existing drafts too: every published description comes from the
+# version-controlled notes, even when this is a retry of an earlier attempt.
+for attempt in range(5):
+    state = release()
+    if state and state.get('body') == notes and state.get('name') == f'Viff {tag}':
+        break
+    if state:
+        gh('api', '-X', 'PATCH', f"{endpoint}/{state['id']}",
+           '-f', f'body={notes}', '-f', f'name=Viff {tag}')
+    time.sleep(5)
+else:
+    raise SystemExit('Could not verify curated release title and notes')
 
 for path in sorted(Path('dist').iterdir()):
     digest = 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest()
