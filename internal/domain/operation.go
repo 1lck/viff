@@ -48,6 +48,10 @@ type Operation struct {
 	MergeMessage string
 	Step, Total  int
 	Interactive  bool
+	// OntoName and IncomingName are branch or tag names pointing at Onto and
+	// Incoming, filled in from the refs by the application when known.
+	OntoName     string
+	IncomingName string
 }
 
 // Active reports an operation in progress.
@@ -83,6 +87,9 @@ func (o Operation) SideLabels(currentBranch string) (ours, theirs string) {
 	switch o.Kind {
 	case OpRebase:
 		ours = "Rebasing onto " + short(o.Onto)
+		if o.OntoName != "" {
+			ours = o.OntoName + " (" + short(o.Onto) + ")"
+		}
 		if o.Onto == "" {
 			ours = "Upstream (being rebased onto)"
 		}
@@ -101,6 +108,9 @@ func (o Operation) SideLabels(currentBranch string) (ours, theirs string) {
 	}
 	ours = headLabel(currentBranch)
 	theirs = short(o.Incoming)
+	if o.IncomingName != "" && o.Kind == OpMerge {
+		theirs = o.IncomingName + " (" + theirs + ")"
+	}
 	if o.IncomingSubject != "" {
 		theirs += " " + o.IncomingSubject
 	}

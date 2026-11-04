@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -78,12 +79,13 @@ func (r *Runner) Read(ctx context.Context, repo domain.Repo, rev Revision, path 
 	default:
 		return Content{}, nil
 	}
+	mode := r.objectMode(ctx, repo, rev, path)
 	sizeOut, err := r.Run(ctx, repo.Root, "cat-file", "-s", name)
 	if err != nil {
 		return Content{}, err
 	}
 	size, _ := strconv.ParseInt(strings.TrimSpace(string(sizeOut)), 10, 64)
-	c := Content{Exists: true, Size: size}
+	c := Content{Exists: true, Size: size, Mode: mode, Symlink: mode == "120000"}
 	if size > ContentLimit {
 		c.TooLarge = true
 		head, err := r.headOfBlob(ctx, repo, name)
@@ -120,7 +122,7 @@ func readWorktree(path string) (Content, error) {
 		}
 		return Content{}, err
 	}
-	c := Content{Exists: true, Size: st.Size()}
+	c := Content{Exists: true, Size: st.Size(), Mode: worktreeMode(st)}
 	if st.Mode()&os.ModeSymlink != 0 {
 		target, err := os.Readlink(path)
 		if err != nil {
@@ -154,6 +156,57 @@ func readWorktree(path string) (Content, error) {
 	c.Data = data
 	c.Binary = isBinary(data)
 	return c, nil
+}
+
+// objectMode is the file mode Git records for path at rev ("100644",
+// "100755", "120000"), or "" when it cannot tell.
+func (r *Runner) objectMode(ctx context.Context, repo domain.Repo, rev Revision, path string) string {
+	switch rev.Kind {
+	case "commit":
+		// ls-tree matches its arguments as patterns, so keep only the exact path.
+		out, err := r.Run(ctx, repo.Root, "ls-tree", "-z", "--full-tree", rev.Rev, "--", path)
+		if err != nil {
+			return ""
+		}
+		for _, rec := range strings.Split(string(out), "\x00") {
+			meta, name, ok := strings.Cut(rec, "\t")
+			if ok && name == path {
+				return strings.Fields(meta)[0]
+			}
+		}
+	case "index", "stage":
+		out, err := r.Run(ctx, repo.Root, "ls-files", "-s", "-z", "--", ":(literal)"+path)
+		if err != nil {
+			return ""
+		}
+		want := "0"
+		if rev.Kind == "stage" {
+			want = strconv.Itoa(rev.Stage)
+		}
+		for _, rec := range strings.Split(string(out), "\x00") {
+			meta, name, ok := strings.Cut(rec, "\t")
+			if f := strings.Fields(meta); ok && name == path && len(f) == 3 && f[2] == want {
+				return f[0]
+			}
+		}
+	}
+	return ""
+}
+
+// worktreeMode derives Git's mode from the file system. Windows has no
+// executable bit, so it reports "" there and the index mode is trusted.
+func worktreeMode(st os.FileInfo) string {
+	switch {
+	case st.Mode()&os.ModeSymlink != 0:
+		return "120000"
+	case st.IsDir():
+		return "160000"
+	case runtime.GOOS == "windows":
+		return ""
+	case st.Mode()&0o111 != 0:
+		return "100755"
+	}
+	return "100644"
 }
 
 // isBinary uses Git's heuristic: a NUL byte in the first 8000 bytes.
