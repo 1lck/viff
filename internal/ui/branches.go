@@ -168,6 +168,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 	}
 	items = append(items, sep(),
 		item{title: "Compare with " + curQ, icon: icons.Diff, disabled: cur == "", run: func() { w.compareBranches(cur, name) }},
+		item{title: "Show Changed Files", icon: icons.Diff, disabled: cur == "" || r.Target == "", run: func() { w.compareBranchFiles(r) }},
 		item{title: "Show Diff with Working Tree", icon: icons.Diff, run: func() { w.compareWithWorking(r.Name) }},
 		sep(),
 		item{title: "Rebase " + curQ + " onto " + q, disabled: cur == "" || busy, run: func() { w.ws.Rebase(r.Name) }},

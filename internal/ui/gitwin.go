@@ -713,11 +713,20 @@ func (w *Window) commitMenu() []item {
 			w.confirmCheckoutRevision(c.Hash)
 		}},
 		{title: "Show Diff with Working Tree", icon: icons.Diff, disabled: !single, run: func() { w.compareWithWorking(c.Hash) }},
-		sep(),
-		{title: "Reset Current Branch to Here…", icon: icons.Reset, disabled: !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
-		{title: "Revert Commit", icon: icons.Revert, disabled: rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
-		{title: "Interactively Rebase from Here…", disabled: !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
 	}
+	if len(sel) == 2 {
+		// The log lists the newest commit first; compare oldest → newest.
+		older, newer := sel[1], sel[0]
+		items = append(items, item{title: "Compare Commits", icon: icons.Diff, run: func() {
+			w.openCompareCommits(older.Hash, newer.Hash)
+		}})
+	}
+	items = append(items,
+		sep(),
+		item{title: "Reset Current Branch to Here…", icon: icons.Reset, disabled: !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
+		item{title: "Revert Commit", icon: icons.Revert, disabled: rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
+		item{title: "Interactively Rebase from Here…", disabled: !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
+	)
 	if single && isHead && len(c.Parents) == 1 && rs.Status.Branch.Ahead > 0 {
 		items = append(items, item{title: "Undo Commit…", icon: icons.Undo, run: func() {
 			w.confirm("Undo Commit", "Undo the last commit '"+c.Subject+"'? Its changes stay staged so you can commit them again.", "Undo Commit", func() {

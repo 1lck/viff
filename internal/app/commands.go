@@ -723,6 +723,27 @@ func (w *Workspace) CompareWith(from, to string, done func([]domain.Change, erro
 	}()
 }
 
+// CompareCommits loads the files that differ between two commits: from is the
+// old side and to the new one. The commits need not be parent and child; any
+// two commit-ish revisions work, and the order decides the direction.
+func (w *Workspace) CompareCommits(from, to string, done func([]domain.Change, error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	repo := rs.Repo
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		list, err := w.Git.DiffNames(ctx, repo, from, to)
+		w.post(func() {
+			if w.Repo == rs {
+				done(list, err)
+			}
+		})
+	}()
+}
+
 // RebaseCommits loads the commits an interactive rebase starting at from
 // would replay, oldest first, and the base it rebases onto.
 func (w *Workspace) RebaseCommits(from string, done func(list []gitcli.RebaseCommit, base string, err error)) {

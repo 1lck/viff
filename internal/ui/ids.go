@@ -179,4 +179,7 @@ var (
 	scWelRemove = tree.Sub(fWelcome, tree.Name("remove"))
 	scWelNav    = tree.Sub(fWelcome, tree.Name("nav"))
 	idWelTheme  = tree.ID(fWelcome, "theme")
+
+	// Commit comparison dialog.
+	idCompareScroll = tree.ID(fDialog, "compare-scroll")
 )
