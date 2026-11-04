@@ -9,13 +9,56 @@ on:
 permissions:
   contents: read
 
+# Pull requests only need the newest commit verified, so superseded runs are
+# cancelled. Runs on main are never cancelled: the release workflow requires a
+# successful CI run for the exact commit that gets tagged.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Documentation-only pull requests skip the heavy jobs. This job always runs
+  # so the required "CI" check still appears and turns green instead of staying
+  # pending forever (a skipped required check would block merging).
+  changes:
+    name: Changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only || 'false' }}
+    steps:
+      - name: Check out pull request
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Classify pull request changes
+        id: classify
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          mapfile -t changed < <(git diff --name-only "$BASE_SHA" HEAD)
+          docs_only=true
+          if [ "${#changed[@]}" -eq 0 ]; then
+            docs_only=false
+          fi
+          for file in "${changed[@]}"; do
+            case "$file" in
+              README.md | README.zh-CN.md | CONTRIBUTING.md | SECURITY.md | \
+                THIRD_PARTY_NOTICES.md | LICENSE | docs/*) ;;
+              *) docs_only=false ;;
+            esac
+          done
+          printf 'Changed files:\n  %s\n' "$(printf '%s\n' "${changed[@]:-}" | paste -sd ' ' -)"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
   quality:
     name: Quality
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -44,14 +87,28 @@ jobs:
       - name: Check module tidiness
         run: go mod tidy -diff
 
+  # Domain, Git, storage and workspace tests. Windows runs two shards because
+  # the same tests take roughly three times longer there than on Linux; vet,
+  # build, package checks and evidence upload run once per OS on shard 1.
   test:
-    name: Tests (${{ matrix.os }})
+    name: Test (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2022, ubuntu-24.04]
+        include:
+          - os: windows-2022
+            shard: 1
+            shards: 2
+          - os: windows-2022
+            shard: 2
+            shards: 2
+          - os: ubuntu-24.04
+            shard: 1
+            shards: 1
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
@@ -87,12 +144,18 @@ jobs:
           # while Git reports the long path. Use the runner's temp root.
           printf 'TEMP=%s\nTMP=%s\nTMPDIR=%s\n' "$RUNNER_TEMP" "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Vet all code, including headless tests
+        if: matrix.shard == 1
         run: go vet -tags 'vivahead litheaudit' ./...
       - name: Test domain, Git, storage, and workspace
-        run: go test -json -count=1 -timeout=10m ./... > .viff-test/ci/logs/core.jsonl
-      - name: Test UI without opening windows
-        run: go test -json -count=1 -timeout=15m -tags 'vivahead litheaudit' ./internal/ui > .viff-test/ci/logs/ui.jsonl
+        uses: ./.github/actions/go-test-shard
+        with:
+          packages: ./...
+          shard: ${{ matrix.shard }}
+          shards: ${{ matrix.shards }}
+          timeout: 10m
+          log-file: .viff-test/ci/logs/core-${{ matrix.shard }}.jsonl
       - name: Build
+        if: matrix.shard == 1
         run: |
           mkdir -p build
           # Stamp the build identity into the binary; About and diagnostics read it.
@@ -102,10 +165,158 @@ jobs:
           LD="-X viff/internal/version.Version=$VERSION -X viff/internal/version.Commit=$COMMIT -X viff/internal/version.BuildDate=$BUILD_DATE"
           if [ "$RUNNER_OS" = "Windows" ]; then
             go build -trimpath -ldflags="-s -w -H=windowsgui $LD" -o build/viff.exe ./cmd/viff
-          elif [ "$RUNNER_OS" = macOS ]; then
-            CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
           else
             go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
+          fi
+      - name: Package and check installation without opening windows
+        if: matrix.shard == 1
+        run: python scripts/package.py v0.1.0-ci --smoke
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-evidence-${{ matrix.os }}-core-${{ matrix.shard }}
+          path: .viff-test/ci/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+  # The headless UI suite is the longest step, so it is sharded across runner
+  # machines. Every test still runs exactly once per OS; the shard action
+  # splits the test list by index. Windows gets three shards because its runner
+  # is the slowest for this suite.
+  ui:
+    name: UI (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            shard: 1
+            shards: 3
+          - os: windows-2022
+            shard: 2
+            shards: 3
+          - os: windows-2022
+            shard: 3
+            shards: 3
+          - os: ubuntu-24.04
+            shard: 1
+            shards: 2
+          - os: ubuntu-24.04
+            shard: 2
+            shards: 2
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      VIFF_SHOTS: ${{ github.workspace }}/.viff-test/ci/screenshots
+      VIFF_SHOTS_BY_TEST: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install Linux runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan1 mesa-vulkan-drivers libxcb1 libcairo2 libfontconfig1 libfreetype6 libharfbuzz0b libpango-1.0-0 libpangocairo-1.0-0 fonts-dejavu-core
+      - name: Record environment
+        run: |
+          mkdir -p .viff-test/ci/logs
+          go version
+          git --version
+          printf 'TEMP=%s\nTMP=%s\nTMPDIR=%s\n' "$RUNNER_TEMP" "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Test UI without opening windows
+        uses: ./.github/actions/go-test-shard
+        with:
+          packages: ./internal/ui
+          tags: vivahead litheaudit
+          shard: ${{ matrix.shard }}
+          shards: ${{ matrix.shards }}
+          timeout: 10m
+          log-file: .viff-test/ci/logs/ui-${{ matrix.shard }}.jsonl
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-evidence-${{ matrix.os }}-ui-${{ matrix.shard }}
+          path: .viff-test/ci/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+  # macOS runner slots are scarce and shared by every workflow in the account,
+  # so macOS runs in a single job and the independent vet/core tests/UI tests/
+  # build commands run concurrently inside it. Splitting this into separate
+  # macOS jobs made every extra job wait minutes for a runner slot, which cost
+  # more wall time than the concurrency saved.
+  macos:
+    name: macOS
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: macos-15
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      VIFF_SHOTS: ${{ github.workspace }}/.viff-test/ci/screenshots
+      VIFF_SHOTS_BY_TEST: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Record environment
+        run: |
+          mkdir -p .viff-test/ci/logs build
+          go version
+          git --version
+          printf 'TEMP=%s\nTMP=%s\nTMPDIR=%s\n' "$RUNNER_TEMP" "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Vet, test and build in parallel
+        run: |
+          set -uo pipefail
+          # Stamp the build identity into the binary; About and diagnostics read it.
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          LD="-X viff/internal/version.Version=$VERSION -X viff/internal/version.Commit=$COMMIT -X viff/internal/version.BuildDate=$BUILD_DATE"
+
+          go vet -tags 'vivahead litheaudit' ./... > .viff-test/ci/logs/vet.log 2>&1 &
+          vet=$!
+          go test -json -count=1 -timeout=10m ./... > .viff-test/ci/logs/core.jsonl &
+          core=$!
+          go test -json -count=1 -timeout=15m -tags 'vivahead litheaudit' ./internal/ui > .viff-test/ci/logs/ui.jsonl &
+          ui=$!
+          CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 \
+            go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff > .viff-test/ci/logs/build.log 2>&1 &
+          build=$!
+
+          status=0
+          wait "$vet" || status=1
+          wait "$core" || status=1
+          wait "$ui" || status=1
+          wait "$build" || status=1
+          if [ "$status" -ne 0 ]; then
+            for log in vet build; do
+              if [ -s ".viff-test/ci/logs/$log.log" ]; then
+                echo "===== $log.log ====="
+                cat ".viff-test/ci/logs/$log.log"
+              fi
+            done
+            exit "$status"
           fi
       - name: Package and check installation without opening windows
         run: python scripts/package.py v0.1.0-ci --smoke
@@ -113,7 +324,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-evidence-${{ matrix.os }}
+          name: test-evidence-macos-15
           path: .viff-test/ci/
           include-hidden-files: true
           if-no-files-found: warn
@@ -122,12 +333,31 @@ jobs:
   required:
     name: CI
     if: always()
-    needs: [quality, test]
+    needs: [changes, quality, test, ui, macos]
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - name: Require every check to pass
         env:
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          CHANGES: ${{ needs.changes.result }}
           QUALITY: ${{ needs.quality.result }}
           TEST: ${{ needs.test.result }}
-        run: test "$QUALITY" = success && test "$TEST" = success
+          UI: ${{ needs.ui.result }}
+          MACOS: ${{ needs.macos.result }}
+        run: |
+          set -euo pipefail
+          test "$CHANGES" = success
+          if [ "$DOCS_ONLY" = "true" ]; then
+            # Documentation-only pull request: the heavy jobs are skipped on
+            # purpose, so the required check passes without running them.
+            test "$QUALITY" = skipped
+            test "$TEST" = skipped
+            test "$UI" = skipped
+            test "$MACOS" = skipped
+          else
+            test "$QUALITY" = success
+            test "$TEST" = success
+            test "$UI" = success
+            test "$MACOS" = success
+          fi
