@@ -1,20 +1,74 @@
 # Release process / 发布流程
 
-## Publish a tested version / 发布已验证版本
+## Write the release notes first / 先写发布说明
 
-1. Merge changes into `main` and wait for the **CI** check to pass.
-2. Choose a version. Pre-release tags include a suffix, such as `v0.1.0-alpha.2`.
-3. Push the tag pointing to the tested commit.
-4. The Release workflow verifies successful CI for that exact commit, builds on
-   macOS, Windows, and Linux, and packages the executable with license notices.
-5. Review the published packages and `SHA256SUMS`, and expand the release notes
-   with changes, verification, and remaining limitations.
+Use [Viff's release template](releases/TEMPLATE.md) for every stable or preview
+release. Its structure follows the [Lithe-IDEA template](https://github.com/1lck/Lithe-IDEA/blob/main/docs/releases/TEMPLATE.md)
+and [release writing guidelines](https://github.com/1lck/Lithe-IDEA/blob/main/.agents/skills/release-lithe/SKILL.md),
+adapted to Viff's actual packages and platform support.
 
-6. 合并至 `main`，等待 **CI** 通过。
-7. 选择版本；预发布使用后缀，例如 `v0.1.0-alpha.2`。
-8. 将指向已验收提交的标签推送到 GitHub。
-9. Release 工作流核实该提交的 CI 成功后，在 macOS、Windows、Linux 构建，并打包程序及许可声明。
-10. 检查发布的安装包与 `SHA256SUMS`，补充具体改动、验证情况和已知限制。
+稳定版和预发布都使用 [Viff 发布模板](releases/TEMPLATE.md)。格式参考
+[Lithe-IDEA 模板](https://github.com/1lck/Lithe-IDEA/blob/main/docs/releases/TEMPLATE.md)与
+[发布写作规范](https://github.com/1lck/Lithe-IDEA/blob/main/.agents/skills/release-lithe/SKILL.md)，
+内容以 Viff 实际产物和平台支持为准，不照搬其他项目的功能、贡献者、Intel 包或 Homebrew 安装说明。
+
+1. Choose a version and its comparison baseline, such as `v0.1.0-alpha.2` and `v0.1.0-alpha.1`.
+2. Copy the template to `docs/releases/vTAG.md`, where `vTAG` is the full tag, and replace every placeholder.
+3. Derive changes from the release's commits and pull requests, verifying download names, compatibility, and contributors.
+4. Validate and commit the notes with the release changes before creating a tag.
+5. Merge into `main` and wait for CI to pass for the exact commit to be tagged.
+6. Push the tag; the Release workflow builds packages and publishes the committed notes verbatim.
+7. Verify the public description, downloads, and `SHA256SUMS` after publication.
+
+中文步骤：
+
+1. 选择版本和对比基线，例如 `v0.1.0-alpha.2` 与 `v0.1.0-alpha.1`。
+2. 将模板复制为 `docs/releases/vTAG.md`，其中 `vTAG` 为完整标签，并替换全部占位符。
+3. 从本次提交和 PR 提炼变化，核实下载文件名、兼容性和贡献者身份。
+4. 验证说明，并在创建标签前将说明与发布改动一同提交。
+5. 合并至 `main`，等待待打标签的确切提交通过 CI。
+6. 推送标签；Release 工作流构建安装包并原样发布已提交的说明。
+7. 发布后检查公开说明、下载文件和 `SHA256SUMS`。
+
+Run the validator before committing / 提交前运行验证：
+
+```sh
+python3 scripts/release_notes.py docs/releases/v0.1.0-alpha.2.md --tag v0.1.0-alpha.2
+```
+
+For another version, use `python3 scripts/release_notes.py docs/releases/vTAG.md --tag vTAG`
+with the actual full tag. CI validates every `docs/releases/v*.md` file. Missing,
+empty, or invalid notes block publication; there is no fallback to GitHub-generated
+notes or a raw commit list. Historical notes added after a release document that
+release; they do not retroactively change its tag.
+
+其他版本使用 `python3 scripts/release_notes.py docs/releases/vTAG.md --tag vTAG`，
+将 `vTAG` 替换为实际完整标签。CI 校验全部 `docs/releases/v*.md`。
+说明缺失、为空或格式不合格时阻止发布，不回退到 GitHub 自动生成的说明或原始提交列表。
+历史版本补录说明只记录该版本，不回改已发布标签。
+
+### Keep the two languages equivalent / 保持双语一致
+
+Write Chinese first and English second, separated by `---`. Keep the template's
+literal headings and order: summary, downloads, highlights with an overview,
+optional new features / improvements / fixes, upgrade instructions, compatibility,
+and a comparison link. End with the Chinese and English contributor sections.
+Omit empty categories in both languages. Keep each bullet to one user-facing
+sentence on one Markdown source line, without nested lists, internal class names,
+test counts, or raw logs. Include only verified changes and contributors.
+
+中文在前、英文在后，以 `---` 分隔。保留模板标题和顺序：摘要、下载、先有概览的重点更新、
+可选的新功能 / 改进 / 修复、升级说明、兼容性、版本对比链接，底部集中列出中英文贡献者致谢。
+中英文同步删除空分类。每条只写一个用户可感知的变化，一句话、一行 Markdown，不嵌套列表，
+不列内部类名、测试数量或原始日志。只写已核实的改动和贡献者。
+
+Keep Viff's lightweight positioning factual: Go and Viva, without Electron or a
+bundled browser runtime. Do not invent memory, startup, or performance numbers.
+Verify signing and platform requirements for each release; headless checks do
+not establish full desktop compatibility.
+
+“轻量”围绕事实表达：Go 与 Viva，不采用 Electron，不捆绑浏览器运行时。
+不编造内存、启动或性能数字。逐版核实签名和系统要求，不将无头检查等同于完整桌面兼容性。
 
 ## Choose the package / 选择安装包
 

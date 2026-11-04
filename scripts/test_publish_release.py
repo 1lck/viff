@@ -31,6 +31,8 @@ class PublishReleaseTests(unittest.TestCase):
             command = args[1:]
             if command[:2] == ['release', 'create']:
                 self.assertFalse(created, 'Do not create a duplicate draft')
+                self.assertIn('--notes-file', command)
+                self.assertNotIn('--generate-notes', command)
                 created = True
                 # A failed response can still have created the draft remotely.
                 return response(args, 1)
@@ -42,7 +44,11 @@ class PublishReleaseTests(unittest.TestCase):
                 })
                 return response(args)
             if command[:3] == ['api', '-X', 'PATCH']:
-                state['draft'] = False
+                if 'draft=false' in command:
+                    state['draft'] = False
+                else:
+                    state['body'] = next(arg[5:] for arg in command if arg.startswith('body='))
+                    state['name'] = next(arg[5:] for arg in command if arg.startswith('name='))
                 return response(args, 1)  # Applied despite a server error.
             if command[:3] == ['api', '--paginate', '--slurp']:
                 # Put the draft on the second page to exercise pagination.
@@ -64,13 +70,24 @@ class PublishReleaseTests(unittest.TestCase):
                 )] + ['SHA256SUMS']:
                     (Path('dist') / name).write_bytes(b'test asset')
                 with patch.dict(os.environ, GH_REPO='example/viff', GITHUB_REF_NAME=TAG), \
-                        patch('subprocess.run', side_effect=fake_gh), patch('time.sleep'):
+                        patch('subprocess.run', side_effect=fake_gh), patch('time.sleep'), \
+                        patch('release_notes.load_notes', return_value='Curated bilingual notes'):
                     runpy.run_path(str(SCRIPT))
             finally:
                 os.chdir(previous)
         self.assertFalse(state['draft'])
+        self.assertEqual(state['body'], 'Curated bilingual notes')
+        self.assertEqual(state['name'], f'Viff {TAG}')
         self.assertEqual(len(state['assets']), 5)
         self.assertEqual(sum(c[1:3] == ['release', 'create'] for c in calls), 0 if existing_draft else 1)
+
+    def test_missing_notes_block_all_github_calls(self):
+        with patch.dict(os.environ, GH_REPO='example/viff', GITHUB_REF_NAME=TAG), \
+                patch('release_notes.load_notes', side_effect=ValueError('Missing notes')), \
+                patch('subprocess.run') as remote:
+            with self.assertRaisesRegex(ValueError, 'Missing notes'):
+                runpy.run_path(str(SCRIPT))
+            remote.assert_not_called()
 
     def test_existing_draft_is_found_without_recreating_it(self):
         self.exercise(existing_draft=True)
