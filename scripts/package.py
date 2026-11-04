@@ -16,8 +16,12 @@ dest = root / "dist"
 dest.mkdir(exist_ok=True)
 with zipfile.ZipFile(dest / f"{name}.zip", "w", zipfile.ZIP_DEFLATED) as archive:
     archive.write(binary, f"{name}/{binary.name}")
-    for file in ["README.md", "README.zh-CN.md", "LICENSE", "THIRD_PARTY_NOTICES.md"]:
+    for file in ["README.md", "README.zh-CN.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
+                 "CONTRIBUTING.md", "SECURITY.md"]:
         archive.write(root / file, f"{name}/{file}")
+    for file in sorted((root / "docs").rglob("*")):
+        if file.is_file():
+            archive.write(file, f"{name}/{file.relative_to(root).as_posix()}")
     for file in sorted((root / "licenses").iterdir()):
         if file.is_file():
             archive.write(file, f"{name}/licenses/{file.name}")
