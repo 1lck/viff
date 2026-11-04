@@ -151,6 +151,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 			{title: "Delete Tag", icon: icons.Delete, run: func() {
 				w.confirm("Delete Tag", "Delete tag "+q+" locally?", "Delete", func() { w.ws.DeleteTag(name) })
 			}},
+			{title: "Delete Remote Tag…", icon: icons.Delete, disabled: len(rs.Remotes) == 0, run: func() { w.openDeleteRemoteTag(name) }},
 		}
 	}
 	if r.Current {
@@ -158,6 +159,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 			item{title: "New Branch from " + q + "…", icon: icons.Add, run: func() { w.openNewBranch("", name) }},
 			item{title: "Update", icon: icons.Update, disabled: r.Upstream == "" || busy, run: func() { w.ws.Pull(w.pullMode()) }},
 			item{title: "Push…", icon: icons.Push, run: w.openPush},
+			item{title: "Push to Another Remote…", icon: icons.Push, run: func() { w.openPushAnother(r) }},
 			sep(),
 			item{title: "Rename…", icon: icons.Edit, run: func() { w.openRename(r) }},
 		)

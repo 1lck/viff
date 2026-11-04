@@ -357,6 +357,13 @@ func (w *Workspace) PushTag(remote, name string) {
 	}, RunOptions{Success: "Pushed tag " + name + " to " + remote})
 }
 
+// DeleteRemoteTag deletes a tag on the remote. The local tag stays.
+func (w *Workspace) DeleteRemoteTag(remote, name string) {
+	w.Run("Delete remote tag "+name, func(ctx context.Context, repo domain.Repo, p func(string)) error {
+		return w.Git.DeleteRemoteTag(ctx, repo, remote, name, p)
+	}, RunOptions{Success: "Deleted tag " + name + " on " + remote})
+}
+
 // SetUpstream sets a branch's upstream.
 func (w *Workspace) SetUpstream(branch, upstream string) {
 	w.Run("Set upstream", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
@@ -425,18 +432,7 @@ func (w *Workspace) Push(o gitcli.PushOptions, after func()) {
 		_, err := w.Git.Push(ctx, repo, o, p)
 		return err
 	}, RunOptions{
-		OnError: func(err error) bool {
-			if gitcli.KindOf(err) == gitcli.ErrRejected {
-				msg := "The remote has commits you do not have. Update first, then push again."
-				if o.ForceWithLease {
-					msg = "The remote branch changed since your last fetch, so the force push was refused to protect that work. Fetch and review before trying again."
-				}
-				w.Notify(NoticeError, "Push rejected", msg+"\n\n"+ErrorText(err),
-					NoticeAction{Title: "Update", Run: func() { w.Pull(gitcli.PullMerge) }})
-				return true
-			}
-			return false
-		},
+		OnError: w.pushError(o.ForceWithLease),
 		After: func() {
 			dst := o.RemoteName
 			if dst == "" {
@@ -448,6 +444,51 @@ func (w *Workspace) Push(o gitcli.PushOptions, after func()) {
 			}
 		},
 	})
+}
+
+// pushError turns a rejected push into an actionable notification while
+// keeping Git's own message; other errors keep the default handling.
+func (w *Workspace) pushError(force bool) func(error) bool {
+	return func(err error) bool {
+		if gitcli.KindOf(err) != gitcli.ErrRejected {
+			return false
+		}
+		msg := "The remote has commits you do not have. Update first, then push again."
+		if force {
+			msg = "The remote branch changed since your last fetch, so the force push was refused to protect that work. Fetch and review before trying again."
+		}
+		w.Notify(NoticeError, "Push rejected", msg+"\n\n"+ErrorText(err),
+			NoticeAction{Title: "Update", Run: func() { w.Pull(gitcli.PullMerge) }})
+		return true
+	}
+}
+
+// PushUpTo pushes rev and every commit before it to branch on remote. The
+// history is sent as-is: a non-fast-forward update is rejected unless
+// forceWithLease is set, and Git's own message is kept.
+func (w *Workspace) PushUpTo(remote, branch, rev string, forceWithLease bool) {
+	w.pushRef("Push up to "+domain.ShortHash(rev), remote, branch, rev, forceWithLease)
+}
+
+// PushHeadTo pushes HEAD to another remote or under another branch name.
+func (w *Workspace) PushHeadTo(remote, branch string, forceWithLease bool) {
+	w.pushRef("Push HEAD to "+remote+"/"+branch, remote, branch, "HEAD", forceWithLease)
+}
+
+func (w *Workspace) pushRef(title, remote, branch, src string, forceWithLease bool) {
+	w.Run(title, func(ctx context.Context, repo domain.Repo, p func(string)) error {
+		return w.Git.PushRef(ctx, repo, remote, src, branch, forceWithLease, p)
+	}, RunOptions{
+		Success: "Pushed " + pushSource(src) + " to " + remote + "/" + branch,
+		OnError: w.pushError(forceWithLease),
+	})
+}
+
+func pushSource(src string) string {
+	if src == "HEAD" {
+		return "HEAD"
+	}
+	return domain.ShortHash(src)
 }
 
 // Outgoing lists the commits a push would send.
