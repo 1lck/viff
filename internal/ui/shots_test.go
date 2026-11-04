@@ -344,6 +344,60 @@ func TestLogSearch(t *testing.T) {
 	f.snap("26-log-search")
 }
 
+// TestStageBlockAndNewBranch stages one diff block from the divider and
+// creates a branch through the New Branch dialog.
+func TestStageBlockAndNewBranch(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+	f.click("main.go")
+	f.settleTab()
+
+	h, ok := f.s.Hit("Stage Change")
+	if !ok {
+		t.Fatalf("no Stage Change button; hits: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if err := f.s.Click(h.Bounds.X+h.Bounds.Width/2, h.Bounds.Y+h.Bounds.Height/2); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.git("diff", "--cached", "--", "main.go") != ""
+	}, 10*time.Second); err != nil {
+		t.Fatal("no block was staged")
+	}
+	f.settle()
+	staged := f.git("diff", "--cached", "--", "main.go")
+	if n := strings.Count(staged, "\n@@ "); n != 1 {
+		t.Fatalf("staged %d hunks, want exactly one block:\n%s", n, staged)
+	}
+	if !strings.Contains(f.git("diff", "--", "main.go"), "addr returns") {
+		t.Fatal("the other blocks should stay unstaged")
+	}
+	f.snap("30-block-staged")
+
+	f.s.Keys("cmd+alt+n")
+	f.s.Settle(40*time.Millisecond, time.Second)
+	if f.win.dialog == nil {
+		t.Fatal("⌥⌘N did not open the New Branch dialog")
+	}
+	if err := f.s.Type("feature/ui-test"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.click("Create")
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.ws.Repo.CurrentBranch() == "feature/ui-test"
+	}, 10*time.Second); err != nil {
+		t.Fatalf("branch not created/checked out; current %q", f.ws.Repo.CurrentBranch())
+	}
+	f.settle()
+	if got := strings.TrimSpace(f.git("rev-parse", "--abbrev-ref", "HEAD")); got != "feature/ui-test" {
+		t.Fatalf("HEAD = %q", got)
+	}
+	f.snap("31-new-branch-done")
+}
+
 const mainV1 = `package main
 
 import (
