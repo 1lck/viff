@@ -5,3 +5,11 @@
 *.prof
 .DS_Store
 /.viff-test/
+/.lithe/
+/viff
+/viff.exe
+*.test.exe
+/coverage/
+.env
+.env.*
+!.env.example

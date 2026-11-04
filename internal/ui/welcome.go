@@ -95,7 +95,7 @@ func (w *Window) paintWelcome(full ui.Rect) {
 		label string
 		id    ui.ID
 		fn    func()
-	}{{"Clone", idWelClone, w.openClone}, {"Open", idWelOpen, w.chooseRepoNow}, {"New Repository", idWelInit, w.openInit}} {
+	}{{"Clone", idWelClone, w.openClone}, {"Open", idWelOpen, w.chooseRepoNow}, {"New Repository", idWelInit, w.openInit}, {"Repositories…", idWelcomeRepositories, w.openRepositories}} {
 		bw := w.buttonWidth(b.label)
 		kind := btnNormal
 		if i == 1 {
@@ -196,9 +196,9 @@ func (w *Window) paintWelcomeEmpty(r ui.Rect) {
 		icon  icons.Pair
 		id    ui.ID
 		fn    func()
-	}{{"New Repository", icons.Add, idWelInit, w.openInit}, {"Open", icons.Open, idWelOpen, w.chooseRepoNow}, {"Clone", icons.Download, idWelClone, w.openClone}}
-	bw := float32(110)
-	x := r.X + (r.Width-3*bw-2*24)/2
+	}{{"New Repository", icons.Add, idWelInit, w.openInit}, {"Open", icons.Open, idWelOpen, w.chooseRepoNow}, {"Clone", icons.Download, idWelClone, w.openClone}, {"Repositories…", icons.Project, idWelcomeRepositories, w.openRepositories}}
+	bw := float32(120)
+	x := r.X + (r.Width-4*bw-3*24)/2
 	y := cy + 84
 	for _, b := range big {
 		br := rect(x, y, bw, 76)

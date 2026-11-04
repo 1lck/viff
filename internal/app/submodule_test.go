@@ -1,7 +1,6 @@
 package app
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,18 +62,14 @@ func TestSubmoduleCommands(t *testing.T) {
 		t.Fatalf("submodule HEAD = %s, want %s", got, want)
 	}
 
-	// Sync writes the .gitmodules URL into .git/config.
+	// Sync writes the .gitmodules URL into .git/config. The URL is rewritten
+	// through Git itself: .gitmodules escapes backslashes (Windows paths) and
+	// quotes, so editing the raw text does not match what Git stored.
 	other := newFixture(t)
 	other.write("lib.txt", "other\n")
 	other.commitAll("other")
 	modules := filepath.Join(f.dir, ".gitmodules")
-	data, err := os.ReadFile(modules)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(modules, []byte(strings.Replace(string(data), child.dir, other.dir, 1)), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	f.git("config", "-f", modules, "submodule.deps/lib.url", other.dir)
 	var (
 		syncEr error
 		syncOK bool

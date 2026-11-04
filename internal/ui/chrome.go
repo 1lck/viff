@@ -57,6 +57,7 @@ func (w *Window) paintMain(full ui.Rect) {
 			w.saveSettings)
 	}
 	w.paintEditor(area)
+	w.applyPendingRepositoryFile()
 	if w.pendingRebase != "" && !w.ws.Busy() {
 		onto := w.pendingRebase
 		w.after(func() {
@@ -207,7 +208,8 @@ func (w *Window) projectMenu() []item {
 	var out []item
 	out = append(out, item{title: "Open…", icon: icons.Open, shortcut: "⌘O", run: w.chooseRepoNow},
 		item{title: "Clone Repository…", icon: icons.Download, run: w.openClone},
-		item{title: "New Repository…", icon: icons.Add, run: w.openInit})
+		item{title: "New Repository…", icon: icons.Add, run: w.openInit},
+		item{title: "Repositories…", icon: icons.Project, run: w.openRepositories})
 	cur := ""
 	if w.ws.Repo != nil {
 		cur = w.ws.Repo.Repo.Root

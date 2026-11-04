@@ -77,6 +77,8 @@ func TestSubmodulesDialogAndMenu(t *testing.T) {
 		}
 	}
 
+	f.snap("submodules-status")
+
 	// Sync All runs and the dialog reloads instead of closing.
 	f.click("Sync All")
 	f.settle()

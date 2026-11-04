@@ -68,6 +68,10 @@ func TestParseTree(t *testing.T) {
 // symlinks and a submodule gitlink, plus the error for an unknown revision.
 func TestTreeAt(t *testing.T) {
 	tr := newTestRepo(t)
+	// On Windows Git ignores the filesystem modes (core.filemode=false) and
+	// records a link as a regular file unless core.symlinks is on, so ask for
+	// the tree modes explicitly below instead of relying on the platform.
+	tr.git("config", "core.symlinks", "true")
 	tr.write("README.md", "hello\n")
 	tr.write("src/main.go", "package main\n")
 	tr.write("docs/空 格.txt", "text\n")
@@ -85,6 +89,10 @@ func TestTreeAt(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr.git("add", "run.sh", "link.md")
+	// Git does not read the executable bit from an NTFS file, and the index
+	// mode is what the tree records: set it directly so this test covers real
+	// 100755 tree metadata on every platform.
+	tr.git("update-index", "--chmod=+x", "run.sh")
 	head := strings.TrimSpace(tr.git("rev-parse", "HEAD"))
 	// A gitlink is how a submodule appears in the tree; the target
 	// repository does not need to exist to list it.

@@ -80,9 +80,39 @@ type Workspace struct {
 	// Repo is the open repository, nil on the welcome screen.
 	Repo *RepoState
 
+	// Repositories is the explicit multi-repository list, in the order the user
+	// added them. Only the active repository (Repo) runs Git commands and has a
+	// file watcher; the other rows show their last known status and are
+	// refreshed by RefreshRepositories.
+	Repositories []RepositorySummary
+	// ActiveRoot is the canonical root of the active repository, "" when none
+	// is open. It is persisted with the list, so a restart can restore the
+	// previous selection.
+	ActiveRoot string
+	// WorkspaceWarning reports a workspace file that could not be used as is
+	// (unreadable, or written by a newer Viff and therefore read-only).
+	WorkspaceWarning string
+	// ChangeLists is the per-repository change-list bookkeeping. It is created
+	// lazily by the change-list backend (changelists.go); a workspace that never
+	// shows change lists keeps it nil.
+	ChangeLists *ChangeListManager
+	// changeListSyncWarned keeps a failing rename sync from notifying on every
+	// status refresh; the next success clears it.
+	changeListSyncWarned bool
+	// workspaceSaveWarned keeps a failing workspace write from notifying on
+	// every list change; the next success clears it.
+	workspaceSaveWarned bool
+
 	Notifications []Notification
 	Console       []ConsoleEntry
 	Tasks         []*Task
+
+	// repos is the private state behind Repositories; see repositories.go.
+	repos repositoriesState
+	// nextGen is the repository generation counter. It only ever grows: a
+	// generation is never reused after a repository is closed or removed, so a
+	// stale view can never match a newer repository.
+	nextGen uint64
 
 	invalidate func()
 	mu         sync.Mutex
@@ -109,6 +139,7 @@ type Watcher interface{ Close() }
 func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
 	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now}
 	git.Log = w.logCommand
+	w.loadRepositories()
 	w.ApplyGitSettings()
 	return w
 }
@@ -207,6 +238,21 @@ func (w *Workspace) Dismiss(id uint64) {
 			return
 		}
 	}
+}
+
+// warnChangeListSync reports a failed change-list rename sync once per failure
+// streak. SyncChangeListRenames runs after every successful status refresh, so
+// a persistent failure would otherwise repeat the warning on every refresh.
+func (w *Workspace) warnChangeListSync(err error) {
+	if err == nil {
+		w.changeListSyncWarned = false
+		return
+	}
+	if w.changeListSyncWarned {
+		return
+	}
+	w.changeListSyncWarned = true
+	w.Notify(NoticeWarning, "Change lists", err.Error())
 }
 
 // NotifyError shows a Git failure with its message.

@@ -60,6 +60,7 @@ func TestSmartCheckoutDialog(t *testing.T) {
 	// overlap the branch, so the changes stay in the stash.
 	f.win.checkoutBranch(ref)
 	waitDialog()
+	f.snap("smart-checkout-confirmation")
 	f.click("Stash and Checkout")
 	f.settle()
 

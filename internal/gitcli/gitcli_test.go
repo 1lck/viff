@@ -172,21 +172,25 @@ func TestStatusPathsAndKinds(t *testing.T) {
 	}
 }
 
+// TestPathspecIsLiteral keeps a path that Git would read as a glob from
+// matching its sibling. Brackets are used instead of "*": they carry the same
+// pathspec meaning, but a file name may contain them on Windows, where "*" is
+// not a legal name at all.
 func TestPathspecIsLiteral(t *testing.T) {
 	tr := newTestRepo(t)
-	tr.write("*.txt", "star\n")
-	tr.write("x.txt", "x\n")
+	tr.write("x[1].txt", "bracket\n")
+	tr.write("x1.txt", "plain\n")
 	tr.commitAll("init")
-	tr.write("*.txt", "changed\n")
-	tr.write("x.txt", "changed\n")
-	if err := tr.r.Stage(ctx, tr.repo, []string{"*.txt"}); err != nil {
+	tr.write("x[1].txt", "changed\n")
+	tr.write("x1.txt", "changed\n")
+	if err := tr.r.Stage(ctx, tr.repo, []string{"x[1].txt"}); err != nil {
 		t.Fatal(err)
 	}
 	st := tr.status()
-	if e, _ := find(st, "x.txt"); e.Staged() {
-		t.Fatal("glob pathspec staged x.txt")
+	if e, _ := find(st, "x1.txt"); e.Staged() {
+		t.Fatal("glob pathspec staged x1.txt")
 	}
-	if e, _ := find(st, "*.txt"); !e.Staged() {
+	if e, _ := find(st, "x[1].txt"); !e.Staged() {
 		t.Fatal("literal path not staged")
 	}
 }

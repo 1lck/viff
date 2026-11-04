@@ -54,21 +54,31 @@ func TestPushVariantEntries(t *testing.T) {
 
 	// Both dialogs paint and close on Escape.
 	f.win.openDeleteRemoteTag("v0.1.0")
+	f.win.Invalidate()
 	f.s.Settle(40*time.Millisecond, time.Second)
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		return f.win.dialog != nil && f.win.dialog.title == "Delete Remote Tag"
 	}, 10*time.Second); err != nil {
 		t.Fatalf("delete remote tag dialog: %+v", f.win.dialog)
 	}
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if !f.s.HasText("Delete Remote Tag") {
+		t.Fatal("delete remote tag dialog was not painted")
+	}
 	f.snap("50-delete-remote-tag")
 	f.s.Keys("escape")
 	f.s.Settle(40*time.Millisecond, time.Second)
 
 	f.win.openPushAnother(cur)
+	f.win.Invalidate()
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		return f.win.dialog != nil && strings.HasPrefix(f.win.dialog.title, "Push HEAD")
 	}, 10*time.Second); err != nil {
 		t.Fatalf("push another dialog: %+v", f.win.dialog)
+	}
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if !f.s.HasText(f.win.dialog.title) {
+		t.Fatal("push another dialog was not painted")
 	}
 	f.snap("51-push-another")
 	f.s.Keys("escape")

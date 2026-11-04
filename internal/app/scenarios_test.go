@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -160,6 +161,13 @@ func TestScenarioDetachedHead(t *testing.T) {
 
 func TestScenarioRenameModeSymlinkBinaryDelete(t *testing.T) {
 	f := newFixture(t)
+	if runtime.GOOS == "windows" {
+		// Git on Windows treats a worktree symlink as a plain file unless
+		// asked, and has no executable bit. Ask for symlinks and stage the
+		// mode change through the index instead of chmod.
+		f.git("config", "core.symlinks", "true")
+		f.git("config", "core.filemode", "false")
+	}
 	f.write("old.txt", strings.Repeat("line\n", 20))
 	f.write("run.sh", "echo hi\n")
 	f.write("target.txt", "target\n")
@@ -171,7 +179,11 @@ func TestScenarioRenameModeSymlinkBinaryDelete(t *testing.T) {
 	f.git("mv", "old.txt", "new.txt")
 	f.write("new.txt", strings.Repeat("line\n", 20)+"added\n")
 	f.git("add", "new.txt")
-	if err := os.Chmod(filepath.Join(f.dir, "run.sh"), 0o755); err != nil {
+	if runtime.GOOS == "windows" {
+		// chmod cannot set an executable bit on Windows; update-index stages
+		// the mode change in the index, so the staged diff still reports it.
+		f.git("update-index", "--chmod=+x", "run.sh")
+	} else if err := os.Chmod(filepath.Join(f.dir, "run.sh"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	os.Remove(filepath.Join(f.dir, "link.txt"))
@@ -190,7 +202,12 @@ func TestScenarioRenameModeSymlinkBinaryDelete(t *testing.T) {
 	if !res.Old.Content.Exists || len(res.Blocks) != 1 {
 		t.Fatalf("renamed diff: oldExists=%v blocks=%d", res.Old.Content.Exists, len(res.Blocks))
 	}
-	mode := f.loadDiff(DiffSource{Path: "run.sh", Area: domain.AreaUnstaged, Working: true})
+	modeArea := domain.AreaUnstaged
+	if runtime.GOOS == "windows" {
+		// The mode change lives in the index on Windows (see above).
+		modeArea = domain.AreaStaged
+	}
+	mode := f.loadDiff(DiffSource{Path: "run.sh", Area: modeArea, Working: true})
 	if !strings.Contains(mode.ModeChange, "100755") {
 		t.Fatalf("mode change not reported: %q notice=%q", mode.ModeChange, mode.Notice)
 	}
@@ -233,7 +250,14 @@ func TestScenarioRenameModeSymlinkBinaryDelete(t *testing.T) {
 
 func TestScenarioSpecialPaths(t *testing.T) {
 	f := newFixture(t)
-	names := []string{"中文 文件.txt", "-leading-dash.txt", "dir with space/a b.txt", "emoji-😀.md", "quote\"d.txt", "tab\tname.txt"}
+	// The portable set covers CJK, spaces, a leading dash, an emoji and
+	// literal brackets; the paths are passed to Git literally, never as globs.
+	names := []string{"中文 文件.txt", "-leading-dash.txt", "dir with space/a b.txt", "emoji-😀.md", "brackets[1].txt"}
+	if runtime.GOOS != "windows" {
+		// Double quotes and tabs are legal on Unix but not in Windows file
+		// names, so keep that coverage on the platforms that can hold them.
+		names = append(names, "quote\"d.txt", "tab\tname.txt")
+	}
 	f.write("keep.txt", "x\n")
 	f.commitAll("Base")
 	for _, n := range names {

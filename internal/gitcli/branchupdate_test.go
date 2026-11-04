@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -171,9 +172,29 @@ func TestUpdateBranchRefusesCheckedOut(t *testing.T) {
 	if _, err := tr.r.UpdateBranch(ctx, tr.repo, "origin", "side", nil); !errors.Is(err, ErrBranchCheckedOut) {
 		t.Fatalf("other worktree err = %v, want ErrBranchCheckedOut", err)
 	}
-	if out := tr.git("worktree", "list", "--porcelain"); !strings.Contains(out, wt) {
+	if out := tr.git("worktree", "list", "--porcelain"); !worktreeListed(out, wt) {
 		t.Fatalf("worktree went away:\n%s", out)
 	}
+}
+
+// worktreeListed reports whether `git worktree list --porcelain` names dir.
+// Git prints forward slashes even on Windows and Windows paths compare
+// case-insensitively, so neither the separator nor the case can be compared
+// byte for byte.
+func worktreeListed(out, dir string) bool {
+	want := filepath.Clean(dir)
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		path, ok := strings.CutPrefix(line, "worktree ")
+		if !ok {
+			continue
+		}
+		got := filepath.Clean(filepath.FromSlash(strings.TrimSpace(path)))
+		if got == want || (runtime.GOOS == "windows" && strings.EqualFold(got, want)) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestUnshallow(t *testing.T) {

@@ -844,6 +844,39 @@ func (w *Workspace) AddWorktree(path, branch, start string, done func(error)) {
 	}()
 }
 
+// AddWorktreeExisting checks out an existing local branch in a new linked
+// worktree at path. Unlike AddWorktree it creates no branch; a missing or
+// remote-only branch and a branch already checked out anywhere are refused
+// (Git checks again while adding). It reports the git error, then refreshes.
+func (w *Workspace) AddWorktreeExisting(path, branch string, done func(error)) {
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	_, ctx, finish := w.startTask("New worktree "+branch, true)
+	repo := rs.Repo
+	go func() {
+		lock := writeLock(repo)
+		lock.Lock()
+		err := w.Git.AddWorktreeExisting(ctx, repo, path, branch)
+		lock.Unlock()
+		w.post(func() {
+			finish()
+			if w.Repo == rs {
+				if err != nil {
+					w.NotifyError("Cannot create worktree", err)
+				} else {
+					w.Notify(NoticeSuccess, "Worktree created", path)
+					w.Refresh(true)
+				}
+			}
+			if done != nil {
+				done(err)
+			}
+		})
+	}()
+}
+
 // RemoveWorktree deletes the worktree at path. Without force Git refuses to
 // delete one with modified or untracked files. The branch stays.
 func (w *Workspace) RemoveWorktree(path string, force bool, done func(error)) {

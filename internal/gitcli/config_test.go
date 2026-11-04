@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -89,13 +90,17 @@ func (tr *testRepo) gitConfig(t *testing.T, key string) string {
 
 // The SSH command cannot be read back with git config; a stub Git that prints
 // its environment proves the variable reaches the child process.
+//
+// The stub is this test binary itself: TestMain notices VIFF_GIT_STUB before
+// the testing flags are parsed and exits with the output the test expects.
+// A shell script with a "#!/bin/sh" line would work on Unix but not on
+// Windows, where a script cannot be executed directly.
 func TestSSHCommandEnvironment(t *testing.T) {
-	dir := t.TempDir()
-	script := filepath.Join(dir, "git-stub")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s' \"$GIT_SSH_COMMAND\"\n"), 0o755); err != nil {
+	stub, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
-	r := &Runner{Path: script}
+	r := &Runner{Path: stub, Env: []string{"VIFF_GIT_STUB=env:GIT_SSH_COMMAND"}}
 	r.SetConfig(Config{SSHCommand: "/usr/bin/ssh -i /tmp/viff-key"})
 	out, err := r.Run(context.Background(), "", "version")
 	if err != nil {
@@ -118,16 +123,10 @@ func TestSSHCommandEnvironment(t *testing.T) {
 // path resolved for the first command.
 func TestSetPathTakesEffect(t *testing.T) {
 	dir := t.TempDir()
-	makeStub := func(name, out string) string {
-		p := filepath.Join(dir, name)
-		body := "#!/bin/sh\nprintf '" + out + "'\n"
-		if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		return p
-	}
-	first, second := makeStub("git-one", "one"), makeStub("git-two", "two")
-	r := &Runner{Path: first}
+	// Two copies of the stub report different output, based on their file
+	// name, so a cached first path is observable.
+	first, second := testBinaryCopy(t, dir, "git-one"), testBinaryCopy(t, dir, "git-two")
+	r := &Runner{Path: first, Env: []string{"VIFF_GIT_STUB=name"}}
 	out, err := r.Run(context.Background(), "", "version")
 	if err != nil || string(out) != "one" {
 		t.Fatalf("first run = %q, %v", out, err)
@@ -137,4 +136,55 @@ func TestSetPathTakesEffect(t *testing.T) {
 	if err != nil || string(out) != "two" {
 		t.Fatalf("run after SetPath = %q, %v (cached path not reset)", out, err)
 	}
+}
+
+// TestMain lets the test binary double as the fake Git executable the Runner
+// starts. VIFF_GIT_STUB is set by the tests above and inherited by the child;
+// it is unset in a normal `go test` run, where the tests run as usual.
+func TestMain(m *testing.M) {
+	if mode := os.Getenv("VIFF_GIT_STUB"); mode != "" {
+		writeStubOutput(mode)
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+// writeStubOutput is the fake Git. "env:NAME" prints the value of the
+// environment variable NAME, which is how a setting that Git passes through
+// the environment is observed. "name" derives the output from the name of the
+// stub executable, so TestSetPathTakesEffect can tell the two binaries apart.
+func writeStubOutput(mode string) {
+	if name, ok := strings.CutPrefix(mode, "env:"); ok {
+		os.Stdout.WriteString(os.Getenv(name))
+		return
+	}
+	exe, err := os.Executable()
+	if err == nil && strings.Contains(filepath.Base(exe), "two") {
+		os.Stdout.WriteString("two")
+		return
+	}
+	os.Stdout.WriteString("one")
+}
+
+// testBinaryCopy copies the running test executable into dir as name (with the
+// platform's executable extension), so it can serve as a fake Git binary on
+// platforms where shell scripts are not executable.
+func testBinaryCopy(t *testing.T, dir, name string) string {
+	t.Helper()
+	src, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, name)
+	if err := os.WriteFile(dst, data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dst
 }

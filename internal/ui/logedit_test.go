@@ -34,6 +34,7 @@ func TestEditHistoryDialogs(t *testing.T) {
 	open := func(name string, action func(domain.Commit), title string) {
 		t.Helper()
 		action(c)
+		f.win.Invalidate()
 		if err := f.s.WaitFor(func(app.Snapshot) bool { return f.win.dialog != nil }, 10*time.Second); err != nil {
 			t.Fatalf("%s: dialog never opened: %v", name, err)
 		}
@@ -41,6 +42,10 @@ func TestEditHistoryDialogs(t *testing.T) {
 		if got := f.win.dialog.title; !strings.Contains(got, title) {
 			t.Fatalf("%s: title = %q, want %q", name, got, title)
 		}
+		if !f.s.HasText(f.win.dialog.title) {
+			t.Fatalf("%s: dialog was not painted", name)
+		}
+		f.snap(name + "-dialog")
 		f.s.Keys("escape")
 		f.s.Settle(40*time.Millisecond, time.Second)
 		if f.win.dialog != nil {

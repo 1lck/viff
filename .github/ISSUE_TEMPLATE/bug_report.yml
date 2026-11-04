@@ -1,0 +1,85 @@
+name: Bug 报告 / Bug report
+description: 报告可复现的功能问题（中文或英文均可）/ Report a reproducible problem (Chinese or English welcome)
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        中文或英文都可以。Chinese or English is welcome.
+
+        **安全问题不要在这里提交**，请使用 [私密漏洞报告](https://github.com/1lck/viff/security/advisories/new)，见 [SECURITY.md](https://github.com/1lck/viff/blob/main/SECURITY.md)。
+        **Do not report security vulnerabilities here** — use [private vulnerability reporting](https://github.com/1lck/viff/security/advisories/new) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Viff 版本 / Viff version
+      description: 版本号或提交哈希（`git rev-parse --short HEAD`），以及构建方式（源码运行或二进制）/ Version or commit hash, and how you built it
+      placeholder: 例如 2f06516，go run ./cmd/viff
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统 / Operating system
+      description: 发行版与版本；界面问题请注明桌面环境或显示服务器（X11 / Wayland / 远程会话）/ Distribution and version; for UI issues include the desktop environment or display server
+      placeholder: 例如 macOS 15.1 / Windows Server 2022 / Ubuntu 24.04 Wayland
+    validations:
+      required: true
+
+  - type: input
+    id: git
+    attributes:
+      label: Git 版本 / Git version
+      description: 请粘贴 `git --version` 的完整输出 / Paste the full output of `git --version`
+      placeholder: git version 2.51.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 从打开或克隆仓库开始，列出能稳定复现的最少步骤；尽量使用临时仓库并在其中复现 / Start from opening or cloning a repository and list the minimal reliable steps; use a temporary repository where possible
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果 / Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果 / Actual behaviour
+      description: 包括界面上的错误文本；Git 工具窗口 Console 里的命令与输出最有用 / Include the error text shown in the UI; commands and output from the Git tool window's console are the most useful
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息 / Additional context
+      description: 截图、日志、仓库特征（浅克隆、worktree、子模块、非 ASCII 路径等）/ Screenshots, logs, repository characteristics (shallow clone, worktree, submodule, non-ASCII paths, etc.)
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认 / Before submitting
+      options:
+        - label: 我已经搜索过现有 Issue。 / I searched existing issues.
+          required: true
+        - label: 我已在临时仓库中复现，报告中不含令牌、口令、私有仓库内容或其他凭据。 / I reproduced this in a temporary repository and removed tokens, passwords, private repository content and other credentials.
+          required: true
+        - label: 我理解安全问题应走私密报告，而不是公开 Issue。 / I understand that security issues belong in private reporting, not a public issue.
+          required: true

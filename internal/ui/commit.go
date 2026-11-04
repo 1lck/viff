@@ -32,6 +32,10 @@ type commitView struct {
 	scroll    scroller
 	rows      []changeRow
 	msgH      float32
+	// listID filters the changes tree by change list. "" shows every list,
+	// which keeps the historical behavior; any other value is the selected
+	// list's ID.
+	listID string
 }
 
 // changeRow is one row of the staging tree.
@@ -81,6 +85,7 @@ func (v *commitView) reset() {
 	clear(v.collapsed)
 	v.anchor, v.cursor = "", ""
 	v.scroll = scroller{}
+	v.listID = ""
 }
 
 func rowKey(a domain.Area, p string) string { return string(rune('0'+a)) + ":" + p }
@@ -88,11 +93,10 @@ func rowKey(a domain.Area, p string) string { return string(rune('0'+a)) + ":" +
 // buildRows flattens the status into tree rows.
 func (w *Window) buildRows() {
 	v := &w.cm
-	rs := w.repo()
 	v.rows = v.rows[:0]
 	tree := w.ws.Settings.CommitTree
 	for _, a := range areaOrder {
-		entries := rs.Entries(a)
+		entries := w.changeListEntries(a)
 		if len(entries) == 0 && a != domain.AreaStaged && a != domain.AreaUnstaged {
 			continue
 		}
@@ -166,9 +170,14 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	}
 	x += actionSize + 8
 	w.p.vline(x-4, y+5, actionSize-10, w.pal.Separator)
-	staged, unstaged, untracked, _ := rs.Status.Counts()
-	if w.action(idCmStage, x, y, icons.Add, "Stage All", actOpts{disabled: unstaged+untracked == 0}) {
-		w.after(func() { w.stageArea(domain.AreaUnstaged, domain.AreaUntracked) })
+	staged, _, _, _ := rs.Status.Counts()
+	// Stage All follows the filter: with a list selected it stages only the
+	// files that list shows, never the hidden ones.
+	if w.action(idCmStage, x, y, icons.Add, "Stage All", actOpts{disabled: w.stageableCount() == 0}) {
+		w.after(w.stageAllVisible)
+	}
+	if w.cm.listID != "" {
+		w.tip(idCmStage, "Stage All in "+w.changeListFilterName())
 	}
 	x += actionSize + 2
 	if w.action(idCmUnstage, x, y, icons.Hide, "Unstage All", actOpts{disabled: staged == 0}) {
@@ -195,6 +204,11 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	if w.action(idCmStash, x, y, icons.Shelve, "Stash Changes…", actOpts{disabled: rs.Status.Clean()}) {
 		w.after(w.openStashDialog)
 	}
+
+	// Change-list bar: the active filter and how many files it shows. It also
+	// states that committing is not scoped to the selected list.
+	bar := splitTop(&content, w.changeListsBarHeight())
+	w.paintChangeListsBar(bar)
 
 	// Message section and buttons at the bottom.
 	v := &w.cm
@@ -434,7 +448,6 @@ func (w *Window) rowAction(i int, row changeRow, hl ui.Rect) {
 
 // rowPaths returns the files a row stands for.
 func (w *Window) rowPaths(row changeRow) []string {
-	rs := w.repo()
 	switch row.kind {
 	case rowFile:
 		ps := []string{row.entry.Path}
@@ -444,7 +457,7 @@ func (w *Window) rowPaths(row changeRow) []string {
 		return ps
 	case rowDir:
 		var out []string
-		for _, e := range rs.Entries(row.area) {
+		for _, e := range w.changeListEntries(row.area) {
 			if domain.DirName(e.Path) == row.dir {
 				out = append(out, e.Path)
 			}
@@ -452,7 +465,7 @@ func (w *Window) rowPaths(row changeRow) []string {
 		return out
 	}
 	var out []string
-	for _, e := range rs.Entries(row.area) {
+	for _, e := range w.changeListEntries(row.area) {
 		out = append(out, e.Path)
 		if row.area == domain.AreaStaged && e.OrigPath != "" {
 			out = append(out, e.OrigPath)
@@ -624,7 +637,6 @@ func (w *Window) selectedEntries() []changeRow {
 	v := &w.cm
 	var out []changeRow
 	seen := map[string]bool{}
-	rs := w.repo()
 	for _, row := range v.rows {
 		if !v.sel[row.key] {
 			continue
@@ -636,7 +648,7 @@ func (w *Window) selectedEntries() []changeRow {
 				out = append(out, row)
 			}
 		default:
-			for _, e := range rs.Entries(row.area) {
+			for _, e := range w.changeListEntries(row.area) {
 				if row.kind == rowDir && domain.DirName(e.Path) != row.dir {
 					continue
 				}
@@ -827,6 +839,9 @@ func (w *Window) changesMenu() []item {
 	}
 	if conflict {
 		items = append(items, item{title: "Mark Resolved", icon: icons.Checked, run: func() { w.markResolved(first.entry.Path) }})
+	}
+	if move := w.changeListMoveItems(sel); len(move) > 0 {
+		items = append(items, item{title: "Move to Change List", icon: icons.Changelist, sub: move})
 	}
 	items = append(items, item{title: "Rollback…", icon: icons.Revert, shortcut: "⌥⌘Z", disabled: len(w.rollbackTargets()) == 0, run: w.openRollback}, sep())
 	if untrackedOnly {

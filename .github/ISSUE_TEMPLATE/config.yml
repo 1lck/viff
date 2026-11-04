@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞私密报告 / Report a security vulnerability privately
+    url: https://github.com/1lck/viff/security/advisories/new
+    about: 请勿公开披露安全问题。Do not disclose security issues publicly.
+  - name: 先读 README 与设计文档 / Read the README and design docs
+    url: https://github.com/1lck/viff#readme
+    about: 功能范围、已知限制与架构决策。Scope, known limitations and architecture decisions.

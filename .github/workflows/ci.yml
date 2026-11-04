@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check formatting
+        shell: bash
+        run: |
+          mapfile -d '' gofiles < <(git ls-files -z '*.go')
+          files=$(gofmt -l "${gofiles[@]}")
+          if [ -n "$files" ]; then
+            echo "$files"
+            exit 1
+          fi
+      - name: Verify module integrity
+        run: go mod verify
+      - name: Check module tidiness
+        run: go mod tidy -diff
+
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      VIFF_SHOTS: ${{ github.workspace }}/.viff-test/ci/screenshots
+      VIFF_SHOTS_BY_TEST: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Record environment
+        run: |
+          mkdir -p .viff-test/ci/logs
+          go version
+          git --version
+      - name: Vet all code, including headless tests
+        run: go vet -tags 'vivahead litheaudit' ./...
+      - name: Test domain, Git, storage, and workspace
+        run: go test -json -count=1 -timeout=10m ./... > .viff-test/ci/logs/core.jsonl
+      - name: Test UI without opening windows
+        run: go test -json -count=1 -timeout=15m -tags 'vivahead litheaudit' ./internal/ui > .viff-test/ci/logs/ui.jsonl
+      - name: Build
+        run: |
+          mkdir -p build
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            go build -trimpath -ldflags="-s -w" -o build/viff.exe ./cmd/viff
+          else
+            go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
+          fi
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-evidence-${{ matrix.os }}
+          path: .viff-test/ci/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+  required:
+    name: CI
+    if: always()
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every check to pass
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          TEST: ${{ needs.test.result }}
+        run: test "$QUALITY" = success && test "$TEST" = success

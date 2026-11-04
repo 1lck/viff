@@ -21,3 +21,6 @@
 | [0015](0015-branch-update.md) | 更新未检出的分支与反浅化 |
 | [0016](0016-git-settings.md) | Git 命令、签名与凭据设置 |
 | [0017](0017-revision-browser.md) | 浏览某个提交的仓库树 |
+| [0018](0018-existing-branch-worktree.md) | 从已有分支创建工作树 |
+| [0019](0019-git-issue-gaps.md) | Git issue 对照后的功能补齐 |
+| [0020](0020-repositories-changelists.md) | 多仓库工作区与 ChangeList |

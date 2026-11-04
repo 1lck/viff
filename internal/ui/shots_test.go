@@ -43,6 +43,9 @@ func newUIFixture(t *testing.T) *uiFixture {
 	os.MkdirAll(dir, 0o755)
 	env := []string{"HOME=" + home, "XDG_CONFIG_HOME=" + home, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + filepath.Join(home, "gitconfig")}
 	f := &uiFixture{t: t, dir: dir, env: env, shot: os.Getenv("VIFF_SHOTS")}
+	if f.shot != "" && os.Getenv("VIFF_SHOTS_BY_TEST") == "1" {
+		f.shot = filepath.Join(f.shot, t.Name())
+	}
 	f.gitIn(root, "init", "-q", "--bare", "-b", "main", remote)
 	f.git("init", "-q", "-b", "main")
 	f.git("config", "user.name", "Ada Lovelace")
@@ -103,7 +106,13 @@ func (f *uiFixture) start(width, height int) {
 		f.t.Fatal(err)
 	}
 	f.s = s
-	f.t.Cleanup(func() { s.Close(); f.ws.Close() })
+	f.t.Cleanup(func() {
+		defer f.ws.Close()
+		defer s.Close()
+		if os.Getenv("VIFF_SHOTS_BY_TEST") == "1" {
+			f.snap("99-final-state")
+		}
+	})
 }
 
 func (f *uiFixture) git(args ...string) string { f.t.Helper(); return f.gitIn(f.dir, args...) }
@@ -191,6 +200,9 @@ func (f *uiFixture) snap(name string) {
 	f.t.Helper()
 	if f.shot == "" {
 		return
+	}
+	if err := os.MkdirAll(f.shot, 0o755); err != nil {
+		f.t.Fatal(err)
 	}
 	if err := f.s.Screenshot(filepath.Join(f.shot, name+".png")); err != nil {
 		f.t.Fatal(err)
@@ -642,7 +654,7 @@ func TestWorktreesDialog(t *testing.T) {
 		t.Fatalf("the worktrees dialog did not come back: %v", f.win.dialog)
 	}
 	f.s.Settle(60*time.Millisecond, 2*time.Second)
-	if out := f.git("worktree", "list", "--porcelain"); !strings.Contains(out, want) {
+	if out := f.git("worktree", "list", "--porcelain"); !porcelainNamesPath(out, want) {
 		t.Fatalf("worktree %s not created:\n%s", want, out)
 	}
 	if !f.s.HasText("3 worktrees") || !f.s.HasText("ui-wt") || !f.s.HasText("viff-demo-ui-wt") {
@@ -675,7 +687,7 @@ func TestWorktreesDialog(t *testing.T) {
 	}, 20*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if out := f.git("worktree", "list", "--porcelain"); strings.Contains(out, wt) {
+	if out := f.git("worktree", "list", "--porcelain"); porcelainNamesPath(out, wt) {
 		t.Fatalf("worktree still listed:\n%s", out)
 	}
 	if !f.s.HasText("2 worktrees") {
@@ -726,6 +738,15 @@ func TestCheckoutOpensOtherWorktree(t *testing.T) {
 		return f.ws.Repo != nil && f.ws.Repo.Repo.Root == real && !f.ws.Busy()
 	}, 20*time.Second); err != nil {
 		t.Fatalf("checkout did not open %s: %v", real, err)
+	}
+	// Opening a worktree loads its state in the background: the worktree list
+	// can still be the empty one from before the switch when the root is
+	// already the new checkout, so wait for that load too.
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		rs := f.ws.Repo
+		return rs != nil && rs.WorktreesLoaded && len(rs.Worktrees) == 2 && !f.ws.Busy()
+	}, 20*time.Second); err != nil {
+		t.Fatalf("worktrees did not load for %s: %v\nworktrees: %+v", real, err, f.ws.Repo.Worktrees)
 	}
 	f.s.Settle(60*time.Millisecond, 2*time.Second)
 	if len(f.ws.Repo.Worktrees) != 2 {

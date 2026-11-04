@@ -1,7 +1,6 @@
 package gitcli
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -149,21 +148,16 @@ func TestSubmoduleUpdateAndSync(t *testing.T) {
 		t.Fatalf("after init = %+v", subs)
 	}
 
-	// Sync copies a changed .gitmodules URL into .git/config.
+	// Sync copies a changed .gitmodules URL into .git/config. The URL is set
+	// through git config so the value is written with the quoting Git expects:
+	// replacing the text in the file would depend on how Git stored the old
+	// value, and a Windows path's backslashes are escaped in .gitmodules.
 	other := newTestRepo(t)
 	other.write("lib.txt", "other\n")
 	other.commitAll("other")
-	modules := filepath.Join(parent.dir, ".gitmodules")
-	data, err := os.ReadFile(modules)
-	if err != nil {
-		t.Fatal(err)
-	}
-	changed := strings.Replace(string(data), child.dir, other.dir, 1)
-	if changed == string(data) {
-		t.Fatalf(".gitmodules did not mention %s:\n%s", child.dir, data)
-	}
-	if err := os.WriteFile(modules, []byte(changed), 0o644); err != nil {
-		t.Fatal(err)
+	setGitmodulesURL(t, parent, "sub dir", other.dir)
+	if got := gitmodulesURL(t, parent, "sub dir"); got != other.dir {
+		t.Fatalf(".gitmodules url = %q, want %q", got, other.dir)
 	}
 	if err := parent.r.SyncSubmodules(ctx, repo, "sub dir"); err != nil {
 		t.Fatal(err)
@@ -171,6 +165,22 @@ func TestSubmoduleUpdateAndSync(t *testing.T) {
 	if got := strings.TrimSpace(parent.git("config", "--get", "submodule.sub dir.url")); got != other.dir {
 		t.Fatalf("submodule url = %q, want %q", got, other.dir)
 	}
+}
+
+// gitmodulesURL reads a submodule URL from .gitmodules through Git, so the
+// value is decoded the same way on every platform: Git stores a Windows path
+// with C-style escaped backslashes in the file.
+func gitmodulesURL(t *testing.T, tr *testRepo, path string) string {
+	t.Helper()
+	out := tr.git("config", "-f", filepath.Join(tr.dir, ".gitmodules"), "--get", "submodule."+path+".url")
+	return strings.TrimSpace(out)
+}
+
+// setGitmodulesURL rewrites a submodule URL in .gitmodules through Git, which
+// applies the quoting the value needs on the platform.
+func setGitmodulesURL(t *testing.T, tr *testRepo, path, url string) {
+	t.Helper()
+	tr.git("config", "-f", filepath.Join(tr.dir, ".gitmodules"), "submodule."+path+".url", url)
 }
 
 // TestSubmoduleRecursiveStatus covers nested submodules: status lists them

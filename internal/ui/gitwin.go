@@ -29,6 +29,9 @@ type logView struct {
 	dtScroll  scroller
 	dtSel     int
 	msgScroll scroller
+	// msgLayout caches the commit message wrapped for the current panel width,
+	// so a repaint does not rewrap it.
+	msgLayout *commitMessageLayout
 	favorites map[string]bool
 	brRows    []brRow
 	// reveal is a commit to select once the log shows it; viewH is the
@@ -38,6 +41,9 @@ type logView struct {
 	revealGen   uint64
 	revealTries int
 	viewH       float32
+	// multi is the detail panel while more than one commit is selected: the
+	// deduplicated union of the commits' first-parent changes.
+	multi multiCommitView
 }
 
 type brRow struct {
@@ -49,8 +55,6 @@ type brRow struct {
 	count  int
 	remote string
 }
-
-type consoleView struct{ scroll scroller }
 
 type reflogView struct {
 	entries []domain.ReflogEntry
@@ -75,6 +79,7 @@ func (v *logView) reset() {
 	v.scroll, v.brScroll, v.dtScroll = scroller{}, scroller{}, scroller{}
 	v.dtSel = -1
 	v.gen = 0
+	v.multi.stop()
 }
 
 const (
@@ -987,17 +992,19 @@ func (w *Window) clickBranchRow(row brRow) {
 func (w *Window) paintDetails(r ui.Rect) {
 	rs := w.repo()
 	v := &w.lg
-	n := len(v.sel)
-	if n == 0 || rs.Detail == nil && !rs.DetailLoading {
-		msg := "Select a commit to see its changes"
-		if n > 1 {
-			msg = plural(n, "commit", "commits") + " selected"
-		}
-		w.p.textCenter(msg, rect(r.X, r.Y+r.Height*0.4, r.Width, 22), fontUI, regular, w.pal.TextSecond)
+	sel := w.selectedCommits()
+	n := len(sel)
+	if n > 1 {
+		// The union of each commit's first-parent changes, not a diff between
+		// the first and last selection.
+		w.paintMultiCommitDetails(r, sel)
 		return
 	}
-	if n > 1 {
-		w.p.textCenter(plural(n, "commit", "commits")+" selected", rect(r.X, r.Y+r.Height*0.4, r.Width, 22), fontUI, regular, w.pal.TextSecond)
+	// A single commit ends any multi-commit query in flight, so its Git
+	// processes stop instead of finishing a selection the user has left.
+	v.multi.stop()
+	if n == 0 || rs.Detail == nil && !rs.DetailLoading {
+		w.p.textCenter("Select a commit to see its changes", rect(r.X, r.Y+r.Height*0.4, r.Width, 22), fontUI, regular, w.pal.TextSecond)
 		return
 	}
 	d := rs.Detail
@@ -1090,55 +1097,7 @@ func (w *Window) paintDetails(r ui.Rect) {
 	w.c.Unclip()
 	w.vbar(scLogScrollbars.At(4), files, &v.dtScroll, content)
 
-	// Message.
-	mr := inset(msg, 14, 10)
-	lines := w.c.WrapLines(nil, d.Subject, fontUI, semibold, mr.Width, 4)
-	body := strings.TrimSpace(d.Body)
-	if strings.HasPrefix(body, d.Subject) {
-		body = strings.TrimSpace(body[len(d.Subject):])
-	}
-	var bodyLines []string
-	for _, para := range strings.Split(body, "\n") {
-		if body == "" {
-			break
-		}
-		if para == "" {
-			bodyLines = append(bodyLines, "")
-			continue
-		}
-		bodyLines = append(bodyLines, w.c.WrapLines(nil, para, fontUI, regular, mr.Width, 20)...)
-	}
-	total := float32(len(lines))*20 + 8 + float32(len(bodyLines))*19 + 70
-	v.msgScroll.clamp(total, mr.Height)
-	w.onScrollIn(msg, func(dx, dy float32) { v.msgScroll.Y += dy; v.msgScroll.clamp(total, mr.Height) })
-	w.c.Clip(msg)
-	yy := mr.Y - v.msgScroll.Y
-	for _, l := range lines {
-		w.p.text(l, rect(mr.X, yy, mr.Width, 20), fontUI, semibold, w.pal.Text)
-		yy += 20
-	}
-	yy += 8
-	for _, l := range bodyLines {
-		w.p.text(l, rect(mr.X, yy, mr.Width, 19), fontUI, regular, w.pal.Text)
-		yy += 19
-	}
-	if len(bodyLines) > 0 {
-		yy += 8
-	}
-	meta := domain.ShortHash(d.Hash) + "  " + d.Author + " <" + d.AuthorEmail + ">"
-	w.p.text(meta, rect(mr.X, yy, mr.Width, 19), fontSmall, regular, w.pal.TextMuted)
-	yy += 19
-	when := "on " + d.AuthorTime.Format("Jan 2, 2006 at 15:04")
-	if d.Committer != d.Author {
-		when += " · committed by " + d.Committer
-	}
-	w.p.text(when, rect(mr.X, yy, mr.Width, 19), fontSmall, regular, w.pal.TextMuted)
-	yy += 19
-	if br := rs.DetailBranches; len(br) > 0 {
-		s := "In " + plural(len(br), "branch", "branches") + ": " + strings.Join(br, ", ")
-		w.p.text(s, rect(mr.X, yy, mr.Width, 19), fontSmall, regular, w.pal.TextSecond)
-	}
-	w.c.Unclip()
+	w.paintLogCommitMessage(msg, d)
 }
 
 func (w *Window) showCommitFile(d *domain.CommitDetail, i int, pin bool) {
@@ -1154,57 +1113,6 @@ func (w *Window) showCommitFile(d *domain.CommitDetail, i int, pin bool) {
 }
 
 // ---- console ----------------------------------------------------------------
-
-func (w *Window) paintConsole(r ui.Rect) {
-	v := &w.con
-	entries := w.ws.Console
-	tb := splitTop(&r, 34)
-	if w.action(idConsoleClear, right(tb)-8-actionSize, tb.Y+4, icons.Delete, "Clear All", actOpts{disabled: len(entries) == 0}) {
-		w.after(func() { w.ws.Console = nil })
-	}
-	w.p.text("Git commands run by Viff", rect(tb.X+12, tb.Y, tb.Width-60, tb.Height), fontSmall, regular, w.pal.TextSecond)
-	_, lineH, fs := w.metrics()
-	type cl struct {
-		s string
-		c ui.Color
-	}
-	var lines []cl
-	for _, e := range entries {
-		head := e.Time.Format("15:04:05") + "  " + e.Command
-		c := w.pal.EditorText
-		if e.Failed {
-			c = w.pal.Error
-		}
-		lines = append(lines, cl{head, c})
-		if out := strings.TrimRight(e.Output, "\n"); out != "" {
-			for _, l := range strings.Split(out, "\n") {
-				lines = append(lines, cl{"          " + expandLine(l), w.pal.TextMuted})
-			}
-		}
-	}
-	content := float32(len(lines))*lineH + 10
-	w.c.HitWithOptions(idConsole, r, "Console", ui.HitOptions{Role: ui.RoleGroup})
-	// Stick to the bottom like a terminal unless scrolled up.
-	atEnd := v.scroll.Y >= content-r.Height-lineH*2
-	if atEnd {
-		v.scroll.Y = content
-	}
-	v.scroll.clamp(content, r.Height)
-	w.onScrollIn(r, func(dx, dy float32) { v.scroll.Y += dy; v.scroll.clamp(content, r.Height) })
-	if len(lines) == 0 {
-		w.p.textCenter("No commands yet", rect(r.X, r.Y+r.Height*0.35, r.Width, 22), fontUI, regular, w.pal.TextSecond)
-		return
-	}
-	w.c.Clip(r)
-	first := max(0, int(v.scroll.Y/lineH))
-	last := min(len(lines), int((v.scroll.Y+r.Height)/lineH)+1)
-	for i := first; i < last; i++ {
-		y := r.Y + 4 + float32(i)*lineH - v.scroll.Y
-		w.c.Label(lines[i].s, rect(r.X+12, y, r.Width-24, lineH), ui.TextStyle{Size: fs - 1, Color: lines[i].c, Mono: true, MonoFace: w.mono})
-	}
-	w.c.Unclip()
-	w.vbar(scLogScrollbars.At(5), r, &v.scroll, content)
-}
 
 // ---- reflog -----------------------------------------------------------------
 

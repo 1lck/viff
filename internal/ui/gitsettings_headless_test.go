@@ -32,6 +32,7 @@ func TestGitSettingsDialog(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.s.Settle(40*time.Millisecond, time.Second)
+	f.snap("git-settings-before-save")
 	f.click("OK")
 	f.s.Settle(60*time.Millisecond, time.Second)
 
@@ -77,6 +78,7 @@ func TestGitSettingsWarnsAboutMissingCommand(t *testing.T) {
 	if !f.s.HasText("Not found: /no/such/gpg") {
 		t.Fatalf("missing command was not reported; texts: %s", strings.Join(f.s.Texts(), " | "))
 	}
+	f.snap("git-settings-before-save")
 	f.click("OK")
 	if got := f.ws.Settings.GPGProgram; got != "/no/such/gpg" {
 		t.Fatalf("GPGProgram = %q, want the typed value", got)

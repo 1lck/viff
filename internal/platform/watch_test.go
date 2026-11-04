@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -55,7 +56,12 @@ func TestWatchReportsChangesOnce(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		os.WriteFile(filepath.Join(dir, "f"+string(rune('a'+i%26))), []byte("x"), 0o644)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	// The non-macOS backend scans the worktree every six seconds.
+	wait := 5 * time.Second
+	if runtime.GOOS != "darwin" {
+		wait = 12 * time.Second
+	}
+	deadline := time.Now().Add(wait)
 	for worktree.Load() == 0 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -67,7 +73,7 @@ func TestWatchReportsChangesOnce(t *testing.T) {
 		t.Fatalf("burst produced %d callbacks", n)
 	}
 	os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/other\n"), 0o644)
-	deadline = time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(wait)
 	for meta.Load() == 0 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}

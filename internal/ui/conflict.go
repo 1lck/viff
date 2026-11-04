@@ -17,6 +17,24 @@ type conflictPane struct {
 	mark  []uint8 // per line: 0 plain, 1 changed vs base, 2 conflict body, 3 marker line
 }
 
+// The per-block resolve controls have an identity scope of their own, made in
+// init so the shared tree (ids.go) already has its features, and declared in
+// this file rather than in ids.go: the conflict viewer's read-only identities
+// stay unchanged.
+var (
+	scConflictResolve ui.Scope
+	idResolveOurs     ui.ID
+	idResolveTheirs   ui.ID
+	idResolveBoth     ui.ID
+)
+
+func init() {
+	scConflictResolve = tree.Sub(fDiff, tree.Name("conflict-resolve"))
+	idResolveOurs = scConflictResolve.ID(tree.Name("ours"))
+	idResolveTheirs = scConflictResolve.ID(tree.Name("theirs"))
+	idResolveBoth = scConflictResolve.ID(tree.Name("both"))
+}
+
 func (w *Window) conflictPanes(t *diffTab) []conflictPane {
 	cv := t.res.Conflict
 	mk := func(title string, s []string, base []string) conflictPane {
@@ -58,8 +76,19 @@ func (w *Window) conflictPanes(t *diffTab) []conflictPane {
 func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	cv := t.res.Conflict
 	rs := w.repo()
+	// In-app resolution needs a readable working-tree text whose markers form
+	// complete blocks. Anything else stays read-only here: a binary file, a
+	// symlink or a submodule has no sides to accept as text, and markers the
+	// parser cannot trust would make "block 2" mean the wrong lines.
+	resolvable := cv.Conflict.Kind.Textual() && cv.Current.Content.Exists && cv.Current.Text &&
+		!cv.Current.Content.Binary && !cv.Current.Content.TooLarge &&
+		!cv.Current.Content.Submodule && !cv.Current.Content.Symlink &&
+		cv.Markers.Reliable && len(cv.Markers.Blocks) > 0
 	// Banner.
 	bh := float32(88)
+	if resolvable {
+		bh = 122 // room for the per-block accept row
+	}
 	br := splitTop(&r, bh)
 	inner := rect(br.X+10, br.Y+8, br.Width-20, bh-16)
 	bg, border := w.pal.BannerWarn, w.pal.BannerWarnBorder
@@ -77,6 +106,9 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		sub = "Review the result, then mark the file as resolved to stage it."
 	} else if n := len(cv.Markers.Blocks); n > 0 {
 		sub = plural(n, "conflict", "conflicts") + " in the file on disk. Edit it in your editor; this view updates when it is saved."
+		if resolvable {
+			sub = plural(n, "conflict", "conflicts") + " in the file on disk. Accept a side below, or edit it in your editor."
+		}
 		if !cv.Markers.Reliable {
 			sub = "The conflict markers look unusual; check the file in your editor."
 		}
@@ -129,6 +161,33 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		s := "Conflict " + itoa(t.conflictBlock+1) + " of " + itoa(n)
 		sw := w.p.width(s, fontUI, regular)
 		w.p.text(s, rect(nx-sw-10, by, sw+2, 26), fontUI, regular, w.pal.TextMuted)
+	}
+	// Per-block resolution: accepting a side rewrites only that block on disk.
+	if resolvable {
+		rx := inner.X + 34
+		label := "Conflict " + itoa(t.conflictBlock+1) + " of " + itoa(n) + ": accept"
+		w.p.text(label, rect(rx, inner.Y+72, 230, 26), fontUI, regular, w.pal.TextMuted)
+		rx += 240
+		disabled := t.busy || t.loading
+		choices := []struct {
+			id     ui.ID
+			label  string
+			tip    string
+			choice domain.ResolveChoice
+		}{
+			{idResolveOurs, "Accept Ours", "Keep " + cv.OursLabel + " for this block", domain.ResolveOurs},
+			{idResolveTheirs, "Accept Theirs", "Keep " + cv.TheirsLabel + " for this block", domain.ResolveTheirs},
+			{idResolveBoth, "Accept Both", "Keep " + cv.OursLabel + " and then " + cv.TheirsLabel + " for this block", domain.ResolveBoth},
+		}
+		for _, c := range choices {
+			cw := w.buttonWidth(c.label)
+			if w.button(c.id, rect(rx, inner.Y+72, cw, 26), c.label, btnNormal, disabled) {
+				choice := c.choice
+				w.after(func() { w.resolveConflictBlock(t, choice) })
+			}
+			w.tip(c.id, c.tip)
+			rx += cw + 8
+		}
 	}
 
 	if !cv.Conflict.Kind.Textual() && !cv.Current.Content.Exists && !cv.Ours.Content.Exists && !cv.Theirs.Content.Exists {
@@ -230,4 +289,24 @@ func (w *Window) scrollToConflict(t *diffTab) {
 	}
 	_, lineH, _ := w.metrics()
 	t.y = max(0, float32(cv.Markers.Blocks[t.conflictBlock].Begin-4)*lineH)
+}
+
+// resolveConflictBlock accepts one side of the selected block in the working
+// file. The workspace re-reads the file, refuses a stale or non-textual view
+// and reports the reason; the tab is reloaded either way, so after an external
+// edit the panes show what is actually on disk.
+func (w *Window) resolveConflictBlock(t *diffTab, choice domain.ResolveChoice) {
+	res := t.res
+	if res == nil || res.Conflict == nil || t.loading || t.busy {
+		return
+	}
+	block := t.conflictBlock
+	if block < 0 || block >= len(res.Conflict.Markers.Blocks) {
+		return
+	}
+	t.busy = true
+	w.ws.ResolveConflict(res, block, choice, func(error) {
+		t.busy = false
+		w.loadTab(t)
+	})
 }

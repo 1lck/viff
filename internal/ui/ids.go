@@ -161,7 +161,13 @@ var (
 	scDialogRows   = tree.Sub(fDialog, tree.Name("rows"))
 	scDialogCombos = tree.Sub(fDialog, tree.Name("combos"))
 	scDialogLinks  = tree.Sub(fDialog, tree.Name("links"))
-	idDialogList   = tree.ID(fDialog, "list")
+	// The New Worktree dialog chooses an existing branch from a list inside
+	// the dialog, not a popup: a popup opened from a dialog is painted but
+	// cannot be clicked through the focus trap (0012).
+	idDialogBranchList = tree.ID(fDialog, "branch-list")
+	scDialogBranchRows = tree.Sub(fDialog, tree.Name("branch-rows"))
+	scDialogBranchBar  = tree.Sub(fDialog, tree.Name("branch-scroll"))
+	idDialogList       = tree.ID(fDialog, "list")
 
 	// Worktrees dialog.
 	idWorktreeNew    = tree.ID(fDialog, "worktree-new")

@@ -2,6 +2,8 @@ package gitcli
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"viff/internal/domain"
@@ -456,6 +458,89 @@ func (r *Runner) AddWorktree(ctx context.Context, repo domain.Repo, path, branch
 		args = append(args, start)
 	}
 	return r.write(ctx, repo, args...)
+}
+
+// AddWorktreeExisting checks out an existing local branch in a new linked
+// worktree. Unlike AddWorktree it never creates or moves a branch, and it
+// never forces: the branch must already exist locally, must not be checked
+// out in any worktree, and the path must not be occupied. The checks here
+// produce a clear error before anything is written; Git repeats them when the
+// command runs, so two callers racing still cannot check out one branch twice
+// or overwrite an existing directory.
+func (r *Runner) AddWorktreeExisting(ctx context.Context, repo domain.Repo, path, branch string) error {
+	if strings.TrimSpace(branch) == "" {
+		return errors.New("branch name is empty")
+	}
+	// The branch is passed to Git by name (not as refs/heads/...) so Git
+	// attaches the new worktree to the branch; a leading dash would make Git
+	// read the name as an option instead.
+	if strings.HasPrefix(branch, "-") {
+		return fmt.Errorf("invalid branch name %q", branch)
+	}
+	if strings.TrimSpace(path) == "" {
+		return errors.New("worktree path is empty")
+	}
+	if strings.HasPrefix(path, "-") {
+		return fmt.Errorf("invalid worktree path %q", path)
+	}
+	if err := r.checkBranchName(ctx, repo, branch); err != nil {
+		return err
+	}
+	exists, err := r.localBranchExists(ctx, repo, branch)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("%q is not an existing local branch", branch)
+	}
+	worktrees, err := r.Worktrees(ctx, repo)
+	if err != nil {
+		return err
+	}
+	for _, wt := range worktrees {
+		if wt.Branch == branch {
+			return fmt.Errorf("branch %q is already checked out at %s", branch, wt.Path)
+		}
+	}
+	// -- keeps a path with a leading dash literal; Git's own path check then
+	// refuses a non-empty directory without --force.
+	return r.write(ctx, repo, "worktree", "add", "--", path, branch)
+}
+
+// checkBranchName rejects names that Git would not read back as the literal
+// branch refs/heads/branch. HEAD is the case that matters: refs/heads/HEAD can
+// exist, but git resolves the name HEAD to the current commit, so worktree add
+// would silently detach at HEAD instead of checking the branch out. Git also
+// rejects other reserved and revision-like names here.
+func (r *Runner) checkBranchName(ctx context.Context, repo domain.Repo, branch string) error {
+	out, err := r.Run(ctx, repo.Root, "check-ref-format", "--branch", branch)
+	if err != nil {
+		if KindOf(err) == ErrCancelled {
+			return err
+		}
+		return fmt.Errorf("invalid branch name %q", branch)
+	}
+	// --branch expands @{-n}; anything but the name itself would make Git
+	// check out a different ref than the one validated below.
+	if got := strings.TrimSpace(string(out)); got != branch {
+		return fmt.Errorf("invalid branch name %q", branch)
+	}
+	return nil
+}
+
+// localBranchExists reports whether refs/heads/branch exists. Git exits 1 when
+// it does not; every other failure is a real error and must not be read as
+// "no".
+func (r *Runner) localBranchExists(ctx context.Context, repo domain.Repo, branch string) (bool, error) {
+	_, err := r.Run(ctx, repo.Root, "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	if err == nil {
+		return true, nil
+	}
+	var ge *Error
+	if errors.As(err, &ge) && ge.ExitCode == 1 {
+		return false, nil
+	}
+	return false, err
 }
 
 func (r *Runner) RemoveWorktree(ctx context.Context, repo domain.Repo, path string, force bool) error {

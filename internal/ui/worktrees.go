@@ -9,6 +9,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/ui/icons"
 )
@@ -251,21 +252,268 @@ func defaultWorktreePath(root, branch string) string {
 	return filepath.Join(filepath.Dir(root), filepath.Base(root)+"-"+name)
 }
 
+// worktreeModes are the two ways New Worktree gets the branch it checks out.
+var worktreeModes = []string{"New branch", "Existing branch"}
+
+const (
+	worktreeModeNew = iota
+	worktreeModeExisting
+)
+
+// worktreeChoice is one local branch in New Worktree's existing-branch mode.
+// heldIn is the worktree that already has it checked out; "" means a new
+// worktree can take it.
+type worktreeChoice struct {
+	name   string
+	heldIn string
+}
+
+func (c worktreeChoice) free() bool { return c.heldIn == "" }
+
+// heldLabel names the worktree that holds the branch, in the few words a menu
+// row has room for. current is the repository's current branch.
+func (c worktreeChoice) heldLabel(current string) string {
+	switch {
+	case c.heldIn == "":
+		return ""
+	case c.name == current:
+		return "in this checkout"
+	}
+	return "in " + filepath.Base(c.heldIn)
+}
+
+// The existing-branch list shows at most six rows and scrolls the rest.
+const (
+	worktreeBranchRowH    = 28
+	worktreeBranchRowsMax = 6
+)
+
+// paintWorktreeBranches draws the existing mode's branch list and selects the
+// clicked free branch. A branch a worktree already has is disabled and says
+// where, so the reason is visible in the dialog itself.
+func (w *Window) paintWorktreeBranches(area ui.Rect, choices []worktreeChoice, chosen *string, scroll *scroller) {
+	current := w.repo().CurrentBranch()
+	border := w.pal.ControlBorder
+	if w.focused(idDialogBranchList) {
+		border = w.pal.Focus
+	}
+	w.p.outline(area, 6, 1, border, w.pal.ControlBg)
+	inner := inset(area, 1, 1)
+	// One focusable list around the rows, so the keyboard can reach it and
+	// move the choice with the arrow keys; the rows themselves skip focus.
+	w.list(idDialogBranchList, scDialogBranchRows, inner, "Local branches")
+	w.onKeys(idDialogBranchList, w.worktreeBranchKeys(choices, chosen, scroll, inner.Height))
+	content := float32(len(choices)) * worktreeBranchRowH
+	scroll.clamp(content, inner.Height)
+	w.onScrollIn(inner, func(dx, dy float32) {
+		scroll.Y += dy
+		scroll.clamp(content, inner.Height)
+	})
+	w.c.Clip(inner)
+	for i, c := range choices {
+		y := inner.Y + float32(i)*worktreeBranchRowH - scroll.Y
+		if y+worktreeBranchRowH <= inner.Y || y >= bottom(inner) {
+			continue
+		}
+		row := rect(inner.X, y, inner.Width, worktreeBranchRowH)
+		id := scDialogBranchRows.At(i)
+		selected := c.name == *chosen
+		switch {
+		case selected:
+			w.p.round(row, 4, w.pal.Selection)
+		case c.free() && w.hovered(id):
+			w.p.round(row, 4, w.pal.Hover)
+		}
+		ix := row.X + 8
+		if selected {
+			w.p.iconIn(icons.Checked, rect(ix, row.Y, 16, worktreeBranchRowH))
+		} else {
+			w.p.iconTinted(icons.BranchLabel, rect(ix, row.Y, 16, worktreeBranchRowH), w.pal.RefLocal)
+		}
+		fg := w.pal.Text
+		if !c.free() {
+			fg = w.pal.TextDisable
+		}
+		nameW := min(w.p.width(c.name, fontUI, regular), max(0, row.Width-140))
+		w.p.text(c.name, rect(ix+22, row.Y, nameW, worktreeBranchRowH), fontUI, regular, fg)
+		if where := c.heldLabel(current); where != "" {
+			hintW := max(0, right(row)-ix-22-nameW-18)
+			w.p.text("checked out "+where, rect(ix+22+nameW+10, row.Y, hintW, worktreeBranchRowH), fontSmall, regular, w.pal.TextSecond)
+		}
+		w.c.HitWithOptions(id, row, c.name, ui.HitOptions{Role: ui.RoleOption, Checked: selected, Disabled: !c.free(), SkipFocus: true})
+		if c.free() && w.c.Clicked(id) {
+			c := c
+			w.after(func() { *chosen = c.name })
+		}
+	}
+	w.c.Unclip()
+	w.vbar(scDialogBranchBar.At(0), inner, scroll, content)
+}
+
+// worktreeBranchKeys moves the existing mode's choice with the arrow keys,
+// steps over the branches a worktree already has, and keeps the chosen row in
+// view. It returns false for keys it does not own, so Enter still submits.
+func (w *Window) worktreeBranchKeys(choices []worktreeChoice, chosen *string, scroll *scroller, view float32) func(ui.KeyEvent) bool {
+	return func(e ui.KeyEvent) bool {
+		next := worktreeBranchStep(choices, *chosen, e.Key)
+		if next < 0 {
+			switch e.Key {
+			case ui.KeyUp, ui.KeyDown, ui.KeyHome, ui.KeyEnd:
+				return true // ours, even when no free branch is left
+			}
+			return false
+		}
+		*chosen = choices[next].name
+		scroll.reveal(float32(next)*worktreeBranchRowH, worktreeBranchRowH, view)
+		return true
+	}
+}
+
+// worktreeBranchStep is where a key moves the choice: the next free branch in
+// that direction, or -1 when the key is not a navigation key or nothing is
+// left. Branches a worktree has are skipped, never selected.
+func worktreeBranchStep(choices []worktreeChoice, chosen string, key ui.Key) int {
+	if key != ui.KeyHome && key != ui.KeyEnd && key != ui.KeyUp && key != ui.KeyDown {
+		return -1
+	}
+	cur := -1
+	for i, c := range choices {
+		if c.name == chosen {
+			cur = i
+			break
+		}
+	}
+	free := func(i int) bool { return i >= 0 && i < len(choices) && choices[i].free() }
+	switch key {
+	case ui.KeyHome:
+		for i := range choices {
+			if free(i) {
+				return i
+			}
+		}
+	case ui.KeyEnd:
+		for i := len(choices) - 1; i >= 0; i-- {
+			if free(i) {
+				return i
+			}
+		}
+	case ui.KeyUp:
+		for i := cur - 1; i >= 0; i-- {
+			if free(i) {
+				return i
+			}
+		}
+		if cur < 0 {
+			for i := len(choices) - 1; i >= 0; i-- {
+				if free(i) {
+					return i
+				}
+			}
+		}
+	case ui.KeyDown:
+		for i := max(cur+1, 0); i < len(choices); i++ {
+			if free(i) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// worktreeChoices lists the local branches in Git's order, each with the
+// worktree that has it checked out. A branch can be checked out in one
+// worktree at a time: Git refuses the second even when the first worktree is
+// prunable, so every listed worktree counts, not only the ones on disk.
+func worktreeChoices(rs *vapp.RepoState) []worktreeChoice {
+	held := make(map[string]string, len(rs.Worktrees))
+	for _, wt := range rs.Worktrees {
+		if wt.Bare || wt.Branch == "" {
+			continue
+		}
+		held[wt.Branch] = wt.Path
+	}
+	var out []worktreeChoice
+	for _, r := range rs.RefsOf(domain.RefLocal) {
+		out = append(out, worktreeChoice{name: r.Short, heldIn: held[r.Short]})
+	}
+	return out
+}
+
+// worktreeBranchProblem says why branch cannot be checked out in a new
+// worktree; "" when nothing stands in the way.
+func worktreeBranchProblem(rs *vapp.RepoState, branch string) string {
+	if branch == "" {
+		return "Select a local branch."
+	}
+	for _, c := range worktreeChoices(rs) {
+		if c.name != branch {
+			continue
+		}
+		if c.heldIn == "" {
+			return ""
+		}
+		where := shortenHome(c.heldIn)
+		if c.name == rs.CurrentBranch() {
+			where = "this checkout"
+		}
+		return "Branch '" + branch + "' is already checked out in " + where +
+			". A branch can be checked out in one worktree at a time; open that worktree instead."
+	}
+	return "Branch '" + branch + "' is not a local branch any more. Pick another one."
+}
+
+// worktreePathProblem says why the directory cannot take a worktree; "" when
+// it can.
+func worktreePathProblem(p string) string {
+	switch {
+	case p == "":
+		return "Enter a path for the worktree."
+	case !filepath.IsAbs(p):
+		return "Use an absolute path, for example ~/Projects/repo-branch."
+	}
+	if _, err := os.Stat(p); err == nil {
+		return p + " already exists."
+	}
+	return ""
+}
+
+// newWorktreeBranchProblem says why name cannot be a new branch; "" when it can.
+func (w *Window) newWorktreeBranchProblem(name string) string {
+	if p := validRefName(name); p != "" {
+		return p
+	}
+	if w.branchExists(name) {
+		return "Branch '" + name + "' already exists. Pick another name."
+	}
+	return ""
+}
+
 // openNewWorktree is IntelliJ's New Worktree dialog: a new branch checked out
-// in a directory next to the repository.
+// in a directory next to the repository, or an existing local branch that no
+// worktree has yet. New branch is the default mode and keeps the old behaviour.
 func (w *Window) openNewWorktree() {
 	rs := w.repo()
 	if rs == nil {
 		return
 	}
 	root := rs.Repo.Root
+	mode := worktreeModeNew
 	branch := text.NewEditor("")
-	pathEd := text.NewEditor("")
 	start := text.NewEditor("HEAD")
 	if b := rs.CurrentBranch(); b != "" {
 		start = text.NewEditor(b)
 	}
+	// The first branch no worktree has is the default of the existing mode.
+	existing := ""
+	for _, c := range worktreeChoices(rs) {
+		if c.free() {
+			existing = c.name
+			break
+		}
+	}
+	pathEd := text.NewEditor("")
 	lastAuto := ""
+	branchScroll := &scroller{}
 
 	absPath := func() string {
 		p := expandHome(strings.TrimSpace(pathEd.String()))
@@ -277,40 +525,62 @@ func (w *Window) openNewWorktree() {
 		}
 		return p
 	}
+	// branchName is the name the path suggestion follows in either mode.
+	branchName := func() string {
+		if mode == worktreeModeExisting {
+			return existing
+		}
+		return strings.TrimSpace(branch.String())
+	}
 	problem := func() string {
-		b := strings.TrimSpace(branch.String())
-		if p := validRefName(b); p != "" {
+		if mode == worktreeModeExisting {
+			if p := worktreeBranchProblem(w.repo(), existing); p != "" {
+				return p
+			}
+		} else if p := w.newWorktreeBranchProblem(strings.TrimSpace(branch.String())); p != "" {
 			return p
 		}
-		if w.branchExists(b) {
-			return "Branch '" + b + "' already exists. Pick another name."
-		}
-		p := absPath()
-		switch {
-		case p == "":
-			return "Enter a path for the worktree."
-		case !filepath.IsAbs(p):
-			return "Use an absolute path, for example ~/Projects/repo-branch."
-		}
-		if _, err := os.Stat(p); err == nil {
-			return p + " already exists."
-		}
-		return ""
+		return worktreePathProblem(absPath())
 	}
 
 	w.openDialog(&dialog{
 		title: "New Worktree", ok: "Create", width: 580,
 		onCancel: func() { w.after(w.openWorktrees) },
 		body: func(f *form) {
-			f.labelW = 96
-			id := f.field("Branch name:", branch, "feature-login", false)
-			if !w.dialog.focused {
-				w.dialog.focus = id
+			f.radio(worktreeModes, &mode)
+			f.gap(2)
+			if mode == worktreeModeExisting {
+				f.muted("Checks out a local branch that no worktree has yet. A branch can be checked out in one worktree at a time.")
+			} else {
+				f.muted("Creates the branch from the start point and checks it out in a new worktree.")
 			}
+			f.gap(4)
+			f.labelW = 96
+
+			choices := worktreeChoices(w.repo())
+			if mode == worktreeModeNew {
+				id := f.field("Branch name:", branch, "feature-login", false)
+				if !w.dialog.focused {
+					w.dialog.focus = id
+				}
+			} else if visible := min(len(choices), worktreeBranchRowsMax); visible > 0 {
+				// A list inside the dialog, not a combo: a popup opened from a
+				// dialog is painted but cannot be clicked through its focus
+				// trap (0012).
+				f.custom(float32(visible)*worktreeBranchRowH+2, func(r ui.Rect) {
+					w.p.text("Branch:", rect(r.X, r.Y+4, f.labelW, 20), fontUI, regular, w.pal.Text)
+					w.paintWorktreeBranches(rect(r.X+f.labelW, r.Y, r.Width-f.labelW, float32(visible)*worktreeBranchRowH+2), choices, &existing, branchScroll)
+				})
+				// Switching to this mode hands the keyboard to the list, so a
+				// keyboard user can pick a branch without the pointer. The
+				// request is applied once and never pulls focus back.
+				w.c.RequestFocus(idDialogBranchList)
+				f.gap(6)
+			}
+
 			// Suggest a sibling directory until the user edits the path.
-			b := strings.TrimSpace(branch.String())
 			auto := ""
-			if b != "" {
+			if b := branchName(); b != "" {
 				auto = defaultWorktreePath(root, b)
 			}
 			if pathEd.String() == lastAuto && auto != lastAuto {
@@ -318,19 +588,35 @@ func (w *Window) openNewWorktree() {
 				w.after(func() { setText(pathEd, auto) })
 			}
 			f.field("Path:", pathEd, "~/Projects/repo-feature-login", false)
-			f.field("Start point:", start, "HEAD", false)
-			if b != "" {
+			if mode == worktreeModeNew {
+				f.field("Start point:", start, "HEAD", false)
+			}
+
+			switch {
+			case mode == worktreeModeExisting && existing == "":
+				if len(choices) == 0 {
+					f.message("There are no local branches to check out. Create a new branch instead.", w.pal.Error)
+				} else {
+					f.message("Every local branch is already checked out in a worktree. Create a new branch instead.", w.pal.Error)
+				}
+			case mode == worktreeModeExisting || strings.TrimSpace(branch.String()) != "":
 				if p := problem(); p != "" {
 					f.message(p, w.pal.Error)
 				}
 			}
-			f.muted("Creates the branch and checks it out in a new worktree.")
 		},
-		okDisabled: func() bool {
-			return strings.TrimSpace(branch.String()) == "" || problem() != ""
-		},
+		okDisabled: func() bool { return problem() != "" },
 		onOK: func() bool {
-			w.ws.AddWorktree(absPath(), strings.TrimSpace(branch.String()), strings.TrimSpace(start.String()), func(err error) {
+			path := absPath()
+			if mode == worktreeModeExisting {
+				w.ws.AddWorktreeExisting(path, existing, func(err error) {
+					if err == nil {
+						w.after(w.openWorktrees)
+					}
+				})
+				return true
+			}
+			w.ws.AddWorktree(path, strings.TrimSpace(branch.String()), strings.TrimSpace(start.String()), func(err error) {
 				if err == nil {
 					w.after(w.openWorktrees)
 				}

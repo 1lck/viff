@@ -18,8 +18,11 @@ import (
 type RepoState struct {
 	Repo domain.Repo
 	// Gen increases whenever the repository is reopened; results for an older
-	// generation are dropped.
+	// generation are dropped. Workspace.nextGen issues it and never reuses a
+	// value, so closing and reopening also yields a new generation.
 	Gen uint64
+	// rootKey is the canonical root used as the workspace list key.
+	rootKey string
 
 	Status       domain.Status
 	StatusLoaded bool
@@ -72,16 +75,45 @@ func writeLock(repo domain.Repo) *sync.Mutex {
 }
 
 // Open opens the repository containing dir. done reports failure on the UI
-// thread.
+// thread. Opening a repository while another one is active is a switch, so a
+// running write task refuses it just like ActivateRepository does.
+//
+// Open shares the activation sequence with ActivateRepository and Close: a slow
+// discovery that finishes after a newer open, switch or close is stale and
+// must not replace that newer state.
 func (w *Workspace) Open(dir string, done func(error)) {
+	if w.Repo != nil && w.Busy() {
+		if done != nil {
+			done(ErrRepositoryBusy)
+		}
+		return
+	}
+	w.repos.activateSeq++
+	seq := w.repos.activateSeq
 	_, ctx, finish := w.startTask("Opening "+filepath.Base(dir), false)
 	go func() {
 		repo, err := w.Git.Discover(ctx, dir)
 		w.post(func() {
 			finish()
+			if seq != w.repos.activateSeq {
+				// A newer open, switch or close replaced this request.
+				if done != nil {
+					done(ErrRepositoryStale)
+				}
+				return
+			}
 			if err != nil {
 				if done != nil {
 					done(err)
+				}
+				return
+			}
+			// A write task may have started while discovery ran; opening a
+			// repository is a switch from the existing one, so refuse it the
+			// same way ActivateRepository does.
+			if w.Busy() {
+				if done != nil {
+					done(ErrRepositoryBusy)
 				}
 				return
 			}
@@ -94,16 +126,18 @@ func (w *Workspace) Open(dir string, done func(error)) {
 }
 
 func (w *Workspace) setRepo(repo domain.Repo) {
-	var gen uint64 = 1
+	// The repository becomes part of the explicit workspace list and the
+	// active one; this also persists the list before any command runs.
+	root := w.noteActiveRepository(repo)
 	if w.Repo != nil {
-		gen = w.Repo.Gen + 1
 		w.Repo.Log.close()
 	}
 	if w.watcher != nil {
 		w.watcher.Close()
 		w.watcher = nil
 	}
-	w.Repo = &RepoState{Repo: repo, Gen: gen}
+	w.nextGen++
+	w.Repo = &RepoState{Repo: repo, Gen: w.nextGen, rootKey: root}
 	if w.Settings != nil {
 		w.Settings.AddRecent(repo.Root)
 		w.Settings.Save()
@@ -125,8 +159,15 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 	}
 }
 
-// Close closes the repository and returns to the welcome screen.
+// Close closes the repository and returns to the welcome screen. It releases
+// the repository-specific log and file watcher; the persisted workspace list
+// and the persisted active repository are left alone, so closing (or quitting)
+// never forgets the repositories the user added. RemoveRepository is the only
+// operation that clears the active root, and it does so explicitly.
 func (w *Workspace) Close() {
+	// Invalidate opens and switches that are still discovering: a repository
+	// that is being opened must not reopen the window after it was closed.
+	w.repos.activateSeq++
 	if w.Repo != nil {
 		w.Repo.Log.close()
 	}
@@ -182,9 +223,16 @@ func (w *Workspace) Refresh(meta bool) {
 			}
 			rs.refreshing = false
 			if err != nil {
+				w.markRepositoryError(rs.rootKey, err)
 				if gitcli.KindOf(err) == gitcli.ErrNotRepository {
 					w.Notify(NoticeError, "Repository is gone", repo.Root)
+					// Keep the row (with its error) but there is nothing to be
+					// active any more.
 					w.Close()
+					if w.ActiveRoot == rs.rootKey {
+						w.ActiveRoot = ""
+						w.saveRepositories()
+					}
 					return
 				}
 				w.NotifyError("Cannot read status", err)
@@ -194,6 +242,11 @@ func (w *Workspace) Refresh(meta bool) {
 				rs.StatusTime = w.Now()
 				rs.Operation = op
 				rs.Conflicts = conflicts
+				// Git reports a rename as one entry whose old path is gone;
+				// keep change-list membership attached to the new path. A
+				// failure is reported once per failure streak, not on every
+				// refresh.
+				w.warnChangeListSync(w.SyncChangeListRenames())
 			}
 			if refsErr == nil {
 				key := refsFingerprint(refs, st.Branch.Head)
@@ -214,6 +267,9 @@ func (w *Workspace) Refresh(meta bool) {
 			if shallowErr == nil {
 				rs.Shallow = shallow
 			}
+			// Keep the workspace overview row of the active repository in
+			// step with the view; a failure keeps the known status.
+			w.syncActiveSummary(err)
 			if rs.refreshMore {
 				rs.refreshMore = false
 				w.Refresh(true)

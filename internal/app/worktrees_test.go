@@ -16,6 +16,9 @@ func TestWorktreeCommands(t *testing.T) {
 	f.open()
 
 	wt := filepath.Join(t.TempDir(), "wt-side")
+	// git worktree list --porcelain prints paths with forward slashes, also on
+	// Windows, while the fixture path uses the native separator.
+	wtListed := filepath.ToSlash(wt)
 	var err error
 	done := false
 	f.w.AddWorktree(wt, "side", "HEAD", func(e error) { err, done = e, true })
@@ -23,7 +26,7 @@ func TestWorktreeCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add worktree: %v", err)
 	}
-	if out := f.git("worktree", "list", "--porcelain"); !strings.Contains(out, wt) {
+	if out := f.git("worktree", "list", "--porcelain"); !strings.Contains(out, wtListed) {
 		t.Fatalf("git worktree list does not contain %s:\n%s", wt, out)
 	}
 	if _, err := os.Stat(filepath.Join(wt, "a.txt")); err != nil {
@@ -53,7 +56,7 @@ func TestWorktreeCommands(t *testing.T) {
 	if err == nil {
 		t.Fatal("removing a dirty worktree without force must fail")
 	}
-	if out := f.git("worktree", "list", "--porcelain"); !strings.Contains(out, wt) {
+	if out := f.git("worktree", "list", "--porcelain"); !strings.Contains(out, wtListed) {
 		t.Fatalf("worktree was removed despite the failure:\n%s", out)
 	}
 
@@ -64,7 +67,7 @@ func TestWorktreeCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("force remove: %v", err)
 	}
-	if out := f.git("worktree", "list", "--porcelain"); strings.Contains(out, wt) {
+	if out := f.git("worktree", "list", "--porcelain"); strings.Contains(out, wtListed) {
 		t.Fatalf("worktree still listed:\n%s", out)
 	}
 	if _, err := os.Stat(wt); !os.IsNotExist(err) {

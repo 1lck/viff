@@ -2,6 +2,7 @@ package viffui
 
 import (
 	"path/filepath"
+	"runtime"
 	"sort"
 	"time"
 
@@ -69,13 +70,16 @@ type Window struct {
 	wel welcomeView
 	nt  noticeView
 
-	favPtr        map[string]*bool
-	pendingRebase string
+	favPtr                map[string]*bool
+	pendingRebase         string
+	pendingRepositoryFile *repositoryOpenTarget
 
-	lastGen   uint64
-	saveTimer *time.Timer
-	fetchStop chan struct{}
-	started   time.Duration
+	lastGen      uint64
+	lastRoot     string
+	commitDrafts map[string]string
+	saveTimer    *time.Timer
+	fetchStop    chan struct{}
+	started      time.Duration
 }
 
 type scrollRegion struct {
@@ -113,7 +117,14 @@ const (
 func New(ws *vapp.Workspace) *Window {
 	w := &Window{ws: ws, commitOpen: true, gitOpen: true}
 	ws.ConfirmCheckout = w.confirmStashCheckout
-	w.mono = ui.MonoFamily(platform.EditorFontFamily)
+	// Only macOS currently registers the bundled face. Asking DirectWrite
+	// for an uninstalled family can select a proportional fallback, breaking
+	// the fixed-cell layout of diffs and the console. Use the platform's
+	// actual monospace default elsewhere (Consolas on Windows).
+	w.mono = ui.MonoSystem
+	if runtime.GOOS == "darwin" {
+		w.mono = ui.MonoFamily(platform.EditorFontFamily)
+	}
 	w.applyTheme()
 	w.cm.init()
 	w.lg.init()
@@ -194,6 +205,7 @@ func (w *Window) Start(dir string) {
 }
 
 func (w *Window) onClosed() {
+	w.lg.multi.stop()
 	w.flushSettings()
 	w.stopAutoFetch()
 	w.ws.Close()
@@ -306,7 +318,19 @@ func (w *Window) syncRepo() {
 	w.lastGen = rs.Gen
 	w.ws.Settings.AddRecent(rs.Repo.Root)
 	w.saveSettings()
+	if w.commitDrafts == nil {
+		w.commitDrafts = make(map[string]string)
+	}
+	if w.lastRoot != "" {
+		draft := w.cm.msg.String()
+		if w.cm.amend {
+			draft = w.cm.saved
+		}
+		w.commitDrafts[w.lastRoot] = draft
+	}
+	w.lastRoot = rs.Repo.Root
 	w.cm.reset()
+	setText(w.cm.msg, w.commitDrafts[w.lastRoot])
 	w.ed.reset()
 	w.lg.reset()
 	w.st.sel = -1

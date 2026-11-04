@@ -1,84 +1,150 @@
+<div align="center">
+
 # Viff
 
-用 Go 和 [Viva](https://github.com/vivaui/viva) 编写的 Git 桌面客户端。界面与交互参照最新版 IntelliJ IDEA 的新 UI（Islands 主题），目标是低内存，并保证 Git 状态正确。
+**A lightweight, native Git desktop client.**
 
-设计文档见 [docs/design.md](docs/design.md)，架构决策见 [docs/decisions](docs/decisions/README.md)。
+Go + Viva. No Electron. No WebView. No bundled browser.
 
-## 功能
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-- **欢迎页**：最近项目（支持搜索和移除，不存在的路径标红）、打开、克隆、新建仓库，也可以把文件夹拖进窗口。
-- **Commit 工具窗口**
-  - 分组：Merge Conflicts / Staged / Changes / Unversioned Files，可按目录分组。
-  - 暂存：悬停行上的 +/−，空格键，多选（Shift、⌘）后批量暂存，回滚，加入 .gitignore。
-  - 提交：Amend，Sign-off，跳过钩子，⌘↩ 提交，“Commit and Push…”。
-  - 正在进行 merge、rebase 等操作时显示横幅，带 Continue / Abort。
-- **Stash 页签**：暂存（可包含未跟踪文件、保留索引）、应用、Pop、删除、转为分支，并可查看 stash 中的文件 diff。
-- **补丁**：变更列表右键“Create Patch…”把选中的改动保存为 `.patch`（二进制和 CRLF 原样保留，重命名仍是 rename）；Git 工具窗口菜单可以把补丁应用到工作树或只应用到索引，应用失败时文件不变并显示 Git 的原始错误。
-- **Diff**
-  - 并排与统一两种视图，同步滚动，曲线连接相同块，词级高亮，按语言语法着色。
-  - 部分暂存：块按钮（→ ← + ⟲）可暂存、取消暂存或回滚单个块，也可以在行号栏选中几行后只暂存这些行。
-  - F7 / ⇧F7 在差异之间跳转，⌘F 搜索，可忽略空白差异，F4 用外部编辑器打开。
-  - 预览页签跟随选中的文件；双击或 ⌘D 固定页签。
-- **冲突查看器**：Ours / Result / Theirs 三栏，在冲突块间跳转，在编辑器中打开，确认无冲突标记后才能标记为已解决。
-- **文件查看**：只读打开某个提交里的文件（“Open Repository Version”），显示行数、换行符，以及二进制、超大文件和子模块的说明；可定位到当前行用外部编辑器打开。
-  - **Git blame 注解**：按提交新旧着色，显示作者与日期；点击注解在 Log 中定位该提交，右键可看该提交的 diff 或注解上一个版本。
-- **浏览提交的仓库树**（“Browse Repository at Revision…”）：在 Log 里右键一个提交，列出该提交里的全部文件（路径、大小，并标出可执行、符号链接和子模块），可按路径过滤，双击或回车以只读方式打开该版本。
-- **子模块**：Git 工具窗口的 ⋯ 菜单列出子模块的状态（未初始化 / 已修改 / 冲突）、当前提交和 describe，可 Update、Sync 或打开子模块；变更列表里子模块条目的右键菜单也有 Update Submodule 与 Open Submodule。递归子模块一并列出。
-- **Git 工具窗口**
-  - Log：分支树；提交图；引用标签；按文本或哈希、分支、作者、日期、路径过滤；懒加载。
-  - 提交详情：文件列表和完整提交信息。
-  - 提交右键菜单：cherry-pick、revert、reset（Soft/Mixed/Hard/Keep）、撤销提交、检出、新建分支或标签、与工作树比较；选中两个提交可比较它们之间的文件。
-  - 直接编辑历史：修改提交信息、把提交 squash 进父提交、删除提交（drop），冲突时自动 abort 并保持分支不变。
-  - Console 显示所有执行过的 Git 命令及其输出；Reflog 页签可以查看 reflog。
-- **分支弹窗**（⌥⇧`）：速搜、收藏、本地和远程分支的子菜单，可执行检出、新建、重命名、合并、rebase、比较、设置上游、推送、删除；“Show Changed Files”列出两个分支 tip 之间的文件，双击打开 diff。
-- **Smart Checkout**：工作区有未提交改动时切换分支或检出修订不再直接失败——Git 因改动会被覆盖而拒绝后弹出确认，选“Stash and Checkout”会连同未跟踪文件一起 stash，检出后自动恢复；恢复冲突时改动留在 stash 并提示，检出失败则恢复改动、当前分支不变。
-- **工作树（Worktrees）**：分支弹窗底部的“Worktrees…”列出仓库的所有工作树（分支、短 HEAD、路径，当前工作树有标记），可以新建（分支名、路径、起点，路径按分支名建议）、删除（可强制丢弃改动，分支保留）、打开为当前仓库、复制路径；已被其他工作树检出的分支在分支菜单里标注，检出会打开那个工作树。
-- **推送和更新**：推送对话框列出待推送的提交，可选推送标签和 force-with-lease；更新支持 merge 或 rebase 方式；也支持 Fetch、后台定时 Fetch 和管理远程仓库。
-- **推送变体**：Log 右键“Push Up to Commit…”把某个历史提交及其之前的提交推到远端分支；分支弹窗“Push to Another Remote…”把 HEAD 推到别的远端或分支名；标签菜单可以只删除远端标签（本地标签保留）。非 fast-forward 默认被 Git 拒绝并显示原文，强制推送需显式勾选 force-with-lease。
-- **更新未检出的分支**：分支弹窗里非当前分支的本地分支有“Update from Remote”，快进到远端同名分支并说明前进了几个提交；分叉时拒绝且分支不变。浅克隆时 Git 工具窗口的 ⋯ 菜单会多出“Fetch Full History (Unshallow)”。
-- **Git 设置**：设置对话框的 Git 页可以指定 SSH 命令、GPG 程序、签名格式（Git 默认 / OpenPGP / SSH）、签名密钥、默认签名提交与 credential helper；保存后对下一次 Git 调用立即生效，不改写仓库或全局 Git 配置。
-- **通知**：右下角气泡（成功消息 10 秒后自动隐藏），以及通知工具窗口。
-- **主题**：Islands Dark、Islands Light，或跟随系统。
+[![CI](https://github.com/1lck/viff/actions/workflows/ci.yml/badge.svg)](https://github.com/1lck/viff/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.27.3%2B-00ADD8.svg)](https://go.dev/dl/)
 
-## 构建与运行
+[Get started](#get-started) · [Features](#a-full-git-workflow) · [Contribute](CONTRIBUTING.md) · [Releases](https://github.com/1lck/viff/releases)
 
-需要 Go 1.27 或更高版本，以及本机安装的 `git`。在 macOS 上编译需要 Xcode Command Line Tools，因为字体注册和 FSEvents 用到了 cgo。
+</div>
+
+![Viff in dark mode: line staging, side-by-side diff, and commit history](docs/screenshots/diff-dark.png)
+
+## Keep the tool lightweight. Keep the workflow complete.
+
+Viff puts your working tree, diffs, and history in one native desktop window.
+It is written in Go with [Viva](https://github.com/vivaui/viva), renders without a
+browser engine, and runs your installed Git executable.
+
+- **A small distribution:** one application executable, plus license files. No separate browser runtime or local server to install.
+- **A native desktop foundation:** Viva handles rendering and platform integration; Viff does not ship an Electron or WebView application.
+- **Git stays Git:** use your repositories, remotes, hooks, and configured credentials. Inspect executed commands and output in the Console.
+- **Work is loaded as needed:** paginated history and on-demand diffs keep large repositories from becoming a single eager load.
+
+For a concrete size reference, stripped Go 1.27.3 builds on November 4, 2026
+were **7.37 MiB on macOS arm64** and **7.65 MiB on Windows amd64**
+(`-trimpath -ldflags="-s -w"`, executable only). Archive size, installed Git,
+and runtime memory are separate measurements.
+
+Lightweight is a design goal, not an unmeasured performance claim. Memory usage
+and startup time vary with the repository, platform, and renderer; no comparative
+RAM or startup benchmark is claimed.
+
+## A full Git workflow
+
+| Work                  | What Viff provides                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, and multiple tabs      |
+| Build a commit        | Stage files, hunks, or selected lines; unstage, roll back, amend, sign off, and commit/push                          |
+| Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, and named ChangeLists                       |
+| Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing |
+| Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                     |
+| Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, and explicit mark-as-resolved                      |
+| Work across checkouts | Create worktrees from new or existing branches; manage submodules with dirty-work protection                         |
+| Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                               |
+
+**ChangeLists group files; they do not create separate Git indexes.** A commit
+includes **all staged files**, even when a list filter is active. Filtered bulk
+staging only stages visible files.
+
+<details>
+<summary>Light theme</summary>
+
+![Viff in light mode with a diff and selected commit](docs/screenshots/diff-light.png)
+
+</details>
+
+Screenshots come from real Viva headless tests using disposable demo repositories.
+
+## Get started
+
+### Build from source
+
+Install **Go 1.27.3 or newer** and **Git**. macOS also needs Xcode Command Line
+Tools (`xcode-select --install`) because font registration and file watching use cgo.
 
 ```sh
-go run ./cmd/viff                 # 打开上次的项目，没有则显示欢迎页
-go run ./cmd/viff ~/code/project  # 打开指定仓库
-go build -o viff ./cmd/viff
+git clone https://github.com/1lck/viff.git
+cd viff
+go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
+./build/viff /path/to/repository
 ```
 
-设置保存在用户配置目录的 `Viff/settings.json`（macOS 上为 `~/Library/Application Support/Viff/settings.json`） 中，也可以通过设置对话框（⌘,）查看路径。
+On Windows, run these commands in PowerShell after cloning:
 
-## 常用快捷键
+```powershell
+go build -trimpath -ldflags="-s -w" -o build/viff.exe ./cmd/viff
+.\build\viff.exe C:\path\to\repository
+```
 
-| 快捷键 | 动作 |
-| --- | --- |
-| ⌘K / ⇧⌘K / ⌘T | 提交 / 推送 / 更新项目 |
-| ⌥⇧` | 分支弹窗 |
-| ⌘D | 显示选中项的 diff |
-| F7 / ⇧F7 | 下一个 / 上一个差异 |
-| ⌘F | 在 diff 中搜索，或聚焦日志搜索 |
-| ⌘0 / ⌘9 | 显示或隐藏 Commit / Git 工具窗口 |
-| ⌥⌘Z | 回滚 |
-| ⌘W、⇧⌘[ / ⇧⌘] | 关闭或切换编辑器页签 |
-| ⌘R | 刷新 |
+Launch without a path to reopen the last project or show the welcome screen.
+You can also open, clone, or initialize a repository there.
 
-## 测试
+### Download a release
+
+[GitHub Releases](https://github.com/1lck/viff/releases) provides available builds,
+release notes, and SHA-256 checksums. Early releases are **pre-release,
+unsigned executables**, not signed installers. Git must be installed separately.
+Choose the archive matching your OS and CPU architecture.
+
+## Platform status
+
+| Platform | Verification                                                               |
+| -------- | -------------------------------------------------------------------------- |
+| macOS    | Native development and Git / headless UI tests                             |
+| Windows  | Real Git and Viva headless UI tests on Windows Server 2022 x64; Windows CI |
+| Linux    | Not yet validated as a desktop application                                 |
+
+Windows 10/11 desktop interaction, IME input, installers, and signing still need
+dedicated acceptance testing. Some shortcut labels still use macOS symbols.
+Windows and Linux file watching uses polling.
+
+The pre-publication acceptance suite covered **298 top-level tests**, including
+**80 headless UI tests**, and captured **194 Windows screenshots**. These are
+dated verification results, not a claim that every platform or edge case is covered.
+See [testing and platform notes](docs/testing.md).
+
+## Develop and test
 
 ```sh
-go test ./...                                            # 领域、Git 解析与命令、工作区、监听器
-go test -tags vivahead ./internal/ui/                    # 无界面 UI 测试：提交流程、日志搜索、stash、冲突等
-VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写到指定目录
+go test ./...
+go vet -tags "vivahead litheaudit" ./...
+go test -tags "vivahead litheaudit" ./internal/ui
 ```
 
-所有测试都在 `t.TempDir()` 中创建临时仓库，并隔离 HOME 和 Git 全局配置，不会读写本机的仓库或设置。
+The UI suite runs **without opening application windows**. To keep screenshots:
 
-## 已知限制
+```sh
+VIFF_SHOTS="$PWD/.viff-test/shots" VIFF_SHOTS_BY_TEST=1 \
+  go test -count=1 -tags "vivahead litheaudit" ./internal/ui
+```
 
-- 目前只在 macOS 上验证过。Linux 和 Windows 的文件监听仍是轮询，见 [0003](docs/decisions/0003-file-watching.md)。
-- 界面字体使用系统字体（SF Pro），没有使用 Inter，见 [0002](docs/decisions/0002-fonts.md)。
-- 冲突需要在外部编辑器里解决，见 [0005](docs/decisions/0005-read-only-conflicts.md)。
-- 新建工作树只能创建新分支，不能把已有分支检出到新工作树；prunable 工作树只能查看、不能删除。子模块不能在应用内添加或删除，见 [0010](docs/decisions/0010-submodule-status.md)。
+Tests create disposable repositories and use isolated Git configuration. CI runs
+on macOS and Windows and retains test evidence as workflow artifacts.
+
+- [Contributing / 参与贡献](CONTRIBUTING.md)
+- [Security policy / 安全问题](SECURITY.md)
+- [Detailed feature guide (中文)](docs/features.zh-CN.md)
+- [Design (中文)](docs/design.md) and [architecture decisions](docs/decisions/README.md)
+
+Settings live in your OS user configuration directory under `Viff/settings.json`.
+The Settings dialog shows the actual path. Repository writes target the active
+repository; inactive repositories refresh when requested. Free-form conflict
+editing and unsupported binary conflicts use an external editor.
+
+## License and credits
+
+Viff's original code is [MIT licensed](LICENSE). Viva, JetBrains Mono, IntelliJ
+Platform icons, and other dependencies retain their own licenses; see
+[third-party notices](THIRD_PARTY_NOTICES.md).
+
+The interface takes inspiration from IntelliJ IDEA's Git workflow. Viff is an
+independent project and is not affiliated with or endorsed by JetBrains.
