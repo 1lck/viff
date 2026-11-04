@@ -120,6 +120,10 @@ func RedactPath(root, s string) string {
 	if root = strings.TrimSpace(root); root != "" {
 		s = replacePathPrefix(s, filepath.Clean(root), placeholderRepo)
 	}
+	// A diagnostics bundle may travel between platforms; keep the remaining
+	// repository-relative part slash-separated even when the input came from
+	// Windows. On Unix this is a no-op.
+	s = filepath.ToSlash(s)
 	return Redact(s, DefaultRedaction())
 }
 

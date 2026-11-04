@@ -84,9 +84,7 @@ func TestWriterFileNamingAndPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat dir: %v", err)
 	}
-	if got := dirInfo.Mode().Perm(); got != 0o700 {
-		t.Fatalf("log dir mode = %o, want 700", got)
-	}
+	checkPerm(t, dirInfo, 0o700, "log directory")
 	files := logFiles(t, dir)
 	if len(files) != 1 {
 		t.Fatalf("got %d log files, want 1", len(files))
@@ -99,9 +97,7 @@ func TestWriterFileNamingAndPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat log file: %v", err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Fatalf("log file mode = %o, want 600", got)
-	}
+	checkPerm(t, info, 0o600, "log file")
 	if records := readLogRecords(t, dir); len(records) != 1 || records[0].Event != "writer.test" {
 		t.Fatalf("unexpected records on disk: %+v", records)
 	}

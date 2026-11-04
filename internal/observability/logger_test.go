@@ -566,6 +566,12 @@ func TestCloseIdempotentConcurrent(t *testing.T) {
 }
 
 func TestWriteErrorDoesNotPanic(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows refuses to delete a file another process holds open, which
+		// is how this test injects a write error; the writer's error path is
+		// covered on the other platforms and by writer_test.go.
+		t.Skip("cannot delete an open log file on Windows")
+	}
 	dir := filepath.Join(t.TempDir(), "logs")
 	log, err := New(Options{Dir: dir, MaxFileBytes: 64, MaxBytes: 4096})
 	if err != nil {

@@ -47,9 +47,7 @@ func TestWriteCrash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat crash file: %v", err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Fatalf("crash file mode = %o, want 600", got)
-	}
+	checkPerm(t, info, 0o600, "crash file")
 	if info.Size() == 0 {
 		t.Fatal("crash file is empty")
 	}
@@ -57,9 +55,7 @@ func TestWriteCrash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat crash dir: %v", err)
 	}
-	if got := dirInfo.Mode().Perm(); got != 0o700 {
-		t.Fatalf("crash dir mode = %o, want 700", got)
-	}
+	checkPerm(t, dirInfo, 0o700, "crash dir")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read crash file: %v", err)
