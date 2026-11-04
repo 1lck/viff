@@ -1,11 +1,16 @@
 package viffui
 
 import (
+	"fmt"
+	"os"
 	"strings"
+	"time"
 	"unicode/utf8"
 
+	"github.com/vivaui/viva/app"
 	"github.com/vivaui/viva/ui"
 
+	vapp "viff/internal/app"
 	"viff/internal/ui/icons"
 )
 
@@ -18,6 +23,13 @@ const (
 	consolePadBottom = 6  // space below the last row
 	consolePadRight  = 16 // room kept after the widest row, clear of the bar
 	consoleBarW      = 12 // right gutter reserved for the vertical bar
+
+	// consoleOutputIndent lines saved output up under its command.
+	consoleOutputIndent = "          "
+	// consoleOutputLimit caps the output saved for one command. The console
+	// keeps what the workspace recorded; Copy All and Save… never put more
+	// than this per command on the clipboard or in a file.
+	consoleOutputLimit = 8 << 10
 )
 
 // consoleView is the Console tab's scroll state; it lives here with the console
@@ -39,13 +51,94 @@ type consoleRow struct {
 	color ui.Color
 }
 
+// consoleCommandHead is the command row's leading text: time, the command and,
+// when the workspace measured it, how long it took.
+func consoleCommandHead(e vapp.ConsoleEntry) string {
+	head := e.Time.Format("15:04:05") + "  " + e.Command
+	if e.Took > 0 {
+		head += "  " + consoleDuration(e.Took)
+	}
+	return head
+}
+
+// consoleDuration renders a command's duration the way the design asks:
+// tenths of a second once it reaches one, whole milliseconds below.
+func consoleDuration(d time.Duration) string {
+	if d >= time.Second {
+		return fmt.Sprintf("(%.1fs)", d.Seconds())
+	}
+	return fmt.Sprintf("(%dms)", d.Milliseconds())
+}
+
+// consoleText is the console as plain text, for Copy All and Save…: one
+// command row with its duration followed by its output, indented. The output
+// of a single command is capped so the result stays shareable.
+func (w *Window) consoleText() string {
+	var b strings.Builder
+	for _, e := range w.ws.Console {
+		b.WriteString(consoleCommandHead(e))
+		b.WriteByte('\n')
+		out := strings.TrimRight(e.Output, "\n")
+		if out == "" {
+			continue
+		}
+		if len(out) > consoleOutputLimit {
+			out = truncateText(out, consoleOutputLimit) + "\n… (output truncated)"
+		}
+		for _, l := range strings.Split(out, "\n") {
+			b.WriteString(consoleOutputIndent)
+			b.WriteString(expandLine(l))
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
+
+// truncateText shortens s to at most n bytes without splitting a UTF-8 rune.
+func truncateText(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
+// copyConsole puts the console text on the clipboard.
+func (w *Window) copyConsole() {
+	w.copyText(w.consoleText())
+}
+
+// saveConsole asks where to write the console text and writes it.
+func (w *Window) saveConsole() {
+	if len(w.ws.Console) == 0 {
+		return
+	}
+	dest, err := app.SaveFile(app.SaveFileOptions{
+		Title:            "Save Console Output",
+		SuggestedName:    "viff-console-" + time.Now().Format("20060102-150405") + ".txt",
+		DefaultExtension: "txt",
+		Filters:          []app.FileFilter{{Name: "Text files", Pattern: "*.txt"}},
+	})
+	if err != nil || dest == "" {
+		return
+	}
+	if err := os.WriteFile(dest, []byte(w.consoleText()), 0o644); err != nil {
+		w.ws.NotifyError("Cannot save console output", err)
+		return
+	}
+	w.ws.Notify(vapp.NoticeSuccess, "Console saved", dest,
+		vapp.NoticeAction{Title: "Show in Finder", Run: func() { revealPath(dest) }})
+}
+
 // consoleRows builds the rows of the console and measures the widest one.
 func (w *Window) consoleRows() (rows []consoleRow, widest int) {
 	row := func(text string, c ui.Color) consoleRow {
 		return consoleRow{text: text, cells: displayCells(text), color: c}
 	}
 	for _, e := range w.ws.Console {
-		head := e.Time.Format("15:04:05") + "  " + e.Command
+		head := consoleCommandHead(e)
 		c := w.pal.EditorText
 		if e.Failed {
 			c = w.pal.Error
@@ -53,7 +146,7 @@ func (w *Window) consoleRows() (rows []consoleRow, widest int) {
 		rows = append(rows, row(head, c))
 		if out := strings.TrimRight(e.Output, "\n"); out != "" {
 			for _, l := range strings.Split(out, "\n") {
-				rows = append(rows, row("          "+expandLine(l), w.pal.TextMuted))
+				rows = append(rows, row(consoleOutputIndent+expandLine(l), w.pal.TextMuted))
 			}
 		}
 	}
@@ -121,10 +214,23 @@ func (w *Window) paintConsole(r ui.Rect) {
 	v := &w.con
 	entries := w.ws.Console
 	tb := splitTop(&r, 34)
-	if w.action(idConsoleClear, right(tb)-8-actionSize, tb.Y+4, icons.Delete, "Clear All", actOpts{disabled: len(entries) == 0}) {
-		w.after(func() { w.ws.Console = nil })
+	cx := right(tb) - 8 - actionSize
+	if w.action(idConsoleClear, cx, tb.Y+4, icons.Delete, "Clear All", actOpts{disabled: len(entries) == 0}) {
+		w.after(func() {
+			w.confirm("Clear Console", "Remove all Git commands and their output from the Console?\n\nThis only clears the view; Git is not affected.", "Clear", func() {
+				w.ws.Console = nil
+			})
+		})
 	}
-	w.p.text("Git commands run by Viff", rect(tb.X+12, tb.Y, tb.Width-60, tb.Height), fontSmall, regular, w.pal.TextSecond)
+	cx -= actionSize + 4
+	if w.action(idConsoleSave, cx, tb.Y+4, icons.Download, "Save Console Output…", actOpts{disabled: len(entries) == 0}) {
+		w.after(w.saveConsole)
+	}
+	cx -= actionSize + 4
+	if w.action(idConsoleCopy, cx, tb.Y+4, icons.Copy, "Copy All", actOpts{disabled: len(entries) == 0}) {
+		w.after(w.copyConsole)
+	}
+	w.p.text("Git commands run by Viff", rect(tb.X+12, tb.Y, cx-24-tb.X, tb.Height), fontSmall, regular, w.pal.TextSecond)
 	_, lineH, fs := w.metrics()
 	w.c.HitWithOptions(idConsole, r, "Console", ui.HitOptions{Role: ui.RoleGroup})
 	rows, widest := w.consoleRows()

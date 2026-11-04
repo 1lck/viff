@@ -387,6 +387,7 @@ func TestConsoleHeadlessClearResetsScrolling(t *testing.T) {
 		t.Fatal("setup did not scroll horizontally")
 	}
 	f.click("Clear All")
+	f.click("Clear") // Clear All asks for confirmation first
 	consoleTestPaint(t, f)
 	if len(f.ws.Console) != 0 {
 		t.Fatalf("Clear All did not empty the console: %d entries", len(f.ws.Console))

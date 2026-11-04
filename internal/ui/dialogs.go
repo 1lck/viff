@@ -1,7 +1,6 @@
 package viffui
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	"viff/internal/domain"
 	"viff/internal/gitcli"
 	"viff/internal/ui/icons"
+	"viff/internal/version"
 )
 
 // validRefName applies the main rules of git check-ref-format.
@@ -561,22 +561,25 @@ func (w *Window) settingsMenu() []item {
 	return items
 }
 
+// openAbout shows the build identity plus the Go, Viva and Git versions. The
+// build identity comes from internal/version, which release builds fill in
+// with -ldflags.
 func (w *Window) openAbout() {
-	ver := ""
-	if v, err := w.ws.Git.Version(context.Background()); err == nil {
-		ver = v
+	git := w.gitVersion()
+	detail := "Go " + version.GoVersion() + " · Viva " + version.VivaVersion()
+	if git != "" {
+		detail += " · Git " + git
 	}
 	w.openDialog(&dialog{
-		title: "About Viff", ok: "Close", width: 420, noCancel: true,
+		title: "About Viff", ok: "Close", width: 480, noCancel: true,
 		body: func(f *form) {
 			f.custom(56, func(r ui.Rect) {
 				w.c.DrawBitmap(branding.Bitmap, rect(r.X, r.Y+4, 44, 44))
 				w.p.text("Viff", rect(r.X+58, r.Y+4, 200, 24), 18, semibold, w.pal.Text)
 				w.p.text("A Git client in the style of IntelliJ IDEA", rect(r.X+58, r.Y+28, r.Width-58, 20), fontUI, regular, w.pal.TextMuted)
 			})
-			if ver != "" {
-				f.muted("Using " + ver)
-			}
+			f.text("Viff " + version.String())
+			f.muted(detail)
 			f.muted("Icons: IntelliJ Platform (Apache 2.0). Editor font: JetBrains Mono (OFL).")
 		},
 	})
@@ -589,6 +592,7 @@ func (w *Window) openSettings() {
 	gitPath := text.NewEditor(s.GitPath)
 	editor := text.NewEditor(s.ExternalEditor)
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
+	debugLog := s.LogLevel == "debug"
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
 	gitDraft := newGitSettingsDraft(s)
@@ -646,6 +650,12 @@ func (w *Window) openSettings() {
 			f.custom(22, func(r ui.Rect) {
 				w.p.text("Settings file: "+shortenHome(s.Path()), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
 			})
+			f.gap(6)
+			f.bold("Diagnostics")
+			f.check("Debug logging", &debugLog)
+			f.custom(22, func(r ui.Rect) {
+				w.p.text("Writes detailed events for troubleshooting. Logs stay on this computer.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+			})
 		},
 		okDisabled: func() bool {
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
@@ -671,6 +681,11 @@ func (w *Window) openSettings() {
 			if m > 0 {
 				s.AutoFetchMins = m
 			}
+			s.LogLevel = ""
+			if debugLog {
+				s.LogLevel = "debug"
+			}
+			w.ws.SetLogLevel(s.LogLevel)
 			w.applyTheme()
 			w.flushSettings()
 			w.startAutoFetch()

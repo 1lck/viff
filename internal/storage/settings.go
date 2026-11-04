@@ -32,6 +32,11 @@ type Settings struct {
 	FetchPrune    bool   `json:"fetchPrune"`
 	PullMode      string `json:"pullMode"` // "merge", "rebase", "ff-only"
 
+	// LogLevel is the file log level: "debug" keeps verbose diagnostics,
+	// empty or "info" keeps the default. It has no effect on behavior, so an
+	// old settings file without the field keeps working unchanged.
+	LogLevel string `json:"logLevel,omitempty"`
+
 	// Git settings passed to every invocation. Empty values leave Git's own
 	// configuration and defaults in charge, so an old settings file (which
 	// has none of these fields) keeps behaving exactly as before.
@@ -188,6 +193,11 @@ func (s *Settings) sanitize() {
 	case "", "openpgp", "ssh":
 	default:
 		s.SignFormat = ""
+	}
+	switch s.LogLevel {
+	case "", "info", "debug":
+	default:
+		s.LogLevel = ""
 	}
 	if len(s.Recent) > 20 {
 		s.Recent = s.Recent[:20]
