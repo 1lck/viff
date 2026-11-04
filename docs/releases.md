@@ -1,31 +1,75 @@
 # Release process / 发布流程
 
+## Publish a tested version / 发布已验证版本
+
 1. Merge changes into `main` and wait for the **CI** check to pass.
-2. Choose a version. Pre-release tags include a suffix, such as `v0.1.0-alpha.1`.
+2. Choose a version. Pre-release tags include a suffix, such as `v0.1.0-alpha.2`.
 3. Push the tag pointing to the tested commit.
-4. The Release workflow verifies successful CI for that exact commit, builds
-   on macOS and Windows, and packages the native executable with license notices.
-5. The workflow publishes archives and `SHA256SUMS`. Review and expand the
-   generated release notes with changes, verification, and remaining limitations.
+4. The Release workflow verifies successful CI for that exact commit, builds on
+   macOS, Windows, and Linux, and packages the executable with license notices.
+5. Review the published packages and `SHA256SUMS`, and expand the release notes
+   with changes, verification, and remaining limitations.
 
 6. 合并至 `main`，等待 **CI** 通过。
-7. 选择版本；预发布使用后缀，例如 `v0.1.0-alpha.1`。
+7. 选择版本；预发布使用后缀，例如 `v0.1.0-alpha.2`。
 8. 将指向已验收提交的标签推送到 GitHub。
-9. Release 工作流核实该提交的 CI 成功后，在 macOS 和 Windows 构建，并打包可执行文件及许可声明。
-10. 工作流发布压缩包与 `SHA256SUMS`；维护者补充具体改动、验证情况和已知限制。
+9. Release 工作流核实该提交的 CI 成功后，在 macOS、Windows、Linux 构建，并打包程序及许可声明。
+10. 检查发布的安装包与 `SHA256SUMS`，补充具体改动、验证情况和已知限制。
 
-Current binaries are unsigned and are not installers. The archive name records
-the actual build OS and architecture. Git is a separate prerequisite. Do not
-describe these artifacts as notarized, signed, or verified on untested platforms.
+## Choose the package / 选择安装包
 
-当前产物未签名，也不是安装器。文件名标明实际构建平台和架构，Git 需单独安装。
-不得声称已签名、公证，或在未测试的平台完成验证。
+For `v0.1.0-alpha.2`, the artifact names are:
 
-Local packaging after building `build/viff` (or `build/viff.exe`):
+| Platform / 平台             | Artifact / 文件                               | Installation / 安装                                           |
+| --------------------------- | --------------------------------------------- | ------------------------------------------------------------- |
+| macOS 13+, Apple Silicon    | `viff-v0.1.0-alpha.2-darwin-arm64.dmg`        | Drag Viff.app to Applications / 将 Viff.app 拖入 Applications |
+| Windows x64                 | `viff-v0.1.0-alpha.2-windows-amd64-setup.exe` | Per-user installation / 安装到当前用户目录                    |
+| Debian/Ubuntu x64           | `viff-v0.1.0-alpha.2-linux-amd64.deb`         | `sudo apt install ./viff-v0.1.0-alpha.2-linux-amd64.deb`      |
+| Linux x64 portable / 便携包 | `viff-v0.1.0-alpha.2-linux-amd64.tar.gz`      | Extract, then run `./viff` / 解压后执行 `./viff`              |
+
+Git must be available on `PATH`. The Linux DEB declares dependencies on `git`,
+`libvulkan1`, `libxcb1`, `libcairo2`, `libfontconfig1`, `libfreetype6`,
+`libharfbuzz0b`, `libpango-1.0-0`, and `libpangocairo-1.0-0`;
+`apt install ./…deb` resolves those packages. The portable archive needs equivalent libraries installed separately.
+Linux desktop use also needs a working graphical session and rendering backend.
+The DEB installs `/usr/bin/viff` and a desktop menu entry. Windows installs under
+`%LOCALAPPDATA%\Programs\Viff`, adds a Start menu shortcut and an uninstall entry,
+and does not require administrator access.
+
+Git 必须在 `PATH` 中。Linux DEB 声明了 `git`、`libvulkan1`、`libxcb1`、`libcairo2`、
+`libfontconfig1`、`libfreetype6`、`libharfbuzz0b`、`libpango-1.0-0`、`libpangocairo-1.0-0` 依赖，使用 `apt install ./…deb` 可解析安装；便携包需要自行安装对应系统库。
+Linux 桌面运行还需要正常的图形会话与渲染后端。DEB 安装 `/usr/bin/viff` 和桌面菜单项。
+Windows 安装位置为 `%LOCALAPPDATA%\Programs\Viff`，添加开始菜单快捷方式和卸载入口，
+无需管理员权限。
+
+The macOS app uses an ad-hoc signature, without Developer ID signing or
+notarization. Windows installers are not Authenticode signed. Operating-system security prompts are expected. Do not describe
+native installation formats as signed releases, or headless CI as full desktop
+acceptance. The older `v0.1.0-alpha.1` release contains portable ZIPs only.
+
+macOS 应用使用 ad-hoc 签名，未经 Developer ID 签名或公证；Windows 安装器未经
+Authenticode 签名。系统可能显示安全提示。
+不要将原生安装格式等同于签名发布，也不要将无头 CI 等同于完整桌面验收。
+旧版 `v0.1.0-alpha.1` 仅提供便携 ZIP。
+
+## Package locally / 本地打包
+
+Build `build/viff` (or `build/viff.exe`) on the target platform, then run:
+
+在目标平台构建 `build/viff`（Windows 为 `build/viff.exe`），再执行：
 
 ```sh
-python scripts/package.py v0.1.0-alpha.1
+python scripts/package.py v0.1.0-alpha.2
 ```
+
+Packaging uses macOS `hdiutil`, Windows NSIS (`makensis`), or Linux `dpkg-deb`.
+Windows release builds use `-ldflags="-s -w -H=windowsgui"` to avoid a console
+window. Package checks must inspect and install/uninstall disposable test packages
+without launching application windows. Preserve all bundled license notices.
+
+打包分别使用 macOS 的 `hdiutil`、Windows 的 NSIS（`makensis`）或 Linux 的 `dpkg-deb`。
+Windows 发布构建使用 `-ldflags="-s -w -H=windowsgui"`，避免弹出控制台窗口。
+安装包检查使用可清理的临时环境，不启动应用窗口；所有分发包都须保留许可声明。
 
 GitHub repository settings require pull requests, a passing CI check, resolved
 review conversations, and linear history on `main`. Force pushes and branch

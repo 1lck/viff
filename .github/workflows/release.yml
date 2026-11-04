@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2022]
+        os: [macos-15, windows-2022, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     defaults:
@@ -44,19 +44,33 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Install Linux runtime and packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan1 mesa-vulkan-drivers libxcb1 libcairo2 libfontconfig1 libfreetype6 libharfbuzz0b libpango-1.0-0 libpangocairo-1.0-0 fonts-dejavu-core
+      - name: Install Windows installer compiler
+        if: runner.os == 'Windows'
+        run: |
+          if [ ! -f '/c/Program Files (x86)/NSIS/makensis.exe' ]; then
+            choco install nsis --yes --no-progress
+          fi
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
       - name: Build and package with licenses
         run: |
           mkdir -p build dist
           if [ "$RUNNER_OS" = Windows ]; then
-            go build -trimpath -ldflags="-s -w" -o build/viff.exe ./cmd/viff
+            go build -trimpath -ldflags="-s -w -H=windowsgui" -o build/viff.exe ./cmd/viff
+          elif [ "$RUNNER_OS" = macOS ]; then
+            CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
           else
             go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
           fi
-          python scripts/package.py "$GITHUB_REF_NAME"
+          python scripts/package.py "$GITHUB_REF_NAME" --smoke
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-${{ matrix.os }}
-          path: dist/*.zip
+          path: dist/*
           if-no-files-found: error
 
   publish:
@@ -67,6 +81,9 @@ jobs:
       contents: write
       actions: read
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Download packages and publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,8 +91,6 @@ jobs:
         run: |
           gh run download "$GITHUB_RUN_ID" --repo "$GH_REPO" --pattern 'package-*' --dir packages
           mkdir dist
-          find packages -name '*.zip' -exec cp {} dist/ \;
-          (cd dist && sha256sum -- ./*.zip > SHA256SUMS)
-          flags=()
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "Viff $GITHUB_REF_NAME" "${flags[@]}"
+          find packages -type f -exec cp {} dist/ \;
+          (cd dist && sha256sum -- ./* > SHA256SUMS)
+          python scripts/publish-release.py

@@ -28,7 +28,7 @@ go test -tags 'vivahead litheaudit' ./internal/ui
 
 第一条覆盖领域、Git 解析与命令、工作区与监听器；第二条运行无头 UI 测试（提交、日志、diff、冲突、stash、worktree 等）。`litheaudit` 是外部 issue 回归审计的 opt-in 标签。
 
-CI 在 macOS 与 Windows 上运行同一组测试，并额外检查 `gofmt`、`go vet -tags 'vivahead litheaudit' ./...`、`go mod verify` 和 `go mod tidy -diff`。
+CI 在 macOS、Windows 与 Linux 上运行同一组测试，并额外检查 `gofmt`、`go vet -tags 'vivahead litheaudit' ./...`、`go mod verify` 和 `go mod tidy -diff`。
 
 UI 测试在无头模式下运行，不打开应用窗口。在 CI、SSH 等没有图形界面的环境中不要启动 `cmd/viff`，使用 Viva 离屏渲染后端；需要生成截图时显式设置 `VIFF_SHOTS`。
 
@@ -76,7 +76,7 @@ go test -tags 'vivahead litheaudit' ./internal/ui
 
 The first command covers the domain, Git parsing and commands, the workspace and the watchers. The second runs the headless UI suite (commit, log, diff, conflict, stash, worktree and more). `litheaudit` is an opt-in tag for the external-issue audit.
 
-CI runs the same tests on macOS and Windows, and additionally checks `gofmt`, `go vet -tags 'vivahead litheaudit' ./...`, `go mod verify` and `go mod tidy -diff`.
+CI runs the same tests on macOS, Windows, and Linux, and additionally checks `gofmt`, `go vet -tags 'vivahead litheaudit' ./...`, `go mod verify` and `go mod tidy -diff`.
 
 The UI tests run headless and never open an application window. In headless environments such as CI or an SSH session, do not launch `cmd/viff` use the Viva offscreen renderer, and set `VIFF_SHOTS` explicitly when screenshots are needed.
 

@@ -78,7 +78,7 @@ go build -trimpath -ldflags="-s -w" -o build/viff ./cmd/viff
 Windows 克隆后，在 PowerShell 中执行：
 
 ```powershell
-go build -trimpath -ldflags="-s -w" -o build/viff.exe ./cmd/viff
+go build -trimpath -ldflags="-s -w -H=windowsgui" -o build/viff.exe ./cmd/viff
 .\build\viff.exe C:\path\to\repository
 ```
 
@@ -86,9 +86,21 @@ go build -trimpath -ldflags="-s -w" -o build/viff.exe ./cmd/viff
 
 ### 下载发布版本
 
-[GitHub Releases](https://github.com/1lck/viff/releases) 提供可用构建、更新说明与 SHA-256 校验值。
-早期版本为**预发布、未签名的可执行文件**，不是签名安装包。需要自行安装 Git，
-并选择与系统和 CPU 架构对应的压缩包。
+在 [GitHub Releases](https://github.com/1lck/viff/releases) 下载对应平台的包。
+从 **v0.1.0-alpha.2** 起，提供原生安装格式：
+
+| 平台      | 架构                   | 格式         | 安装方式                                             |
+| --------- | ---------------------- | ------------ | ---------------------------------------------------- |
+| macOS 13+ | Apple Silicon（arm64） | `.dmg`       | 打开磁盘映像，将 **Viff** 拖入 **Applications**。    |
+| Windows   | x64（amd64）           | `-setup.exe` | 运行安装器，安装到当前用户目录。                     |
+| Linux     | x64（amd64）           | `.deb`       | Debian/Ubuntu 执行 `sudo apt install ./viff-*.deb`。 |
+| Linux     | x64（amd64）           | `.tar.gz`    | 解压便携包，在解压目录执行 `./viff`。                |
+
+Git 需单独安装并加入 `PATH`。Linux 还需要[发布指南](docs/releases.md)中列出的系统渲染库。
+发布页提供 `SHA256SUMS`，可用于核对下载文件；最初的 `alpha.1` 版本仅提供便携 ZIP。
+
+目前仍是**预发布版本**。macOS 应用使用 ad-hoc 签名，未经 Developer ID 签名或公证；
+Windows 安装器未经 Authenticode 签名，因此操作系统可能显示安全提示。
 
 ## 平台支持进度
 
@@ -96,9 +108,9 @@ go build -trimpath -ldflags="-s -w" -o build/viff.exe ./cmd/viff
 | ------- | --------------------------------------------------------------- |
 | macOS   | 原生开发环境，Git 与无头 UI 测试                                |
 | Windows | Windows Server 2022 x64 实机 Git、Viva 无头 UI 验收，Windows CI |
-| Linux   | 尚未完成桌面应用验证                                            |
+| Linux   | Ubuntu Git 与 Viva 无头 UI CI；交互式桌面验收尚未完成           |
 
-Windows 10/11 的桌面交互、输入法、安装器及签名仍需专门验收；部分快捷键文案仍使用 macOS 符号。
+Windows 10/11 的桌面交互、输入法及签名仍需专门验收；部分快捷键文案仍使用 macOS 符号。
 Windows 与 Linux 文件监听采用轮询。
 
 公开发布前的验收覆盖 **298 个顶层测试**，其中 **80 个无头 UI 测试**，并收集
@@ -120,7 +132,8 @@ VIFF_SHOTS="$PWD/.viff-test/shots" VIFF_SHOTS_BY_TEST=1 \
   go test -count=1 -tags "vivahead litheaudit" ./internal/ui
 ```
 
-测试创建临时仓库并隔离 Git 配置。CI 在 macOS、Windows 上执行，并将验收证据保存为工作流附件。
+测试创建临时仓库并隔离 Git 配置。CI 在 macOS、Windows、Linux 上执行，并将验收证据保存为工作流附件。
+原生安装包的检查同样不打开应用窗口。
 
 - [贡献指南](CONTRIBUTING.md)
 - [安全问题报告](SECURITY.md)
