@@ -1003,10 +1003,14 @@ func (w *Window) copyText(s string) {
 func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	v := &w.cm
 	rs := w.repo()
-	// Amend + options row.
+	// Amend + options row. A backend that cannot rewrite a committed revision
+	// (Subversion) does not offer Amend at all, so the checkbox is absent and
+	// v.amend can never be set from the window.
 	top := rect(r.X+10, r.Y+6, r.Width-20, 28)
-	if w.checkbox(idCmAmend, top.X, top.Y, top.Height, w.t(i18n.WorkspaceCheckAmend), v.amend, !rs.HasHead()) {
-		w.after(w.toggleAmend)
+	if w.ws.Caps.Amend {
+		if w.checkbox(idCmAmend, top.X, top.Y, top.Height, w.t(i18n.WorkspaceCheckAmend), v.amend, !rs.HasHead()) {
+			w.after(w.toggleAmend)
+		}
 	}
 	chevron, chevronTip := icons.ChevronDown, w.t(i18n.WorkspaceTipCollapseMessage)
 	if v.msgCollapsed {
@@ -1053,9 +1057,10 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 
 	// Buttons.
 	by := bottom(mr) + 10
-	staged, _, _, conflicts := rs.Status.Counts()
+	committable := w.ws.CommittableCount()
+	_, _, _, conflicts := rs.Status.Counts()
 	empty := strings.TrimSpace(value) == ""
-	can := !empty && (staged > 0 || v.amend) && conflicts == 0
+	can := !empty && (committable > 0 || v.amend) && conflicts == 0
 	label := w.t(i18n.WorkspaceButtonCommit)
 	if v.amend {
 		label = w.t(i18n.WorkspaceButtonAmendCommit)
@@ -1067,8 +1072,12 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	switch {
 	case conflicts > 0:
 		w.tip(idCmCommit, w.t(i18n.WorkspaceTipResolveBeforeCommit))
-	case staged == 0 && !v.amend:
-		w.tip(idCmCommit, w.t(i18n.WorkspaceTipStageToCommit))
+	case committable == 0 && !v.amend:
+		if w.ws.Caps.Index {
+			w.tip(idCmCommit, w.t(i18n.WorkspaceTipStageToCommit))
+		} else {
+			w.tip(idCmCommit, w.t(i18n.WorkspaceTipNoChangesToCommit))
+		}
 	case empty:
 		w.tip(idCmCommit, w.t(i18n.WorkspaceTipEnterMessage))
 	default:
@@ -1118,9 +1127,10 @@ func (w *Window) toggleAmend() {
 func (w *Window) doCommit(push bool) {
 	v := &w.cm
 	rs := w.repo()
-	staged, _, _, conflicts := rs.Status.Counts()
+	committable := w.ws.CommittableCount()
+	_, _, _, conflicts := rs.Status.Counts()
 	msg := strings.TrimSpace(v.msg.String())
-	if msg == "" || conflicts > 0 || (staged == 0 && !v.amend) {
+	if msg == "" || conflicts > 0 || (committable == 0 && !v.amend) {
 		return
 	}
 	req := vapp.CommitRequest{Message: v.msg.String(), Amend: v.amend, SignOff: v.signOff, NoVerify: v.noVerify}

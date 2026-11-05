@@ -26,6 +26,31 @@ type Git = vcs.Backend
 // is only reachable if the UI offered an entry it should have hidden.
 var ErrUnsupported = &vcs.Error{Kind: vcs.ErrOther, Stderr: "this operation is not available for the open repository"}
 
+// CommittableCount is how many changes the next commit would record.
+//
+// A backend with an index (Git) records only what is staged. One without it
+// (Subversion) records every tracked change, because "svn commit" takes the
+// scheduled and modified paths directly: there is no intermediate snapshot to
+// stage into. Untracked files are excluded either way — they need an explicit
+// add first — and a conflicted working copy can commit nothing.
+//
+// The UI needs this to decide whether the Commit button can be pressed. Asking
+// for the staged count directly made the button permanently disabled on
+// Subversion, where that count is always zero.
+func (w *Workspace) CommittableCount() int {
+	if w.Repo == nil {
+		return 0
+	}
+	staged, unstaged, _, conflicts := w.Repo.Status.Counts()
+	if conflicts > 0 {
+		return 0
+	}
+	if w.Caps.Index {
+		return staged
+	}
+	return staged + unstaged
+}
+
 // CapabilitiesOf derives what the UI may offer from the backend instance. A
 // backend that does not implement an optional interface reports it as absent,
 // which is how the same binary hides rebase for Subversion and shows it for

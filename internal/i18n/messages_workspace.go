@@ -78,6 +78,7 @@ const (
 	WorkspaceTipResolveFirst        = Key("workspace.tip.resolveFirst")
 	WorkspaceTipResolveBeforeCommit = Key("workspace.tip.resolveBeforeCommit")
 	WorkspaceTipStageToCommit       = Key("workspace.tip.stageToCommit")
+	WorkspaceTipNoChangesToCommit   = Key("workspace.tip.noChangesToCommit")
 	WorkspaceTipEnterMessage        = Key("workspace.tip.enterMessage")
 	WorkspaceTipCommitOptions       = Key("workspace.tip.commitOptions")
 	WorkspaceTipCollapseMessage     = Key("workspace.tip.collapseMessage")
@@ -225,6 +226,7 @@ func init() {
 		WorkspaceTipResolveFirst:        "Resolve and stage all conflicts first",
 		WorkspaceTipResolveBeforeCommit: "Resolve conflicts before committing",
 		WorkspaceTipStageToCommit:       "Stage changes to commit",
+		WorkspaceTipNoChangesToCommit:   "There are no changes to commit",
 		WorkspaceTipEnterMessage:        "Enter a commit message",
 		WorkspaceTipCommitOptions:       "Commit Options",
 		WorkspaceTipCollapseMessage:     "Collapse the commit message",
@@ -363,6 +365,7 @@ func init() {
 		WorkspaceTipResolveFirst:        "请先解决并暂存全部冲突",
 		WorkspaceTipResolveBeforeCommit: "提交前请先解决冲突",
 		WorkspaceTipStageToCommit:       "暂存改动后再提交",
+		WorkspaceTipNoChangesToCommit:   "没有可提交的改动",
 		WorkspaceTipEnterMessage:        "请输入提交说明",
 		WorkspaceTipCommitOptions:       "提交选项",
 		WorkspaceTipCollapseMessage:     "折叠提交说明",
