@@ -58,16 +58,18 @@ const (
 
 var areaOrder = []domain.Area{domain.AreaConflicts, domain.AreaStaged, domain.AreaUnstaged, domain.AreaUntracked}
 
-func areaTitle(a domain.Area) string {
+// areaTitle names the change-tree group a file belongs to.
+func (w *Window) areaTitle(a domain.Area) string {
+	group := i18n.WorkspaceAreaConflicts
 	switch a {
 	case domain.AreaStaged:
-		return "Staged"
+		group = i18n.WorkspaceAreaStaged
 	case domain.AreaUnstaged:
-		return "Changes"
+		group = i18n.WorkspaceAreaChanges
 	case domain.AreaUntracked:
-		return "Unversioned Files"
+		group = i18n.WorkspaceAreaUntracked
 	}
-	return "Merge Conflicts"
+	return w.t(group)
 }
 
 // pluralT fills in n and picks the one or many message the way i18n.Plural
@@ -360,7 +362,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 			}
 			w.p.iconIn(chev, rect(x, rr.Y, 16, rowH))
 			x += 20
-			title := areaTitle(row.area)
+			title := w.areaTitle(row.area)
 			if row.kind == rowDir {
 				w.p.iconIn(icons.Folder, rect(x, rr.Y, 16, rowH))
 				x += 22
@@ -421,7 +423,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 func (w *Window) rowLabel(row changeRow) string {
 	switch row.kind {
 	case rowGroup:
-		return areaTitle(row.area)
+		return w.areaTitle(row.area)
 	case rowDir:
 		return row.dir
 	}

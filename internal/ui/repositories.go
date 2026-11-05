@@ -539,7 +539,7 @@ func (w *Window) paintRepositoryFiles(v *repositoriesView, s repositorySummary, 
 		if row.header {
 			hr := rect(r.X, y, r.Width, repoOverviewGroupH)
 			if bottom(hr) > r.Y && hr.Y < bottom(r) {
-				w.p.text(areaTitle(row.area), rect(hr.X+10, hr.Y, hr.Width-20, hr.Height), fontUI, semibold, w.pal.Text)
+				w.p.text(w.areaTitle(row.area), rect(hr.X+10, hr.Y, hr.Width-20, hr.Height), fontUI, semibold, w.pal.Text)
 				count := len(repositoryEntries(s.Status, row.area))
 				cw := w.p.width(itoa(count), fontSmall, regular)
 				w.p.text(itoa(count), rect(right(hr)-cw-10, hr.Y, cw, hr.Height), fontSmall, regular, w.pal.TextSecond)

@@ -435,7 +435,7 @@ func (w *Window) paintTabs(r ui.Rect) {
 func (w *Window) tabTip(t *diffTab) string {
 	s := t.src.Path
 	if t.src.Working {
-		return s + " (" + strings.ToLower(areaTitle(t.src.Area)) + ")"
+		return s + " (" + strings.ToLower(w.areaTitle(t.src.Area)) + ")"
 	}
 	return s + " @ " + domain.ShortHash(t.src.Commit)
 }

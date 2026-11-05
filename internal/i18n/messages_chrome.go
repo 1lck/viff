@@ -3,7 +3,7 @@ package i18n
 // Message keys of the window chrome: the main toolbar, the stripes, the status
 // bar, the project and branch menus, the Git tool window's log, branch tree and
 // reflog, and the popup menus they open. Terms follow docs/features.zh-CN.md;
-// "diff" and the tool window names (Log, Console, Reflog) stay as they are.
+// "diff" stays as it is, while the tool window names are translated.
 const (
 	// Toolbar actions (chrome.go).
 	ChromeTbSettings = Key("chrome.tb.settings")
@@ -387,9 +387,9 @@ func init() {
 		ChromePopupChanges:   "更改",
 		ChromePopupGitBranch: "Git 分支",
 
-		ChromeGitTabLog:     "Log",
-		ChromeGitTabConsole: "Console",
-		ChromeGitTabReflog:  "Reflog",
+		ChromeGitTabLog:     "日志",
+		ChromeGitTabConsole: "控制台",
+		ChromeGitTabReflog:  "引用日志",
 		ChromeGitActions:    "Git 操作",
 		ChromeGitHide:       "隐藏",
 

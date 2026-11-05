@@ -161,6 +161,10 @@ const (
 	AppErrorChangeListDefaultDelete  = Key("app.error.changeListDefaultDelete")
 	AppErrorChangeListUnknown        = Key("app.error.changeListUnknown")
 	AppErrorChangeListEmpty          = Key("app.error.changeListEmpty")
+
+	// Titles of the two sides of a comparison.
+	AppSideStaged      = Key("app.side.staged")
+	AppSideYourVersion = Key("app.side.yourVersion")
 )
 
 func init() {
@@ -318,6 +322,9 @@ func init() {
 		AppErrorChangeListDefaultDelete:  "the default change list cannot be deleted",
 		AppErrorChangeListUnknown:        "unknown change list %q",
 		AppErrorChangeListEmpty:          "change list is empty",
+
+		AppSideStaged:      "Staged",
+		AppSideYourVersion: "Your version",
 	})
 
 	register(ZHCN, map[Key]string{
@@ -474,5 +481,8 @@ func init() {
 		AppErrorChangeListDefaultDelete:  "默认变更列表无法删除",
 		AppErrorChangeListUnknown:        "未知的变更列表 %q",
 		AppErrorChangeListEmpty:          "变更列表为空",
+
+		AppSideStaged:      "已暂存",
+		AppSideYourVersion: "你的版本",
 	})
 }

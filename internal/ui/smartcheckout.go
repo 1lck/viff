@@ -3,6 +3,7 @@ package viffui
 import (
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 )
 
 // confirmStashCheckout asks before stashing local changes to finish a
@@ -13,10 +14,8 @@ func (w *Window) confirmStashCheckout(b vapp.CheckoutBlocked) bool {
 	if b.Rev != "" {
 		name = domain.ShortHash(b.Rev)
 	}
-	w.confirm("Stash Changes and Checkout",
-		"Your local changes would be overwritten by checking out "+name+".\n\n"+
-			"Viff can stash them, including untracked files, check out, and restore them afterwards. "+
-			"If restoring them conflicts, they stay in the stash.",
-		"Stash and Checkout", func() { w.ws.SmartCheckout(b) })
+	w.confirm(w.t(i18n.WorkspaceSmartCheckoutTitle),
+		w.t(i18n.WorkspaceSmartCheckoutBody, name),
+		w.t(i18n.WorkspaceSmartCheckoutButton), func() { w.ws.SmartCheckout(b) })
 	return true
 }

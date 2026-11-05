@@ -165,7 +165,7 @@ func (w *Workspace) ApplyBlock(d *DiffResult, block int, action BlockAction, sel
 	blocks := d.Blocks
 	title := map[BlockAction]string{BlockStage: "Stage lines", BlockUnstage: "Unstage lines", BlockRevert: "Revert lines"}[action]
 	w.Run(title, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		oldRev, newRev, _, _ := revisions(src)
+		oldRev, newRev, _, _ := revisions(src, w.translator())
 		oldNow, err := w.Git.Read(ctx, repo, oldRev, src.Path)
 		if err != nil {
 			return err

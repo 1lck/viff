@@ -10,6 +10,32 @@ const (
 	WorkspacePanelStash   = Key("workspace.panel.stash")
 	WorkspacePanelChanges = Key("workspace.panel.changes")
 
+	// Change-tree group headings.
+	WorkspaceAreaStaged    = Key("workspace.area.staged")
+	WorkspaceAreaChanges   = Key("workspace.area.changes")
+	WorkspaceAreaUntracked = Key("workspace.area.untracked")
+	WorkspaceAreaConflicts = Key("workspace.area.conflicts")
+
+	// Stash panel and the smart-checkout confirmation.
+	WorkspaceStashChanges        = Key("workspace.stash.changes")
+	WorkspaceStashApply          = Key("workspace.stash.apply")
+	WorkspaceStashPop            = Key("workspace.stash.pop")
+	WorkspaceStashDrop           = Key("workspace.stash.drop")
+	WorkspaceStashAsBranch       = Key("workspace.stash.asBranch")
+	WorkspaceStashEmpty          = Key("workspace.stash.empty")
+	WorkspaceStashEmptyHint      = Key("workspace.stash.emptyHint")
+	WorkspaceStashList           = Key("workspace.stash.list")
+	WorkspaceStashApplyIndex     = Key("workspace.stash.applyIndex")
+	WorkspaceStashPopMenu        = Key("workspace.stash.popMenu")
+	WorkspaceStashCopyRev        = Key("workspace.stash.copyRev")
+	WorkspaceStashDropMenu       = Key("workspace.stash.dropMenu")
+	WorkspaceStashDropTitle      = Key("workspace.stash.dropTitle")
+	WorkspaceStashDropBody       = Key("workspace.stash.dropBody")
+	WorkspaceStashDropButton     = Key("workspace.stash.dropButton")
+	WorkspaceSmartCheckoutTitle  = Key("workspace.smartCheckout.title")
+	WorkspaceSmartCheckoutBody   = Key("workspace.smartCheckout.body")
+	WorkspaceSmartCheckoutButton = Key("workspace.smartCheckout.button")
+
 	// Labels of the values a panel prints.
 	WorkspaceLabelCommitMessage = Key("workspace.label.commitMessage")
 	WorkspaceLabelSubmodule     = Key("workspace.label.submodule")
@@ -131,6 +157,30 @@ func init() {
 		WorkspacePanelStash:   "Stash",
 		WorkspacePanelChanges: "Changes",
 
+		WorkspaceAreaStaged:    "Staged",
+		WorkspaceAreaChanges:   "Changes",
+		WorkspaceAreaUntracked: "Unversioned Files",
+		WorkspaceAreaConflicts: "Merge Conflicts",
+
+		WorkspaceStashChanges:        "Stash Changes…",
+		WorkspaceStashApply:          "Apply Stash",
+		WorkspaceStashPop:            "Pop Stash (apply and drop)",
+		WorkspaceStashDrop:           "Drop Stash…",
+		WorkspaceStashAsBranch:       "Unstash as Branch…",
+		WorkspaceStashEmpty:          "No stashes",
+		WorkspaceStashEmptyHint:      "Stash changes to set them aside and get back to them later",
+		WorkspaceStashList:           "Stashes",
+		WorkspaceStashApplyIndex:     "Apply with Index",
+		WorkspaceStashPopMenu:        "Pop Stash",
+		WorkspaceStashCopyRev:        "Copy Revision Number",
+		WorkspaceStashDropMenu:       "Drop…",
+		WorkspaceStashDropTitle:      "Drop Stash",
+		WorkspaceStashDropBody:       "Drop %s \"%s\"? You can still find its commit in the reflog for a while, but not in Viff.",
+		WorkspaceStashDropButton:     "Drop",
+		WorkspaceSmartCheckoutTitle:  "Stash Changes and Checkout",
+		WorkspaceSmartCheckoutBody:   "Your local changes would be overwritten by checking out %s.\n\nViff can stash them, including untracked files, check out, and restore them afterwards. If restoring them conflicts, they stay in the stash.",
+		WorkspaceSmartCheckoutButton: "Stash and Checkout",
+
 		WorkspaceLabelCommitMessage: "Commit message",
 		WorkspaceLabelSubmodule:     "submodule",
 		WorkspaceLabelAndMore:       "and %d more",
@@ -238,6 +288,30 @@ func init() {
 		WorkspacePanelCommit:  "提交",
 		WorkspacePanelStash:   "暂存",
 		WorkspacePanelChanges: "变更",
+
+		WorkspaceAreaStaged:    "已暂存",
+		WorkspaceAreaChanges:   "变更",
+		WorkspaceAreaUntracked: "未版本化文件",
+		WorkspaceAreaConflicts: "合并冲突",
+
+		WorkspaceStashChanges:        "暂存更改…",
+		WorkspaceStashApply:          "应用暂存",
+		WorkspaceStashPop:            "弹出暂存（应用并删除）",
+		WorkspaceStashDrop:           "删除暂存…",
+		WorkspaceStashAsBranch:       "从暂存创建分支…",
+		WorkspaceStashEmpty:          "没有暂存",
+		WorkspaceStashEmptyHint:      "把当前更改暂存起来，稍后再处理",
+		WorkspaceStashList:           "暂存",
+		WorkspaceStashApplyIndex:     "应用（含索引）",
+		WorkspaceStashPopMenu:        "弹出暂存",
+		WorkspaceStashCopyRev:        "复制修订号",
+		WorkspaceStashDropMenu:       "删除…",
+		WorkspaceStashDropTitle:      "删除暂存",
+		WorkspaceStashDropBody:       "删除 %s \"%s\"？一段时间内仍可在引用日志里找到它的提交，但 Viff 里不再显示。",
+		WorkspaceStashDropButton:     "删除",
+		WorkspaceSmartCheckoutTitle:  "暂存更改并检出",
+		WorkspaceSmartCheckoutBody:   "检出 %s 会覆盖你的本地更改。\n\nViff 可以把这些更改（含未跟踪文件）暂存起来，检出后再恢复；若恢复时冲突，它们会留在暂存里。",
+		WorkspaceSmartCheckoutButton: "暂存并检出",
 
 		WorkspaceLabelCommitMessage: "提交说明",
 		WorkspaceLabelSubmodule:     "子模块",
