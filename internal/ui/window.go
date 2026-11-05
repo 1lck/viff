@@ -174,7 +174,11 @@ func (w *Window) applyFont() {
 	if runtime.GOOS == "darwin" {
 		w.mono = ui.MonoFamily(platform.EditorFontFamily)
 	}
-	if name != "" && fixedPitch(name) {
+	// The diff face has its own setting. When it is empty, a family the system
+	// also lists as fixed-pitch doubles for it.
+	if diff := strings.TrimSpace(w.ws.Settings.DiffFont); diff != "" {
+		w.mono = ui.MonoFamily(diff)
+	} else if name != "" && fixedPitch(name) {
 		w.mono = ui.MonoFamily(name)
 	}
 }
