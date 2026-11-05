@@ -130,6 +130,7 @@ func settingsTabs(f *form, page *int, labels []string) {
 			if f.w.button(scDialogLinks.At(700+i), rect(x, r.Y, bw, 26), label, kind, false) {
 				if *page != i {
 					*page = i
+					f.w.closePopups()
 					f.w.Invalidate()
 				}
 			}
