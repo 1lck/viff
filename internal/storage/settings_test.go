@@ -102,6 +102,27 @@ func TestAutoUpdateCheckDefaultsOnAndPersistsOff(t *testing.T) {
 	}
 }
 
+// An old settings file has no AI confirmation field; asking before a request
+// leaves the machine must stay the default, while an explicit false must
+// survive a round trip.
+func TestAIConfirmGenerateDefaultsOnAndPersistsOff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"theme":"dark"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Load(path)
+	if !s.AIConfirmGenerate {
+		t.Fatal("old settings did not default aiConfirmGenerate to true")
+	}
+	s.AIConfirmGenerate = false
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if back := Load(path); back.AIConfirmGenerate {
+		t.Fatal("explicit aiConfirmGenerate=false was not persisted")
+	}
+}
+
 // EditorFont and DiffFont are family names the settings page picks from the
 // system's lists. A value that could not name a family must not survive a load,
 // and a usable one is kept without its surrounding spaces.

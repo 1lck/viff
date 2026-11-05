@@ -81,6 +81,7 @@ var (
 	idCmOptions         = tree.ID(fCommit, "commit-options")
 	idCmOptionsDropdown = tree.ID(fCommit, "commit-options-dropdown")
 	idCmAI              = tree.ID(fCommit, "commit-ai")
+	idPromptRuleText    = tree.ID(fCommit, "prompt-rule-text")
 	idAIFetchModels     = tree.ID(fCommit, "ai-fetch-models")
 	idAIEye             = tree.ID(fCommit, "ai-eye")
 	idCmCommit          = tree.ID(fCommit, "commit-button")
@@ -169,6 +170,8 @@ var (
 	scSubItems      = tree.Sub(fPopup, tree.Name("sub-items"))
 	idSubPanel      = tree.ID(fPopup, "sub-panel")
 	scPopupStar     = tree.Sub(fPopup, tree.Name("star"))
+	scPopupSwitch   = tree.Sub(fPopup, tree.Name("switch"))
+	scPopupButtons  = tree.Sub(fPopup, tree.Name("buttons"))
 
 	// The Report a Problem dialog's description field.
 	idReportProblemText = tree.ID(fDialog, "problem-description")
