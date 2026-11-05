@@ -39,6 +39,13 @@ type Window struct {
 	native *app.Window
 	// quit closes the application from the status item's menu.
 	quit func()
+	// openURL opens a web link in the system browser. Tests replace it to assert
+	// which address an action would open without starting a browser.
+	openURL func(string) error
+	// clipboard writes text to the system clipboard. It is Viva's clipboard in
+	// the application; headless tests replace it so a copy never touches the
+	// real one.
+	clipboard func(string) error
 
 	// Registries rebuilt by every paint; event handlers read the latest.
 	scrolls  []scrollRegion
@@ -94,6 +101,9 @@ type Window struct {
 	lastGen      uint64
 	lastRoot     string
 	commitDrafts map[string]string
+	// lfsWarnedGen is the last repository generation warned about a missing
+	// git-lfs, so the notification appears once per opened repository.
+	lfsWarnedGen uint64
 	saveTimer    *time.Timer
 	fetchStop    chan struct{}
 	started      time.Duration
@@ -132,7 +142,7 @@ const (
 // New creates the window for a workspace. The caller sets the invalidate
 // hook of the workspace to w.Invalidate.
 func New(ws *vapp.Workspace) *Window {
-	w := &Window{ws: ws, commitOpen: true, gitOpen: true}
+	w := &Window{ws: ws, commitOpen: true, gitOpen: true, openURL: platform.OpenURL}
 	ws.ConfirmCheckout = w.confirmStashCheckout
 	w.applyFont()
 	w.applyLanguage()
@@ -285,6 +295,7 @@ func (w *Window) Config() app.Config {
 
 func (w *Window) onWake() {
 	w.ws.Drain()
+	w.warnLFSSetup()
 	w.pumpTerminal()
 	if w.ws.ConsumeUpdatePrompt() {
 		w.openUpdateDialog()

@@ -32,8 +32,8 @@ Git 仍是核心。围绕它，Viff 提供只读的项目浏览与 Quick Open、
 - **沿用你的 Git**：使用现有仓库、远端、钩子及凭据配置，在 Console 中查看实际执行的命令和输出。
 - **按需加载**：历史分页读取，Diff 按需打开，避免启动时把大仓库的全部内容一次加载进来。
 
-作为可复现的体积参考：2026 年 11 月 5 日发布的 v0.1.2 安装包中，
-**macOS arm64 可执行文件为 11.73 MiB，Windows amd64 为 13.15 MiB**
+作为可复现的体积参考：2026 年 11 月 5 日从 v0.2.0 构建的可执行文件，
+**macOS arm64 为 12.05 MiB，Windows amd64 为 13.61 MiB**
 （`-trimpath -ldflags="-s -w"`，仅统计可执行文件）。压缩包大小、本机 Git 和运行内存不在这个数字内。
 
 “轻量”是设计目标，不是未经测量的性能承诺。实际内存与启动耗时取决于仓库、平台和渲染环境，
@@ -59,9 +59,12 @@ Git 仍是核心。围绕它，Viff 提供只读的项目浏览与 Quick Open、
 | 阅读历史   | 提交图、分支 / 作者 / 路径筛选、多提交文件汇总、Blame、Reflog、历史仓库树                                                         |
 | 浏览文件   | Project 面板（目录折叠、状态着色）、Quick Open、只读查看、Blame 与文件历史                                                        |
 | 操作分支   | Checkout、Merge、Rebase、Cherry-pick、Revert、Reset、借助 Stash 切换分支                                                          |
-| 解决冲突   | Ours / Result / Theirs 三栏，逐块接受 Ours / Theirs / Both，显式标记解决                                                          |
+| 撤销操作   | ⌘Z 撤销本会话内上一次本地提交、合并、rebase、检出或分支改动                                                                       |
+| 解决冲突   | Ours / Result / Theirs 三栏，逐块接受 Ours / Theirs / Both，显式标记解决，可复制冲突上下文给外部 AI                               |
 | 多工作目录 | 从新分支或已有分支创建 Worktree，管理子模块，保护未提交改动                                                                       |
+| 大文件     | 检测 Git LFS 规则与受管文件；缺 git-lfs 时提示如何安装                                                                            |
 | 同步协作   | Fetch、Pull、Push、force-with-lease、远端、补丁、签名与凭据设置                                                                   |
+| 网页协作   | 在 GitHub、GitLab、Bitbucket 或 Gitea 打开提交、分支、比较与创建 PR 的页面                                                        |
 | 执行命令   | 内置终端，在当前仓库打开；支持滚动回看、选择复制、粘贴、清屏、重启与缩放                                                           |
 | 使用母语   | 界面支持英文与简体中文，默认英文，可在 设置 → General → Language 切换                                                             |
 
@@ -72,6 +75,8 @@ Git 仍是核心。围绕它，Viff 提供只读的项目浏览与 Quick Open、
 
 **AI 生成提交说明是可选的，默认关闭。** 启用后会把变更文件与 diff 发送到你自己配置的端点，
 边界见[隐私说明](docs/privacy.md)。
+
+**Copy for AI 只把冲突上下文复制到剪贴板**，交给外部工具；Viff 不调用模型、不发送任何内容。
 
 <details>
 <summary>查看浅色主题</summary>

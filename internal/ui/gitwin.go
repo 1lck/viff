@@ -762,6 +762,15 @@ func (w *Window) commitMenu() []item {
 		item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }},
 		item{title: w.t(i18n.ChromeMenuBrowseAtRevision), icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }},
 	)
+	// The service name comes from the remote, so the entry reads "Open Commit on
+	// GitHub" and names the host for a self-hosted instance. It is omitted, not
+	// disabled, when the remote has no web page at all.
+	if link, err := rs.LinkFor(branch); err == nil {
+		hash := c.Hash
+		items = append(items, item{title: w.t(i18n.LinksOpenCommit, link.Label()), disabled: !single, run: func() {
+			w.openCommitOnHost(hash)
+		}})
+	}
 	return items
 }
 

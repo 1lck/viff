@@ -144,6 +144,44 @@ const (
 	AppNoticeCommittedBodyMany = Key("app.notice.committedBodyMany")
 	AppNoticeAmendedBody       = Key("app.notice.amendedBody")
 
+	// Session undo: the operation names, the notification wording, and the
+	// reasons an undo refuses because the repository moved on.
+	AppUndoOpCommit       = Key("app.undo.op.commit")
+	AppUndoOpAmend        = Key("app.undo.op.amend")
+	AppUndoOpMerge        = Key("app.undo.op.merge")
+	AppUndoOpRebase       = Key("app.undo.op.rebase")
+	AppUndoOpCherryPick   = Key("app.undo.op.cherryPick")
+	AppUndoOpRevert       = Key("app.undo.op.revert")
+	AppUndoOpReset        = Key("app.undo.op.reset")
+	AppUndoOpCheckout     = Key("app.undo.op.checkout")
+	AppUndoOpCreateBranch = Key("app.undo.op.createBranch")
+	AppUndoOpDeleteBranch = Key("app.undo.op.deleteBranch")
+	AppUndoOpRenameBranch = Key("app.undo.op.renameBranch")
+	AppUndoOpUnknown      = Key("app.undo.op.unknown")
+
+	AppUndoDone    = Key("app.undo.done")
+	AppUndoFailed  = Key("app.undo.failed")
+	AppUndoNothing = Key("app.undo.nothing")
+	AppUndoBusy    = Key("app.undo.busy")
+
+	AppUndoNothingBody = Key("app.undo.nothingBody")
+	AppUndoBusyBody    = Key("app.undo.busyBody")
+
+	AppUndoBlockedRepository    = Key("app.undo.blocked.repository")
+	AppUndoBlockedOperation     = Key("app.undo.blocked.operation")
+	AppUndoBlockedMoved         = Key("app.undo.blocked.moved")
+	AppUndoBlockedDirty         = Key("app.undo.blocked.dirty")
+	AppUndoBlockedBranch        = Key("app.undo.blocked.branch")
+	AppUndoBlockedBranchExists  = Key("app.undo.blocked.branchExists")
+	AppUndoResetBody            = Key("app.undo.body.reset")
+	AppUndoCommitBody           = Key("app.undo.body.commit")
+	AppUndoAmendBody            = Key("app.undo.body.amend")
+	AppUndoCheckoutBranchBody   = Key("app.undo.body.checkoutBranch")
+	AppUndoCheckoutRevisionBody = Key("app.undo.body.checkoutRevision")
+	AppUndoCreateBranchBody     = Key("app.undo.body.createBranch")
+	AppUndoDeleteBranchBody     = Key("app.undo.body.deleteBranch")
+	AppUndoRenameBranchBody     = Key("app.undo.body.renameBranch")
+
 	AppActionDeleteAnyway              = Key("app.action.deleteAnyway")
 	AppActionRestore                   = Key("app.action.restore")
 	AppActionUpdate                    = Key("app.action.update")
@@ -305,6 +343,42 @@ func init() {
 		AppNoticeCommittedBodyMany: "%d files committed: %s",
 		AppNoticeAmendedBody:       "Amended: %s",
 
+		AppUndoOpCommit:       "Commit",
+		AppUndoOpAmend:        "Amend",
+		AppUndoOpMerge:        "Merge",
+		AppUndoOpRebase:       "Rebase",
+		AppUndoOpCherryPick:   "Cherry-pick",
+		AppUndoOpRevert:       "Revert",
+		AppUndoOpReset:        "Reset",
+		AppUndoOpCheckout:     "Checkout",
+		AppUndoOpCreateBranch: "Create branch",
+		AppUndoOpDeleteBranch: "Delete branch",
+		AppUndoOpRenameBranch: "Rename branch",
+		AppUndoOpUnknown:      "Operation",
+
+		AppUndoDone:    "Undid %s",
+		AppUndoFailed:  "Cannot undo %s",
+		AppUndoNothing: "Nothing to undo",
+		AppUndoBusy:    "A command is running",
+
+		AppUndoNothingBody: "Viff remembers the local operations of this session only.",
+		AppUndoBusyBody:    "Wait for it to finish before undoing an earlier operation.",
+
+		AppUndoBlockedRepository:    "The repository changed since this operation; its history is no longer available.",
+		AppUndoBlockedOperation:     "Finish or abort the %s in progress first.",
+		AppUndoBlockedMoved:         "HEAD or the current branch changed since this operation. Undoing now would overwrite newer work.",
+		AppUndoBlockedDirty:         "Commit, stash or discard your changes first: this undo replaces the working tree.",
+		AppUndoBlockedBranch:        "Branch %s changed since this operation.",
+		AppUndoBlockedBranchExists:  "Branch %s exists again; remove or rename it first.",
+		AppUndoResetBody:            "The branch is back at %s.",
+		AppUndoCommitBody:           "The commit is gone and its changes are staged again.",
+		AppUndoAmendBody:            "The previous commit is back; the amended changes are staged again.",
+		AppUndoCheckoutBranchBody:   "Back on %s.",
+		AppUndoCheckoutRevisionBody: "HEAD is detached at %s again.",
+		AppUndoCreateBranchBody:     "Branch %s was removed.",
+		AppUndoDeleteBranchBody:     "Branch %s is back at %s.",
+		AppUndoRenameBranchBody:     "Branch %s is called %s again.",
+
 		AppActionDeleteAnyway:              "Delete anyway",
 		AppActionRestore:                   "Restore",
 		AppActionUpdate:                    "Update",
@@ -463,6 +537,42 @@ func init() {
 		AppNoticeCommittedBody:     "已提交 %d 个文件：%s",
 		AppNoticeCommittedBodyMany: "已提交 %d 个文件：%s",
 		AppNoticeAmendedBody:       "已修订：%s",
+
+		AppUndoOpCommit:       "提交",
+		AppUndoOpAmend:        "修订",
+		AppUndoOpMerge:        "合并",
+		AppUndoOpRebase:       "变基",
+		AppUndoOpCherryPick:   "拣选",
+		AppUndoOpRevert:       "回滚",
+		AppUndoOpReset:        "重置",
+		AppUndoOpCheckout:     "检出",
+		AppUndoOpCreateBranch: "创建分支",
+		AppUndoOpDeleteBranch: "删除分支",
+		AppUndoOpRenameBranch: "重命名分支",
+		AppUndoOpUnknown:      "操作",
+
+		AppUndoDone:    "已撤销%s",
+		AppUndoFailed:  "无法撤销%s",
+		AppUndoNothing: "没有可撤销的操作",
+		AppUndoBusy:    "有命令正在运行",
+
+		AppUndoNothingBody: "Viff 只记住本次会话中的本地操作。",
+		AppUndoBusyBody:    "请等它结束后再撤销更早的操作。",
+
+		AppUndoBlockedRepository:    "仓库已变化，该操作的历史不再可用。",
+		AppUndoBlockedOperation:     "请先完成或中止进行中的%s。",
+		AppUndoBlockedMoved:         "该操作之后 HEAD 或当前分支已变化；现在撤销会覆盖更新的工作。",
+		AppUndoBlockedDirty:         "请先提交、贮藏或回滚你的更改：这次撤销会替换工作区。",
+		AppUndoBlockedBranch:        "分支 %s 在该操作之后已变化。",
+		AppUndoBlockedBranchExists:  "分支 %s 又被创建了；请先删除或重命名它。",
+		AppUndoResetBody:            "分支已回到 %s。",
+		AppUndoCommitBody:           "提交已移除，其中的更改重新处于已暂存状态。",
+		AppUndoAmendBody:            "上一次提交已恢复，修订的更改重新处于已暂存状态。",
+		AppUndoCheckoutBranchBody:   "已切回 %s。",
+		AppUndoCheckoutRevisionBody: "HEAD 已重新分离到 %s。",
+		AppUndoCreateBranchBody:     "分支 %s 已移除。",
+		AppUndoDeleteBranchBody:     "分支 %s 已恢复到 %s。",
+		AppUndoRenameBranchBody:     "分支 %s 已改回 %s。",
 
 		AppActionDeleteAnyway:              "仍要删除",
 		AppActionRestore:                   "恢复",

@@ -68,6 +68,13 @@ const (
 	ConflictAcceptBoth           = Key("conflict.action.acceptBoth")
 	ConflictTipKeepSide          = Key("conflict.tip.keepSide")
 	ConflictTipKeepBoth          = Key("conflict.tip.keepBoth")
+	ConflictActionCopyForAI      = Key("conflict.action.copyForAI")
+	ConflictTipCopyForAI         = Key("conflict.tip.copyForAI")
+	ConflictActionCopyBlock      = Key("conflict.action.copyBlock")
+	ConflictTipCopyBlock         = Key("conflict.tip.copyBlock")
+	ConflictTipCopyNothing       = Key("conflict.tip.copyNothing")
+	ConflictNoticeCopied         = Key("conflict.notice.copied")
+	ConflictNoticeCopiedBody     = Key("conflict.notice.copiedBody")
 
 	PictureNoNewVersion   = Key("picture.notice.noNewVersion")
 	PictureNoOldVersion   = Key("picture.notice.noPreviousVersion")
@@ -156,6 +163,13 @@ func init() {
 		ConflictAcceptBoth:           "Accept Both",
 		ConflictTipKeepSide:          "Keep %s for this block",
 		ConflictTipKeepBoth:          "Keep %s and then %s for this block",
+		ConflictActionCopyForAI:      "Copy for AI",
+		ConflictTipCopyForAI:         "Copy the conflict and file details for an external AI tool; Viff calls no model",
+		ConflictActionCopyBlock:      "Copy This Block",
+		ConflictTipCopyBlock:         "Copy only this conflict block for an external AI tool",
+		ConflictTipCopyNothing:       "Available while the file has conflict markers",
+		ConflictNoticeCopied:         "Conflict context copied",
+		ConflictNoticeCopiedBody:     "Copied. Viff refreshes the file automatically after it is edited.",
 
 		PictureNoNewVersion:   "No new version",
 		PictureNoOldVersion:   "No previous version",
@@ -243,6 +257,13 @@ func init() {
 		ConflictAcceptBoth:           "接受双方",
 		ConflictTipKeepSide:          "此块保留 %s",
 		ConflictTipKeepBoth:          "此块先保留 %s，再保留 %s",
+		ConflictActionCopyForAI:      "复制给 AI",
+		ConflictTipCopyForAI:         "把冲突内容与文件信息复制给外部 AI 工具；Viff 不调用模型",
+		ConflictActionCopyBlock:      "复制此冲突块",
+		ConflictTipCopyBlock:         "只复制当前冲突块，供外部 AI 工具使用",
+		ConflictTipCopyNothing:       "文件中有冲突标记时可用",
+		ConflictNoticeCopied:         "冲突上下文已复制",
+		ConflictNoticeCopiedBody:     "已复制，外部修改后 Viff 会自动刷新",
 
 		PictureNoNewVersion:   "没有新版本",
 		PictureNoOldVersion:   "没有旧版本",

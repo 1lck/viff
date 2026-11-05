@@ -32,3 +32,8 @@
 | [0026](0026-i18n.md) | 界面语言与消息表 |
 | [0027](0027-ai-commit-message.md) | 用模型生成提交信息 |
 | [0028](0028-integrated-terminal.md) | 集成终端工具窗 |
+| [0029](0029-pr-links.md) | 仓库、提交与分支比较的网页链接 |
+| [0030](0030-undo.md) | 会话内全局撤销 |
+| [0031](0031-lfs.md) | Git LFS 检测与状态 |
+| [0032](0032-ai-conflict-context.md) | 复制冲突上下文给外部 AI |
+| [0033](0033-large-repo-performance.md) | 大仓库的 Log 首屏与提交详情 |

@@ -85,6 +85,9 @@ func (w *Workspace) ReloadLog() {
 	l.close()
 	l.seq++
 	l.Gen++
+	// The canceled load may still have been in flight; clear its flag so the
+	// new reader starts. Its stale result is dropped by the seq check.
+	l.Loading = false
 	l.Commits, l.Rows, l.MaxWidth, l.Done, l.Err = nil, nil, 0, false, nil
 	l.layout = domain.GraphLayout{}
 	l.index = map[string]int{}
@@ -193,26 +196,37 @@ func isHex(s string) bool {
 }
 
 // SelectCommit loads the detail of a commit for the log's detail panel.
+//
+// The detail is published as soon as Git has it. Listing the branches that
+// contain the commit walks the repository's history and takes seconds on a
+// large repository, so it runs afterwards and fills DetailBranches when it
+// finishes instead of holding the panel on its loading state.
 func (w *Workspace) SelectCommit(hash string) {
 	rs := w.Repo
 	if rs == nil || rs.DetailHash == hash {
 		return
 	}
+	rs.cancelDetail()
+	rs.detailSeq++
+	seq := rs.detailSeq
 	rs.DetailHash = hash
 	rs.DetailBranches = nil
 	if hash == "" {
 		rs.Detail = nil
+		rs.DetailLoading = false
 		return
 	}
 	rs.DetailLoading = true
 	repo := rs.Repo
+	// The same context covers both queries, so selecting another commit (or
+	// closing the repository) stops the slow branch walk too.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	rs.detailCancel = cancel
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		d, err := w.Git.CommitDetail(ctx, repo, hash)
-		branches, _ := w.Git.ContainingBranches(ctx, repo, hash, 20)
 		w.post(func() {
-			if w.Repo != rs || rs.DetailHash != hash {
+			if w.Repo != rs || rs.detailSeq != seq {
 				return
 			}
 			rs.DetailLoading = false
@@ -222,7 +236,23 @@ func (w *Workspace) SelectCommit(hash string) {
 				return
 			}
 			rs.Detail = &d
+		})
+		if err != nil {
+			return
+		}
+		branches, _ := w.Git.ContainingBranches(ctx, repo, hash, 20)
+		w.post(func() {
+			if w.Repo != rs || rs.detailSeq != seq {
+				return
+			}
 			rs.DetailBranches = branches
 		})
 	}()
+}
+
+func (rs *RepoState) cancelDetail() {
+	if rs.detailCancel != nil {
+		rs.detailCancel()
+		rs.detailCancel = nil
+	}
 }
