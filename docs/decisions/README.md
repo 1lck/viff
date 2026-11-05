@@ -30,3 +30,4 @@
 | [0024](0024-file-browser.md) | 只读文件浏览：Project 工具窗口与 Quick Open |
 | [0025](0025-svn-support.md) | 增加 Subversion 日常客户端支持 |
 | [0026](0026-i18n.md) | 界面语言与消息表 |
+| [0027](0027-ai-commit-message.md) | 用模型生成提交信息 |
