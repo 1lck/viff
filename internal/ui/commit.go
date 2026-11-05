@@ -354,6 +354,8 @@ func (w *Window) paintChanges(r ui.Rect) {
 			w.p.round(hl, 4, w.pal.Hover)
 		}
 		x := rr.X + 10 + float32(row.depth)*18
+		cbX := x
+		x += 22
 		switch row.kind {
 		case rowGroup, rowDir:
 			chev := icons.ChevronDown
@@ -401,6 +403,16 @@ func (w *Window) paintChanges(r ui.Rect) {
 			}
 		}
 		w.c.HitWithOptions(id, hl, w.rowLabel(row), ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected, Expandable: row.kind != rowFile, Expanded: row.kind != rowFile && !v.collapsed[row.key]})
+		// The checkbox is painted after the row's hit area, so a click on it
+		// toggles the check instead of selecting the row.
+		checked := v.sel[row.key]
+		if row.kind != rowFile {
+			checked = w.changesGroupChecked(i)
+		}
+		if w.checkbox(scChangeChecks.At(i), cbX, rr.Y, rowH, "", checked, false) {
+			i := i
+			w.after(func() { w.toggleRowCheck(i) })
+		}
 		w.rowAction(i, row, hl)
 		if w.c.Clicked(id) {
 			i := i
@@ -428,6 +440,58 @@ func (w *Window) rowLabel(row changeRow) string {
 		return row.dir
 	}
 	return row.entry.Path
+}
+
+// toggleRowCheck flips one row's checkbox: a file toggles itself, a group or a
+// directory takes every file below it, up to the next group.
+func (w *Window) toggleRowCheck(i int) {
+	v := &w.cm
+	if i < 0 || i >= len(v.rows) {
+		return
+	}
+	row := v.rows[i]
+	if row.kind == rowFile {
+		if v.sel[row.key] {
+			delete(v.sel, row.key)
+		} else {
+			v.sel[row.key] = true
+		}
+		return
+	}
+	on := !w.changesGroupChecked(i)
+	for k := i + 1; k < len(v.rows); k++ {
+		if v.rows[k].kind == rowGroup {
+			break
+		}
+		if v.rows[k].kind != rowFile {
+			continue
+		}
+		if on {
+			v.sel[v.rows[k].key] = true
+		} else {
+			delete(v.sel, v.rows[k].key)
+		}
+	}
+}
+
+// changesGroupChecked reports whether every file under row i is selected, which
+// is what fills the group's checkbox.
+func (w *Window) changesGroupChecked(i int) bool {
+	v := &w.cm
+	found := false
+	for k := i + 1; k < len(v.rows); k++ {
+		if v.rows[k].kind == rowGroup {
+			break
+		}
+		if v.rows[k].kind != rowFile {
+			continue
+		}
+		found = true
+		if !v.sel[v.rows[k].key] {
+			return false
+		}
+	}
+	return found
 }
 
 // rowAction paints the hover +/- action at the right of a row.
