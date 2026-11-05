@@ -60,6 +60,7 @@ type Settings struct {
 
 	// Layout keeps panel proportions.
 	CommitPanelWidth   float32 `json:"commitPanelWidth"`
+	ProjectPanelWidth  float32 `json:"projectPanelWidth"`
 	GitPanelHeight     float32 `json:"gitPanelHeight"`
 	BranchesWidth      float32 `json:"branchesWidth"`
 	DetailsWidth       float32 `json:"detailsWidth"`
@@ -95,7 +96,7 @@ func Defaults() *Settings {
 		AutoFetch: false, AutoFetchMins: 10, FetchPrune: true, PullMode: "merge",
 		AutoUpdateCheck:  true,
 		Window:           Window{Width: 1440, Height: 900},
-		CommitPanelWidth: 340, GitPanelHeight: 330, BranchesWidth: 220, DetailsWidth: 360,
+		CommitPanelWidth: 340, ProjectPanelWidth: 300, GitPanelHeight: 330, BranchesWidth: 220, DetailsWidth: 360,
 		DiffSyncScroll: true, DiffHighlightWords: true, CommitTree: false,
 	}
 }
@@ -177,6 +178,9 @@ func (s *Settings) sanitize() {
 	}
 	if s.CommitPanelWidth < 200 {
 		s.CommitPanelWidth = d.CommitPanelWidth
+	}
+	if s.ProjectPanelWidth < 200 {
+		s.ProjectPanelWidth = d.ProjectPanelWidth
 	}
 	if s.GitPanelHeight < 120 {
 		s.GitPanelHeight = d.GitPanelHeight

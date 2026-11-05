@@ -994,6 +994,7 @@ func (w *Window) doCommit(push bool) {
 // focusCommit shows the Commit tool window and focuses the message.
 func (w *Window) focusCommit() {
 	w.commitOpen = true
+	w.projectOpen = false
 	w.commitTab = 0
 	w.focusNext = idCmMessage
 }

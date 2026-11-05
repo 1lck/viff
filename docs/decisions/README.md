@@ -27,3 +27,4 @@
 | [0021](0021-observability.md) | 可观测性、崩溃记录与诊断导出 |
 | [0022](0022-child-process-console.md) | 子进程不弹控制台窗口 |
 | [0023](0023-app-update.md) | 应用内更新 |
+| [0024](0024-file-browser.md) | 只读文件浏览：Project 工具窗口与 Quick Open |

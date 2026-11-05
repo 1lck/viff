@@ -174,27 +174,30 @@ func (w *Window) gutterWidth(lines int, cellW float32) float32 {
 
 // diffKeys scrolls the focused pane with the keyboard.
 func (w *Window) diffKeys(t *diffTab, id ui.ID, lineH, view float32) {
-	w.onKeys(id, func(e ui.KeyEvent) bool {
-		switch e.Key {
-		case ui.KeyDown:
-			t.y += lineH
-		case ui.KeyUp:
-			t.y -= lineH
-		case ui.KeyPageDown, ui.KeySpace:
-			t.y += view - lineH
-		case ui.KeyPageUp:
-			t.y -= view - lineH
-		case ui.KeyHome:
-			t.y = 0
-		case ui.KeyEnd:
-			t.y = 1e9
-		case ui.KeyF7:
-			w.jumpBlock(t, e.Modifiers&ui.ModifierShift == 0)
-		default:
-			return false
-		}
-		return true
-	})
+	w.onKeys(id, func(e ui.KeyEvent) bool { return w.scrollKey(t, e, lineH, view) })
+}
+
+// scrollKey is the viewer scrolling the diff panes and the file view share.
+func (w *Window) scrollKey(t *diffTab, e ui.KeyEvent, lineH, view float32) bool {
+	switch e.Key {
+	case ui.KeyDown:
+		t.y += lineH
+	case ui.KeyUp:
+		t.y -= lineH
+	case ui.KeyPageDown, ui.KeySpace:
+		t.y += view - lineH
+	case ui.KeyPageUp:
+		t.y -= view - lineH
+	case ui.KeyHome:
+		t.y = 0
+	case ui.KeyEnd:
+		t.y = 1e9
+	case ui.KeyF7:
+		w.jumpBlock(t, e.Modifiers&ui.ModifierShift == 0)
+	default:
+		return false
+	}
+	return true
 }
 
 // paintPane draws one side of a side-by-side diff.
@@ -210,6 +213,9 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 	w.c.HitWithOptions(id, r, "Diff", ui.HitOptions{Role: ui.RoleGroup})
 	gr := rect(r.X, r.Y, gutter, r.Height)
 	tr := rect(r.X+gutter, r.Y, r.Width-gutter, r.Height)
+	// The read-only file view shares this painting with the diff panes; only
+	// its single new side gets selectable text (see selection.go).
+	view := !old && t.src.View
 	w.c.Clip(r)
 	first := max(0, int(top/lineH))
 	last := min(len(disp), int((top+r.Height)/lineH)+1)
@@ -243,6 +249,9 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 				}
 			}
 		}
+		if view {
+			w.paintTextSelection(t, i, disp[i], tr, y, cellW, lineH)
+		}
 		if sel[i] {
 			w.p.fill(rect(gr.X, y, gr.Width, lineH), w.pal.Selection)
 			w.p.fill(rect(gr.X, y, 3, lineH), w.pal.Brand)
@@ -262,6 +271,9 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 			w.c.Clip(tr)
 			w.c.LabelRuns(s, rect(tr.X+6-t.x, y, cells*cellW+cellW, lineH), style, cellW, runs)
 			w.c.Unclip()
+		}
+		if view {
+			w.paintTextCaret(t, i, disp[i], tr, y, cellW, lineH)
 		}
 	}
 	// Insertions and deletions show as a line on the side that lacks them.
@@ -284,6 +296,9 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 		w.paintHits(t, tr, top, cellW, lineH)
 	}
 	w.c.Unclip()
+	if view {
+		w.textPointer(t, tr, top, cellW, lineH)
+	}
 	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
 
 	// Line selection for partial staging: click changed line numbers.

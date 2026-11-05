@@ -26,6 +26,7 @@ var (
 	idTbSearch        = tree.ID(fChrome, "search")
 	idTbSettings      = tree.ID(fChrome, "settings")
 	idTbHelp          = tree.ID(fChrome, "help")
+	idStripeProject   = tree.ID(fChrome, "stripe-project")
 	idStripeCommit    = tree.ID(fChrome, "stripe-commit")
 	idStripeGit       = tree.ID(fChrome, "stripe-git")
 	idStripeNotify    = tree.ID(fChrome, "stripe-notifications")
@@ -35,6 +36,7 @@ var (
 	idStatusCancel    = tree.ID(fChrome, "status-cancel")
 	idStatusRecording = tree.ID(fChrome, "status-recording")
 	idStatusRepo      = tree.ID(fChrome, "status-repo")
+	idSplitProject    = tree.ID(fChrome, "split-project")
 	idSplitCommit     = tree.ID(fChrome, "split-commit")
 	idSplitGit        = tree.ID(fChrome, "split-git")
 	idSplitBranches   = tree.ID(fChrome, "split-branches")
@@ -208,4 +210,34 @@ var (
 // Editing history from the log.
 var (
 	idLogEditMessage = tree.ID(fDialog, "log-edit-message")
+)
+
+// Project tool window: the working tree's files, read-only.
+var (
+	fProject = tree.Feature("project")
+
+	idProjectFilter   = tree.ID(fProject, "filter")
+	idProjectList     = tree.ID(fProject, "list")
+	scProjectRows     = tree.Sub(fProject, tree.Name("rows"))
+	idProjectBar      = tree.ID(fProject, "scroll")
+	idProjectRefresh  = tree.ID(fProject, "refresh")
+	idProjectMenu     = tree.ID(fProject, "options")
+	idProjectQuick    = tree.ID(fProject, "quick-open")
+	idProjectCollapse = tree.ID(fProject, "collapse-all")
+	idProjectExpand   = tree.ID(fProject, "expand-all")
+	idProjectHide     = tree.ID(fProject, "hide")
+)
+
+// Quick Open dialog.
+var (
+	fQuickOpen = tree.Feature("quick-open")
+
+	idQuickInput = tree.ID(fQuickOpen, "input")
+	scQuickRows  = tree.Sub(fQuickOpen, tree.Name("rows"))
+	idQuickBar   = tree.ID(fQuickOpen, "scroll")
+)
+
+// Text selection in the read-only viewer.
+var (
+	idDiffText = tree.ID(fDiff, "text")
 )

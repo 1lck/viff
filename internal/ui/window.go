@@ -57,13 +57,15 @@ type Window struct {
 	dialog *dialog
 
 	// Panels.
-	commitOpen bool
-	gitOpen    bool
-	notifyOpen bool
-	commitTab  int // 0 = Commit, 1 = Stash
-	gitTab     int // 0 = Log, 1 = Console, 2 = Reflog
+	commitOpen  bool
+	projectOpen bool
+	gitOpen     bool
+	notifyOpen  bool
+	commitTab   int // 0 = Commit, 1 = Stash
+	gitTab      int // 0 = Log, 1 = Console, 2 = Reflog
 
 	cm  commitView
+	fm  filesView
 	ed  editorView
 	lg  logView
 	st  stashView
@@ -132,6 +134,7 @@ func New(ws *vapp.Workspace) *Window {
 	}
 	w.applyTheme()
 	w.cm.init()
+	w.fm.init()
 	w.lg.init()
 	w.wel.init()
 	w.st.sel = -1
@@ -376,6 +379,7 @@ func (w *Window) syncRepo() {
 	w.lastRoot = rs.Repo.Root
 	w.cm.reset()
 	setText(w.cm.msg, w.commitDrafts[w.lastRoot])
+	w.fm.reset()
 	w.ed.reset()
 	w.lg.reset()
 	w.st.sel = -1

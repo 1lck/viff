@@ -42,6 +42,10 @@ func (w *Window) globalKey(e ui.KeyEvent) bool {
 			t.searchOpen = false
 			return true
 		}
+		if t != nil && t.src.View && t.textSel.set {
+			t.clearTextSel()
+			return true
+		}
 		if w.notifyOpen {
 			w.notifyOpen = false
 			return true
@@ -78,6 +82,8 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 			w.chooseRepoNow()
 			return true
 		}
+		w.openQuickOpen()
+		return true
 	}
 	if w.ws.Repo == nil {
 		return false
@@ -105,7 +111,9 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 			w.closeTab(w.ed.active)
 		}
 	case ch == "0":
-		w.commitOpen = !w.commitOpen
+		w.toggleCommit()
+	case ch == "1":
+		w.toggleProject()
 	case ch == "9":
 		w.gitOpen = !w.gitOpen
 	case ch == "z" && alt:
@@ -119,6 +127,19 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 	case ch == "a" && w.focused(idChangesList):
 		for _, r := range w.cm.rows {
 			w.cm.sel[r.key] = true
+		}
+	case ch == "a" && !shift && (w.focused(idDiffText) || w.focused(idDiffRight)):
+		// Select All in the read-only file view; a focused text field keeps
+		// Command+A for its own text (Viva consumes the chord before this).
+		t := w.ed.cur()
+		if t == nil || !t.selectAllText() {
+			return false
+		}
+	case ch == "c" && !shift && !alt:
+		// Copy the file view's selection; Shift+Command+C keeps copying paths
+		// in the lists below.
+		if !w.copyViewSelection() {
+			return false
 		}
 	case ch == "c" && shift && w.focused(idChangesList):
 		if sel := w.selectedEntries(); len(sel) > 0 {
@@ -138,11 +159,11 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		}
 	case ch == "]" && shift:
 		if n := len(w.ed.tabs); n > 0 {
-			w.ed.active = (w.ed.active + 1) % n
+			w.ed.activate((w.ed.active + 1) % n)
 		}
 	case ch == "[" && shift:
 		if n := len(w.ed.tabs); n > 0 {
-			w.ed.active = (w.ed.active + n - 1) % n
+			w.ed.activate((w.ed.active + n - 1) % n)
 		}
 	case ch == "r" && !shift:
 		w.ws.Refresh(true)
