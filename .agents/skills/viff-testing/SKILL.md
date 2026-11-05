@@ -36,6 +36,7 @@ metadata:
 - flaky 先定位再修：常见原因是点击同步、后台任务未 settle、任务结束与刷新竞争；改夹具或等待条件，不靠加大 sleep 或 `-count` 掩盖。重复验证同一用例多轮（如 `docs/testing.md` 记录的 5 轮）再声称稳定。
 - 时间预算：每个分片 `go test -timeout=10m`（`.github/actions/go-test-shard/action.yml` 默认值；macOS 单作业并发跑无头 UI 用 15m）；顶层测试按索引分片，Windows core 2 片、UI 3 片，Ubuntu core 1 片、UI 2 片，新增慢测试要留余量。
 - 证据可上传：CI 把 `VIFF_SHOTS` 指向 `.viff-test/ci/screenshots` 并设 `VIFF_SHOTS_BY_TEST=1`，JSON 流写 `.viff-test/ci/logs/*.jsonl`，上传 `.viff-test/ci/` 保留 14 天；本地临时产物也只放 `.viff-test/`（已被忽略）。
+- 回归测试覆盖同类边界，不只复现单个输入：修并发/平台/路径/取消类缺陷时同时覆盖相邻场景（大小写、空列表、冲突块、中断后状态）。
 
 ## 步骤
 
@@ -58,6 +59,8 @@ metadata:
 - [ ] 平台相关部分有 `runtime.GOOS` 分支或带原因的 `t.Skip`。
 - [ ] 新增慢测试仍能在 10 分钟分片内完成。
 - [ ] 本机未跑的命令已注明，没有编造输出。
+
+- [ ] 回归测试覆盖同类边界，不是只让单个用例通过。
 
 ## 常见错误
 

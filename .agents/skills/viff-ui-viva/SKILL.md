@@ -34,6 +34,7 @@ metadata:
 - 图标走生成：图标源在 `assets/icons/intellij`，运行 `go generate ./internal/ui/icons`（`tools/genicons`），提交生成物与版权声明；明暗各一套 `icons.Pair`，多色图标按色拆 Part。
 - 交互可测试：可点击元素用 `tree.ID`/`tree.Sub` 在 `ids.go` 声明稳定 ID，不按索引或临时字符串拼；对话框用 `PushFocusScope`/`TrapFocus`/`SetEscapeTarget` 并遵循 `Enter` 提交、`Esc` 取消、textarea 内 `Enter` 换行（`dialog.go`）；弹窗遵循 `Esc` 关闭/退层、上下移动、`←`/`→` 子菜单、`Enter`/`Space` 激活（`popup.go`）。改键位同步无头测试。
 - UI 测试用 `vivahead`：文件头 `//go:build vivahead`，先 `platform.RegisterFonts()`，再 `headless.Open(cfg, nil, headless.Options{Scale: 2})`；用 `WaitFor` 等应用状态、`Settle` 等绘制；断言用 `HasText`/`Texts()`/剪贴板/字段值，不只比像素；空闲用 `assertIdle` 防重绘循环。
+- 新交互一次覆盖完整状态：空、加载、错误、长文本、禁用、键盘可达（Tab/Enter/Esc）；不要只画正常流程，也不要留「以后再补」的占位。
 
 ## 步骤
 
@@ -55,6 +56,8 @@ metadata:
 - [ ] 新增图标已 `go generate` 并提交生成物与版权声明。
 - [ ] 无头测试断言状态/字段值，空闲无重绘循环。
 - [ ] 截图只在需要时生成、输出到 `.viff-test/`，未入库。
+
+- [ ] 新交互覆盖空/加载/错误/长文本/键盘路径，没有占位实现。
 
 ## 常见错误
 

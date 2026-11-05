@@ -37,6 +37,7 @@ metadata:
 - 生成物提交：`internal/ui/icons/icons.go` 的 `//go:generate go run ../../../tools/genicons ../../../assets/icons/intellij .` 是唯一入口，改图标后跑 `go generate ./internal/ui/icons` 并提交生成代码；SVG 版权声明留在 `assets/icons/intellij/NOTICE.md`。
 - 包布局：包名短小写、无下划线；平台差异用 `_windows.go` / `_other.go` 加 build tag；包说明写在 `doc.go` 或包内一个文件顶部（`internal/process/doc.go`、`internal/app/workspace.go`）；同一包按主题分文件（`status.go`、`ops.go`、`history.go`），不要按类型堆文件或为每个方法造接口。
 - 不记录完整 argv、环境变量、仓库内容与凭据；日志与错误码细则见 `viff-observability-privacy`。
+- 实现标准是长期维护而非「先跑通」：错误/取消/平台/空边界一次做全；不为赶进度留临时开关、静默降级或注释掉的代码；确实延后的 TODO 必须带 issue/ADR 与复审条件；新抽象要能说明现有代码为何不够。
 
 ## 步骤
 
@@ -58,6 +59,8 @@ metadata:
 - [ ] 新依赖已更新 `licenses/` 与 `THIRD_PARTY_NOTICES.md`。
 - [ ] 图标等生成物已重新生成并纳入提交。
 - [ ] 没有顺手格式化、无关重命名或依赖升级。
+
+- [ ] 没有 happy path 实现、临时开关或无记录的 TODO。
 
 ## 常见错误
 

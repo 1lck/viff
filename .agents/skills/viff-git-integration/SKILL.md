@@ -39,6 +39,7 @@ metadata:
 - 版本差异靠能力与格式，不要引入版本号比较分支代替能力判断：`Runner.Version` 只用于展示与诊断。Git 行为差异（如 Windows 子模块包装脚本丢 `--literal-pathspecs`）在 `internal/gitcli` 内按平台或探测结果分支处理并写注释。
 - hooks、签名、凭据交给系统 Git：用 `-c gpg.program`、`-c user.signingkey`、`-c gpg.format`、`-c credential.helper` 与 `GIT_SSH_COMMAND` 表达 Viff 设置，不改仓库或全局配置（0016）；不静默禁 hooks 或签名，`--no-verify` 只作为显式选项（`CommitOptions.NoVerify`）。
 - 错误分类统一在 `internal/gitcli/runner.go`：14 类 `ErrorKind` + 稳定 `Code()`（如 `push.rejected`、`repo.locked`）；新增失败模式先扩充 `classify` 与 `Code`，不要在 UI 里匹配字符串。Console 只在命令失败或非静默命令（写操作与普通读）时追加一条；成功读由 `quietReads` 静音，慢读只额外写事件日志。
+- 新命令按完整生命周期接入：成功、失败分类、取消、stale 重查、worktree/submodule 与 Windows 差异；不做只在正常路径跑通的接入。
 
 ## 步骤
 
@@ -61,6 +62,8 @@ metadata:
 - [ ] worktree/submodule 路径按字面处理，未用 `--force` 绕过安全检查。
 - [ ] 未修改用户 Git 配置，未静默禁用 hooks/签名。
 - [ ] 失败分类沿用 `ErrorKind`，用户可见错误有 code。
+
+- [ ] 新命令覆盖失败、取消、stale 与平台差异，不是只测成功路径。
 
 ## 常见错误
 

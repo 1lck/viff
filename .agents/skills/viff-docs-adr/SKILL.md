@@ -31,6 +31,7 @@ metadata:
 - 不复制版权文本；许可证原文放 `licenses/`，第三方组件登记到 `THIRD_PARTY_NOTICES.md` 并给来源链接；图标许可另见 `assets/icons/intellij/NOTICE.md`。
 - 不写未核实的性能、内存、兼容性数字；实测必须写清平台、版本与命令/口径（参照 README 的体积参考段落）。
 - 只改文档，不改 `.github/`、`scripts/`；需要动工作流或打包脚本时转 `viff-release-ci`。
+- 取舍与延后项写进 ADR 或专题文档（含复审条件），不把「以后再改」留在代码注释、PR 描述或口头约定里。
 
 ## 步骤
 
@@ -66,6 +67,8 @@ metadata:
 - [ ] 发布说明通过 `release_notes.py`，无 `{{ }}`、`TODO`、`TBD`。
 - [ ] 无未核实数字、无复制版权文本、许可证登记在 `licenses/` 与 notices。
 - [ ] 纯文档 PR 的文件全部落在 docs-only 分类内：`README.md`、`README.zh-CN.md`、`CONTRIBUTING.md`、`SECURITY.md`、`THIRD_PARTY_NOTICES.md`、`LICENSE`、`docs/*`、`AGENTS.md`、`CLAUDE.md`、`.agents/*`。
+
+- [ ] 取舍与延后项有记录（ADR/文档 + 复审条件），没有无主 TODO。
 
 ## 常见错误
 
