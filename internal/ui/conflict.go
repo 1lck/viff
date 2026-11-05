@@ -5,6 +5,7 @@ import (
 
 	"github.com/vivaui/viva/ui"
 
+	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/i18n"
 	"viff/internal/ui/icons"
@@ -18,15 +19,17 @@ type conflictPane struct {
 	mark  []uint8 // per line: 0 plain, 1 changed vs base, 2 conflict body, 3 marker line
 }
 
-// The per-block resolve controls have an identity scope of their own, made in
-// init so the shared tree (ids.go) already has its features, and declared in
-// this file rather than in ids.go: the conflict viewer's read-only identities
-// stay unchanged.
+// The per-block resolve controls and the copy actions for an external AI tool
+// have an identity scope of their own, made in init so the shared tree (ids.go)
+// already has its features, and declared in this file rather than in ids.go:
+// the conflict viewer's read-only identities stay unchanged.
 var (
-	scConflictResolve ui.Scope
-	idResolveOurs     ui.ID
-	idResolveTheirs   ui.ID
-	idResolveBoth     ui.ID
+	scConflictResolve   ui.Scope
+	idResolveOurs       ui.ID
+	idResolveTheirs     ui.ID
+	idResolveBoth       ui.ID
+	idConflictCopyAI    ui.ID
+	idConflictCopyBlock ui.ID
 )
 
 func init() {
@@ -34,6 +37,8 @@ func init() {
 	idResolveOurs = scConflictResolve.ID(tree.Name("ours"))
 	idResolveTheirs = scConflictResolve.ID(tree.Name("theirs"))
 	idResolveBoth = scConflictResolve.ID(tree.Name("both"))
+	idConflictCopyAI = scConflictResolve.ID(tree.Name("copy-ai"))
+	idConflictCopyBlock = scConflictResolve.ID(tree.Name("copy-block"))
 }
 
 func (w *Window) conflictPanes(t *diffTab) []conflictPane {
@@ -85,6 +90,10 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		!cv.Current.Content.Binary && !cv.Current.Content.TooLarge &&
 		!cv.Current.Content.Submodule && !cv.Current.Content.Symlink &&
 		cv.Markers.Reliable && len(cv.Markers.Blocks) > 0
+	// The copied context is built from the same marker parse the accept
+	// controls rely on: without a reliable parse a block would name the wrong
+	// lines, so neither action is offered.
+	canCopy := resolvable
 	// Banner.
 	bh := float32(88)
 	if resolvable {
@@ -155,6 +164,20 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		full := path.Join(rs.Repo.Root, t.src.Path)
 		w.after(func() { w.copyText(full) })
 	}
+	bx += cw + 8
+	// The conflict context goes to the user's own assistant through the
+	// clipboard: Viff starts no request and calls no model. It is offered
+	// exactly when the text behind the accept controls can be trusted.
+	aiLabel := w.t(i18n.ConflictActionCopyForAI)
+	aiw := w.buttonWidth(aiLabel)
+	if w.button(idConflictCopyAI, rect(bx, by, aiw, 26), aiLabel, btnNormal, !canCopy || t.busy || t.loading) {
+		w.after(func() { w.copyConflictForAI(t, vapp.ConflictContextAll) })
+	}
+	if canCopy {
+		w.tip(idConflictCopyAI, w.t(i18n.ConflictTipCopyForAI))
+	} else {
+		w.tip(idConflictCopyAI, w.t(i18n.ConflictTipCopyNothing))
+	}
 	// Conflict navigation.
 	n := len(cv.Markers.Blocks)
 	if n > 0 {
@@ -196,6 +219,16 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 			}
 			w.tip(c.id, c.tip)
 			rx += cw + 8
+		}
+		// The block-level counterpart of Copy for AI, pinned to the right of the
+		// accept row so it cannot push the accept controls out of the banner.
+		cbLabel := w.t(i18n.ConflictActionCopyBlock)
+		cbw := w.buttonWidth(cbLabel)
+		if cx := right(inner) - 8 - cbw; cx > rx+8 {
+			if w.button(idConflictCopyBlock, rect(cx, inner.Y+72, cbw, 26), cbLabel, btnBorderless, disabled) {
+				w.after(func() { w.copyConflictForAI(t, t.conflictBlock) })
+			}
+			w.tip(idConflictCopyBlock, w.t(i18n.ConflictTipCopyBlock))
 		}
 	}
 
@@ -319,4 +352,28 @@ func (w *Window) resolveConflictBlock(t *diffTab, choice domain.ResolveChoice) {
 		t.busy = false
 		w.loadTab(t)
 	})
+}
+
+// copyConflictForAI builds the structured context of the conflict tab and puts
+// it on the clipboard. Viff itself runs no model and opens no connection: the
+// text is for whatever assistant the user pastes it into. block is a 0-based
+// conflict block, or app.ConflictContextAll for the whole file.
+func (w *Window) copyConflictForAI(t *diffTab, block int) {
+	if t == nil || t.res == nil || t.res.Conflict == nil || w.ws.Repo == nil {
+		return
+	}
+	rs := w.ws.Repo
+	text := vapp.ConflictContextText(t.res.Conflict, vapp.ConflictContextOptions{
+		RepoRoot:  rs.Repo.Root,
+		Operation: rs.Operation,
+		Block:     block,
+	})
+	if text == "" {
+		return
+	}
+	if err := w.setClipboardText(text); err != nil {
+		w.ws.NotifyError(w.t(i18n.WorkspaceErrorCannotCopy), err)
+		return
+	}
+	w.ws.Notify(vapp.NoticeInfo, w.t(i18n.ConflictNoticeCopied), w.t(i18n.ConflictNoticeCopiedBody))
 }

@@ -39,6 +39,10 @@ type Window struct {
 	native *app.Window
 	// quit closes the application from the status item's menu.
 	quit func()
+	// clipboard writes text to the system clipboard. It is Viva's clipboard in
+	// the application; headless tests replace it so a copy never touches the
+	// real one.
+	clipboard func(string) error
 
 	// Registries rebuilt by every paint; event handlers read the latest.
 	scrolls  []scrollRegion
