@@ -14,6 +14,16 @@ const (
 	GitCredentialHelper = Key("gitsettings.credentialHelper")
 	GitCredentialHint   = Key("gitsettings.credentialHint")
 	GitCommandNotFound  = Key("gitsettings.commandNotFound")
+	GitAIEndpoint       = Key("gitsettings.aiEndpoint")
+	GitAIEndpointHint   = Key("gitsettings.aiEndpointHint")
+	GitAIModel          = Key("gitsettings.aiModel")
+	GitAIModelHint      = Key("gitsettings.aiModelHint")
+	GitAIKey            = Key("gitsettings.aiKey")
+	GitAIKeyHint        = Key("gitsettings.aiKeyHint")
+	GitAIProtocol       = Key("gitsettings.aiProtocol")
+	GitAIProtoOpenAI    = Key("gitsettings.aiProtocolOpenAI")
+	GitAIProtoAnthropic = Key("gitsettings.aiProtocolAnthropic")
+	GitAIHint           = Key("gitsettings.aiHint")
 )
 
 func init() {
@@ -30,6 +40,16 @@ func init() {
 		GitCredentialHelper: "Credential helper:",
 		GitCredentialHint:   "Empty: Git's own credential.helper",
 		GitCommandNotFound:  "Not found: %s",
+		GitAIEndpoint:       "AI endpoint:",
+		GitAIEndpointHint:   "Empty turns AI commit messages off; e.g. https://api.openai.com/v1",
+		GitAIModel:          "AI model:",
+		GitAIModelHint:      "e.g. gpt-4o-mini",
+		GitAIKey:            "AI key:",
+		GitAIKeyHint:        "Sent as a Bearer token, stored in plain text",
+		GitAIProtocol:       "AI protocol:",
+		GitAIProtoOpenAI:    "OpenAI-compatible",
+		GitAIProtoAnthropic: "Anthropic-compatible",
+		GitAIHint:           "Leave the endpoint empty to turn AI commit messages off; the key is stored in plain text.",
 	})
 	register(ZHCN, map[Key]string{
 		GitSSHCommand:       "SSH 命令：",
@@ -44,5 +64,15 @@ func init() {
 		GitCredentialHelper: "凭据助手：",
 		GitCredentialHint:   "留空则用 Git 自带的 credential.helper",
 		GitCommandNotFound:  "未找到：%s",
+		GitAIEndpoint:       "AI 端点：",
+		GitAIEndpointHint:   "留空则不启用 AI 生成；例如 https://api.openai.com/v1",
+		GitAIModel:          "AI 模型：",
+		GitAIModelHint:      "例如 gpt-4o-mini",
+		GitAIKey:            "AI 密钥：",
+		GitAIKeyHint:        "作为 Bearer 令牌发送，明文保存在设置里",
+		GitAIProtocol:       "AI 协议：",
+		GitAIProtoOpenAI:    "OpenAI 兼容",
+		GitAIProtoAnthropic: "Anthropic 兼容",
+		GitAIHint:           "端点留空即关闭 AI 生成；密钥以明文保存在设置文件里。",
 	})
 }

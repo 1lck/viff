@@ -430,6 +430,36 @@ var DarkBookmarksPart0 = ui.Icon{
 	},
 }
 
+// darkBotPart0 is a compiled vector icon.
+var DarkBotPart0 = ui.Icon{
+	ViewBox: 16.0,
+	Stroke:  1.33,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinRound,
+	Commands: []ui.PathCommand{
+		ui.MoveTo(8.0, 5.33),
+		ui.LineTo(8.0, 2.67),
+		ui.LineTo(5.33, 2.67),
+		ui.MoveTo(12.01, 5.33),
+		ui.CubicTo(12.7445, 5.33, 13.34, 5.92546, 13.34, 6.66),
+		ui.LineTo(13.34, 12.0),
+		ui.CubicTo(13.34, 12.7345, 12.7445, 13.33, 12.01, 13.33),
+		ui.LineTo(4.0, 13.33),
+		ui.CubicTo(3.26546, 13.33, 2.67, 12.7345, 2.67, 12.0),
+		ui.LineTo(2.67, 6.66),
+		ui.CubicTo(2.67, 5.92546, 3.26546, 5.33, 4.0, 5.33),
+		ui.ClosePath(),
+		ui.MoveTo(1.33, 9.33),
+		ui.LineTo(2.66, 9.33),
+		ui.MoveTo(13.33, 9.33),
+		ui.LineTo(14.66, 9.33),
+		ui.MoveTo(10.0, 8.67),
+		ui.LineTo(10.0, 10.0),
+		ui.MoveTo(6.0, 8.67),
+		ui.LineTo(6.0, 10.0),
+	},
+}
+
 // darkBranchLabelPart0 is a compiled vector icon.
 var DarkBranchLabelPart0 = ui.Icon{
 	ViewBox: 16.0,
@@ -7745,6 +7775,36 @@ var LightBookmarksPart0 = ui.Icon{
 			ui.LineTo(12.999, 13.998),
 			ui.ClosePath(),
 		}},
+	},
+}
+
+// lightBotPart0 is a compiled vector icon.
+var LightBotPart0 = ui.Icon{
+	ViewBox: 16.0,
+	Stroke:  1.33,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinRound,
+	Commands: []ui.PathCommand{
+		ui.MoveTo(8.0, 5.33),
+		ui.LineTo(8.0, 2.67),
+		ui.LineTo(5.33, 2.67),
+		ui.MoveTo(12.01, 5.33),
+		ui.CubicTo(12.7445, 5.33, 13.34, 5.92546, 13.34, 6.66),
+		ui.LineTo(13.34, 12.0),
+		ui.CubicTo(13.34, 12.7345, 12.7445, 13.33, 12.01, 13.33),
+		ui.LineTo(4.0, 13.33),
+		ui.CubicTo(3.26546, 13.33, 2.67, 12.7345, 2.67, 12.0),
+		ui.LineTo(2.67, 6.66),
+		ui.CubicTo(2.67, 5.92546, 3.26546, 5.33, 4.0, 5.33),
+		ui.ClosePath(),
+		ui.MoveTo(1.33, 9.33),
+		ui.LineTo(2.66, 9.33),
+		ui.MoveTo(13.33, 9.33),
+		ui.LineTo(14.66, 9.33),
+		ui.MoveTo(10.0, 8.67),
+		ui.LineTo(10.0, 10.0),
+		ui.MoveTo(6.0, 8.67),
+		ui.LineTo(6.0, 10.0),
 	},
 }
 

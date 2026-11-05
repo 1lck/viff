@@ -8,6 +8,7 @@ const (
 
 	SettingsTabGeneral = Key("settings.tab.general")
 	SettingsTabGit     = Key("settings.tab.git")
+	SettingsTabAI      = Key("settings.tab.ai")
 
 	SettingsGroupAppearance  = Key("settings.group.appearance")
 	SettingsGroupGitExec     = Key("settings.group.gitExec")
@@ -71,6 +72,7 @@ func init() {
 
 		SettingsTabGeneral: "General",
 		SettingsTabGit:     "Git",
+		SettingsTabAI:      "AI",
 
 		SettingsGroupAppearance:  "Appearance",
 		SettingsGroupGitExec:     "Git executable",
@@ -133,6 +135,7 @@ func init() {
 
 		SettingsTabGeneral: "常规",
 		SettingsTabGit:     "Git",
+		SettingsTabAI:      "AI",
 
 		SettingsGroupAppearance:  "外观",
 		SettingsGroupGitExec:     "Git 可执行文件",
