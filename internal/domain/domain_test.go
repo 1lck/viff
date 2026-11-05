@@ -246,6 +246,18 @@ func TestStatusEntryAreas(t *testing.T) {
 	if st != 1 || un != 1 || ut != 1 || cf != 1 {
 		t.Fatal(st, un, ut, cf)
 	}
+
+	// A Subversion property-only change (props="modified", item="normal") has
+	// no text status, but it is still a working-copy change that must be listed
+	// and committed: without this the file disappears from every area.
+	p := StatusEntry{Path: "d", Index: '.', Worktree: ' ', Props: 'M'}
+	if p.Staged() || !p.Unstaged() || p.Conflicted() || p.Untracked() {
+		t.Fatalf("props-only entry areas: staged=%v unstaged=%v", p.Staged(), p.Unstaged())
+	}
+	st, un, _, _ = Status{Entries: []StatusEntry{p}}.Counts()
+	if st != 0 || un != 1 {
+		t.Fatalf("props-only counts = staged %d, unstaged %d", st, un)
+	}
 }
 
 func TestSideLabelsRebaseDoesNotSayMine(t *testing.T) {

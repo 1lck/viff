@@ -89,6 +89,11 @@ type Workspace struct {
 	// visible for Git and absent for Subversion.
 	Caps Capabilities
 
+	// ConsoleTool is the executable name the console and the event log show for
+	// the active backend ("git" or "svn"). It is set with the backend, so a
+	// command is never labelled with the other tool's name.
+	ConsoleTool string
+
 	// Repositories is the explicit multi-repository list, in the order the user
 	// added them. Only the active repository (Repo) runs Git commands and has a
 	// file watcher; the other rows show their last known status and are
@@ -378,7 +383,11 @@ func (w *Workspace) logCommand(dir string, args []string, took time.Duration, er
 	if err == nil && quietRead(args) {
 		return // reads are not console noise unless they fail
 	}
-	entry := ConsoleEntry{Time: w.now(), Command: "git " + strings.Join(quoteArgs(args), " "), Took: took}
+	tool := w.ConsoleTool
+	if tool == "" {
+		tool = toolName(w.Git)
+	}
+	entry := ConsoleEntry{Time: w.now(), Command: tool + " " + strings.Join(quoteArgs(args), " "), Took: took}
 	if err != nil {
 		entry.Failed = true
 		var ge *gitcli.Error

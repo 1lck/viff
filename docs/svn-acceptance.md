@@ -1,7 +1,8 @@
 # Subversion acceptance record / Subversion 验收记录
 
-- Status / 状态：界面手工验收基本完成，仍有 3 项待测（见「待测试」）；占位 PR 尚未创建（网络阻断，见「未完成项」）
+- Status / 状态：界面手工验收完成；2 项未修（见「仍未修复」），其余通过或已记录原因
 - Branch / 分支：`feat/svn-support`（已把 `main` 合并进来）
+- Placeholder PR / 占位 PR：<https://github.com/1lck/viff/pull/41>（明确标注请勿合并）
 - Related decision / 相关决策：[0025](decisions/0025-svn-support.md)
 
 ## What this record is / 本文档的用途
@@ -75,23 +76,23 @@ reproduced in this environment (reason stated).
 | 1 | 打开 Open | 打开 SVN 工作副本，状态栏与标题识别后端 | 仓库打开，顶部显示 `work`/`trunk`，历史 4 条提交可读 | 通过 |
 | 2 | 状态 Changes | 修改、新增、缺失、未版本化各自落位 | `notes.txt` 修改、`staged.txt` 新增、`README.md` 删除（修复 D2 后可见）、`loose.txt` 未版本化 | 通过 |
 | 3 | 状态 Changes | 冲突项独立分组，`.mine`/`.r5`/`.r6` 被过滤 | `Merge Conflicts` 分组只有 `notes.txt`，未跟踪列表无辅助文件 | 通过 |
-| 4 | 状态 Changes | 属性变更（`props=modified`）独立呈现 | 未单独构造属性变更场景，代码路径与文本修改分离 | 待测试 |
+| 4 | 状态 Changes | 属性变更（`props=modified`）被列出 | 修复 D9 前「只有属性变更」的文件完全不在列表里；修复后 `README.md`（`svn propset svn:eol-style`）出现在 Changes | 通过 |
 | 5 | 差异 Diff | 工作副本 diff 与 `svn diff` 一致 | `beta` → `beta CHANGED` 单块差异，三栏视图正常 | 通过 |
 | 6 | 历史 Log | 打开历史、最新提交、线性顺序 | r6 在顶、r1 在底，6 条提交按时间倒序 | 通过 |
-| 7 | 历史 Log | 离线/不可达时显示缓存并标注陈旧 | 需要让仓库 URL 不可达，本机未构造该场景 | 待测试 |
+| 7 | 历史 Log | 离线/不可达时显示缓存并标注陈旧 | 把仓库目录改名后刷新：日志仍显示全部提交，**没有任何「缓存/陈旧」标注**，等于冒充最新（D11，未修） | 失败 |
 | 8 | Blame | 每行带修订与作者，未提交行无归属 | 与 `svn blame` 一致：r4/r5/未提交/r6 | 通过 |
 | 9 | 更新 Update | 执行 update 拉入远程提交 | 拉入 r6 并产生冲突（双方都改了同一行），符合 svn 语义 | 通过 |
 | 10 | 提交 Commit | 部分提交（只提交勾选的文件） | 只提交 `notes.txt` → r5，`loose.txt` 保持未版本化 | 通过 |
 | 11 | 提交 Commit | 无索引时提交按钮可用 | 只填消息即可提交（不需要 stage） | 通过 |
-| 12 | 提交 Commit | 目录过期时提交被拒绝 | 未构造过期场景（需要第二个工作副本抢先提交同一路径） | 待测试 |
+| 12 | 提交 Commit | 目录过期时提交被拒绝并给出可读错误 | 第二个工作副本提交 r8 后，从过期工作副本提交：仓库没有新修订，弹出 `Commit failed / svn: E155011 … is out of date / E160028` | 通过 |
 | 13 | 还原 Revert | 还原单个文件 | `Rollback…` 恢复被删除的 `README.md`，其他改动保留 | 通过 |
 | 14 | 添加/删除 Add/Delete | 添加未版本化文件、删除已跟踪文件 | `staged.txt` 经 `svn add` 进入提交；删除走 `!` → 提交即删除 | 通过 |
 | 15 | 分支 Branches | 列出、切换、创建、删除 | 列表显示 `trunk` + `acceptance-branch`；创建落盘为 `branches/acceptance-branch`（修复 D5），切换后工作副本 URL 变更；删除由 `svncli.TestBranchWrites` 覆盖 | 通过 |
 | 16 | 冲突 Conflicts | 只读展示 + 标记已解决 | 三栏展示 + 标记已解决把 `C` 变 `M`（修复 D4）；接受某一侧在 SVN 下已隐藏（修复 D6） | 通过 |
 | 17 | 能力位 Caps | rebase/stash/worktree/reflog/submodule 入口隐藏 | 界面无这些入口；Push/Fetch/Commit and Push 也已隐藏（修复 D3） | 通过 |
-| 18 | 设置 Settings | Subversion 可执行文件路径可配置 | 设置 → General 有 `Path to svn:` 输入；改成不存在的路径后，操作失败但未弹出可读提示（见 D8） | 部分通过 |
-| 19 | 错误提示 Errors | svn 缺失/认证失败/工作副本被锁的提示 | 文案已就位（`AppErrorToolMissingSVN` 等），但把路径改错后通知面板没有可读条目 | 待修复（D8） |
-| 20 | 主题 Theme | 明暗主题下界面可用 | 只在 `Islands Dark` 下验收过，浅色主题未逐项复测 | 待测试 |
+| 18 | 设置 Settings | Subversion 可执行文件路径可配置 | 设置 → General 有 `Path to svn:` 输入并写入 `settings.json` 的 `svnPath` | 通过 |
+| 19 | 错误提示 Errors | svn 缺失/过期/冲突类错误有可读提示 | 过期提交弹出可读错误（见 #12）；但把 `svnPath` 指到不存在的程序后，启动打开仓库失败，应用静默退回欢迎页，没有任何提示（D8，未修） | 部分失败（D8） |
+| 20 | 主题 Theme | 明暗主题下界面可用 | 浅色（`Islands Light`）下提交面板、变更列表、历史、空状态提示都可读，按钮门控一致；备注：界面上切换主题后没有立即生效，需重启才应用（非 SVN 问题，未修） | 通过 |
 
 ## Defects found and fixed / 发现并修复的问题
 
@@ -107,12 +108,28 @@ still open). 只在修复已进分支（或明确标注仍未解决）时列出�
 | D5 | 「新建分支」对话框弹出后什么也没发生 | `svncli` 没有实现分支写能力（`Caps.References == nil`），界面却照样显示入口 | 新增窄接口 `vcs.BranchWriter`（创建/重命名/删除），`svncli` 用 `svn copy`/`svn mv`/`svn delete` 实现（`internal/svncli/refs.go`），界面按 `Caps.Branches` 门控；新增 `TestBranchWrites` | 已修复 |
 | D6 | 冲突视图在 SVN 下画出「接受某一侧」按钮，点击无效果 | 按钮只按 diff 内容判断，没有看后端是否实现 `ConflictResolver` | 冲突视图的接受行改为 `w.ws.Caps.Conflicts != nil` 才绘制；`Copy for AI` 仍可用（只写剪贴板，不需要解析后端能力） | 已修复 |
 | D7 | 打开仓库对话框标题硬编码 `Open Git Repository`，且文案只提 Git | `internal/ui/window.go` 直接写字面量，没走 i18n；文案本身也过时 | 改走 `i18n.ChromeDialogOpenRepository`，中英文案改为「Open Repository」/「打开仓库」 | 已修复 |
-| D8 | 设置里的 svn 路径填错后，刷新失败但没有可读提示 | 未定位到根因：通知面板没有条目，`AppErrorToolMissingSVN` 文案未被触发 | 未修复，保留为待办（见「未完成项」） | 未修复 |
+| D8 | `svnPath` 指向不存在的程序时，启动打开仓库静默失败、退回欢迎页 | `svncli` 已把二进制缺失分类成 `ErrNoGit`（`runner.go`，有测试覆盖），`AppErrorToolMissingSVN` 文案也在；失败发生在 `Window.Start` → `openRepo` 阶段，此时欢迎页没有通知面板入口，提示等于没显示 | 未修复。修法应是在欢迎页给失败一个可见位置（或阻止启动时静默丢弃），属跨界面改动 | 未修复 |
 
 Also observed but not fixed / 一并观察到但未修复（属文案而非功能）：
 
-- 工具栏的 `Git ⌘9` 工具窗与 `Git Actions` 面板标题对 SVN 仍是 Git 品牌文案；两者承载的是共用的分支/历史面板，改名会牵动 i18n 与截图，本次未动。
+- D9 已修：`svn propset` 造成的**纯属性变更**原本完全不进任何分组。`StatusEntry.Unstaged()`
+  只认 `Worktree` 列，而属性变更的文本列是空格（`svn status` 显示 ` M`），条目因此落在
+  所有分组之外——既看不见也进不了提交。现在 `Props` 非空即视为工作副本改动。
+  新增断言在 `domain.TestStatusEntryAreas`。
+- D10 已修：Console 把所有命令都记成 `git …`，SVN 命令也一样；标题写「Git commands run
+  by Viff」。现在命令前缀取自后端（新增 `CLIName()`，`git`/`svn`），标题改为
+  「Commands run by Viff」/「Viff 运行的命令」。
+- D11 未修：仓库不可达时，历史区仍然显示完整缓存且**没有任何陈旧标注**。这与
+  [0025](decisions/0025-svn-support.md) §6 的「离线时显示缓存必须显式标注，不能冒充最新」
+  直接冲突，属数据可信度问题，优先于本表其余文案项。
+- 界面切换主题（`General → Theme`）当次不生效、需要重启；与 SVN 无关，未修。
+- 工具栏的 `Git ⌘9` 工具窗与 `Git Actions` 面板标题对 SVN 仍是 Git 品牌文案；两者承载的是
+  共用的分支/历史面板，改名会牵动 i18n 与截图，本次未动。
 - 文件视图的 `Annotate with Git Blame` 按钮在 SVN 下功能正常（走 `svn blame`），文案仍写 Git。
+- `Update Project` 对话框对 SVN 也列出 merge/rebase/fast-forward 三种 Git 集成方式，后端会忽略
+  该选择。这**不改**：分支自带的 `TestSVNUIUpdateThroughTheWindow` 明确要求这条用户路径，
+  且 [0025](decisions/0025-svn-support.md) 已写明「mode 是无 rebase 后端忽略的 Git 集成选择」。
+  曾尝试让它对 SVN 直接更新，与该测试意图冲突，已回退。
 
 ## Decisions taken without the maintainer / 维护者不在场时的决策
 
@@ -155,13 +172,22 @@ was rejected and how to revisit it.
 
 7. **GitHub 推送被网络阻断时，先完成本地验收而不是反复重试。**
    `github.com` 的 TLS 握手连续失败（`api.github.com`/`codeload` 可用），
-   属本机网络/代理状态而非仓库问题。占位 PR 因此未能创建，记录在「未完成项」，
-   并把推送留到最后重试。复审：网络恢复后执行 `git push origin feat/svn-support`
-   与 `gh pr create`。
+   属本机网络/代理状态而非仓库问题。网络恢复后已推送分支并创建占位 PR
+   <https://github.com/1lck/viff/pull/41>，PR 正文明确写了「请勿合并」。
+   复审：维护者验收后再决定是否转为可评审。
+
+8. **`Update Project` 对话框对 SVN 保留（改动已回退）。**
+   看起来该对 SVN 隐藏三种 Git 集成方式，但分支自带的
+   `TestSVNUIUpdateThroughTheWindow` 明确把「打开对话框 → 确定」当作既有用户路径，
+   [0025](decisions/0025-svn-support.md) 也写明 mode 会被无 rebase 的后端忽略。
+   替代项（SVN 直接更新）会让该测试失败并改变已设计行为，被否决。
 
 ## Still to verify / 未完成项
 
-- 4 项界面验收未完成：属性变更呈现（#4）、离线陈旧标注（#7）、过期提交被拒（#12）、浅色主题（#20）。
-- D8（svn 路径错误没有可读提示）未定位根因，未修复。
-- 占位 PR 未创建：`github.com` 在本机不可达（`schannel: failed to receive handshake`），
-  分支尚未推送。
+- D8：`svnPath` 指错时启动失败没有可见提示（欢迎页没有通知入口）。
+- D11：历史缓存在仓库不可达时没有任何「缓存/陈旧」标注，与
+  [0025](decisions/0025-svn-support.md) §6 冲突，是本项目前最该修的一项。
+- 属文案的 Git 品牌残留（`Git` 工具窗、`Git Actions`、`Annotate with Git Blame`）。
+- 界面切换主题需重启才生效（非 SVN 问题）。
+- 另有两处 Windows 环境限制导致的测试失败（创建符号链接权限不足），与改动无关：
+  `gitcli.TestTreeAt`、`app.TestScenarioRenameModeSymlinkBinaryDelete`。

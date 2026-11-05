@@ -258,8 +258,20 @@ func (e StatusEntry) Staged() bool {
 }
 
 // Unstaged reports changes in the working tree relative to the index.
+//
+// A property-only change counts: Subversion reports it as item="normal" with
+// props="modified", so the text column is blank while the working copy really
+// differs from the base. Without that case the entry lands in no area at all
+// and a file whose only change is svn:eol-style or svn:ignore disappears from
+// the changes list, which also keeps it out of the next commit.
 func (e StatusEntry) Unstaged() bool {
-	return !e.Conflicted() && !e.Untracked() && !e.Ignored() && e.Worktree != '.' && e.Worktree != ' '
+	if e.Conflicted() || e.Untracked() || e.Ignored() {
+		return false
+	}
+	if e.Worktree != '.' && e.Worktree != ' ' {
+		return true
+	}
+	return e.Props != 0 && e.Props != ' '
 }
 
 // IsSubmodule reports a submodule entry.

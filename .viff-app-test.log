@@ -1,6 +1,0 @@
---- FAIL: TestScenarioRenameModeSymlinkBinaryDelete (0.49s)
-    scenarios_test.go:191: symlink target.txt C:\Users\momo\AppData\Local\Temp\TestScenarioRenameModeSymlinkBinaryDelete3191490845\001\link.txt: A required privilege is not held by the client.
-FAIL
-FAIL	viff/internal/app	427.621s
-FAIL
-[exit=1]

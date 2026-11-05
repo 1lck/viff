@@ -41,3 +41,7 @@ func findMeta(dir, name string, ok func(string) bool) string {
 		abs = parent
 	}
 }
+
+// CLIName is the executable name the console and the event log print for a
+// command this adapter ran.
+func (r *Runner) CLIName() string { return "git" }

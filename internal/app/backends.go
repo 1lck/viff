@@ -86,6 +86,23 @@ func (w *Workspace) SetSVNPath(path string) {
 	}
 }
 
+// cliNamer is implemented by an adapter that can name its own executable, so
+// the console and the event log never print one tool's name over the other's
+// commands.
+type cliNamer interface {
+	CLIName() string
+}
+
+// toolName is the executable name to print for b, defaulting to git.
+func toolName(b Git) string {
+	if n, ok := b.(cliNamer); ok {
+		if name := n.CLIName(); name != "" {
+			return name
+		}
+	}
+	return "git"
+}
+
 // useBackend makes b the active adapter. It runs on the UI thread, before any
 // command for the newly opened repository starts, so no goroutine observes the
 // field changing.
@@ -95,6 +112,7 @@ func (w *Workspace) useBackend(b Git) {
 	}
 	b.SetCommandLog(w.logCommand)
 	w.Git = b
+	w.ConsoleTool = toolName(b)
 	w.Caps = CapabilitiesOf(b)
 	if w.Settings != nil {
 		w.ApplyGitSettings()
