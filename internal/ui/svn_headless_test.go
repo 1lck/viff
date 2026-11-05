@@ -385,11 +385,18 @@ func TestSVNUICommitThroughTheWindow(t *testing.T) {
 	// the same path rather than a shortcut that needs a focused editor.
 	f.click("Commit")
 
+	// The commit finishes in two steps: the working copy goes clean and then
+	// the log reloads, because the fingerprint it keys on includes the
+	// repository's HEAD. Waiting only for the clean status returns before the
+	// history is back, which is what made this read an empty list.
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		rs := f.ws.Repo
-		return rs != nil && !f.ws.Busy() && !f.ws.Pending() && len(rs.Status.Entries) == 0
+		return rs != nil && !f.ws.Busy() && !f.ws.Pending() &&
+			len(rs.Status.Entries) == 0 &&
+			rs.Log.Loaded() && !rs.Log.Loading && len(rs.Log.Commits) > 0 &&
+			rs.Log.Commits[0].Hash != before
 	}, 30*time.Second); err != nil {
-		t.Fatalf("commit did not leave a clean working copy: %v\nhits: %s", err, strings.Join(f.s.Texts(), " | "))
+		t.Fatalf("commit did not refresh the log: %v\nhits: %s", err, strings.Join(f.s.Texts(), " | "))
 	}
 	f.s.Settle(60*time.Millisecond, 2*time.Second)
 
@@ -397,8 +404,8 @@ func TestSVNUICommitThroughTheWindow(t *testing.T) {
 	if len(rs.Status.Entries) != 0 {
 		t.Fatalf("entries after commit: %+v", rs.Status.Entries)
 	}
-	if rs.Log.Commits[0].Hash == before {
-		t.Fatalf("the log still shows revision %s after committing", before)
+	if len(rs.Log.Commits) == 0 {
+		t.Fatal("the log is empty after committing")
 	}
 	if got := rs.Log.Commits[0].Subject; got != "Add notes file" {
 		t.Fatalf("newest subject = %q", got)
