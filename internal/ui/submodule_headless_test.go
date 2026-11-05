@@ -60,14 +60,24 @@ func TestSubmodulesDialogAndMenu(t *testing.T) {
 	}
 	f.win.cm.sel = map[string]bool{}
 
-	// The dialog lists the submodule with its state and actions.
+	// The dialog lists the submodule with its state and actions. The buttons
+	// stay disabled until both loads land, and a disabled control is skipped by
+	// hit testing, so waiting for the text alone raced the second load.
 	f.win.openSubmodules()
 	f.win.Invalidate()
-	err := f.s.WaitFor(func(app.Snapshot) bool {
-		return strings.Contains(strings.Join(f.s.Texts(), "\n"), "deps/lib")
+	err := f.s.WaitFor(func(snap app.Snapshot) bool {
+		if !strings.Contains(strings.Join(f.s.Texts(), "\n"), "deps/lib") {
+			return false
+		}
+		for _, hit := range snap.Hits {
+			if hit.Label == "Sync All" && !hit.Disabled {
+				return true
+			}
+		}
+		return false
 	}, 10*time.Second)
 	if err != nil {
-		t.Fatalf("submodule dialog never listed deps/lib: %v\ntexts: %s", err, strings.Join(f.s.Texts(), " | "))
+		t.Fatalf("submodule dialog never offered Sync All: %v\ntexts: %s", err, strings.Join(f.s.Texts(), " | "))
 	}
 	f.s.Settle(60*time.Millisecond, 2*time.Second)
 	texts := strings.Join(f.s.Texts(), "\n")
