@@ -38,7 +38,6 @@ type commitView struct {
 	msgCollapsed bool
 	aiBusy       bool
 	aiLast       string // last generated message, so a rerun asks for other wording
-	aiErr        string
 	// listID filters the changes tree by change list. "" shows every list,
 	// which keeps the historical behavior; any other value is the selected
 	// list's ID.
@@ -1077,19 +1076,12 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
 		w.after(func() { w.doCommit(true) })
 	}
-	if v.aiErr != "" && msgH > 48 {
-		card := rect(mr.X+8, bottom(mr)-50, mr.Width-16, 42)
-		w.p.round(card, 6, w.pal.ControlBg)
-		w.p.iconIn(icons.Bot, rect(card.X+10, card.Y+13, 16, 16))
-		w.p.text(v.aiErr, rect(card.X+34, card.Y+6, card.Width-34-100, 30), fontSmall, regular, w.pal.TextSecond)
-		if w.button(idCmAISettings, rect(right(card)-92, card.Y+8, 84, 26), w.t(i18n.WorkspaceAIOpenSettings), btnNormal, false) {
-			w.after(func() { w.openSettingsAt(2) })
-		}
-	}
 }
 
 // generateAICommitMessage asks the configured endpoint for a message and puts
 // it in the box. A second run passes the previous one so the wording changes.
+// A missing endpoint or a failed request is reported as a notification, which
+// carries the link to the settings page instead of covering the message box.
 func (w *Window) generateAICommitMessage() {
 	v := &w.cm
 	if v.aiBusy {
@@ -1103,20 +1095,20 @@ func (w *Window) generateAICommitMessage() {
 		Model:    s.AIModel,
 		Language: s.Language,
 	}
+	openSettings := vapp.NoticeAction{Title: w.t(i18n.WorkspaceAIOpenSettings), Run: func() { w.openSettingsAt(2) }}
 	if !cfg.Ready() {
-		v.aiErr = w.t(i18n.WorkspaceAINotConfigured)
+		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.WorkspaceAINotConfigured), "", openSettings)
 		return
 	}
-	v.aiBusy, v.aiErr = true, ""
+	v.aiBusy = true
 	previous := v.aiLast
 	w.ws.GenerateCommitMessage(context.Background(), cfg, previous, func(message string, err error) {
 		v.aiBusy = false
 		if err != nil {
-			v.aiErr = err.Error()
+			w.ws.Notify(vapp.NoticeError, w.t(i18n.WorkspaceAIGenerateFailed), err.Error(), openSettings)
 			return
 		}
 		v.aiLast = message
-		v.aiErr = ""
 		setText(v.msg, message)
 	})
 }

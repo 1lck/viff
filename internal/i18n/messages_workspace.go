@@ -84,6 +84,7 @@ const (
 	WorkspaceTipExpandMessage       = Key("workspace.tip.expandMessage")
 	WorkspaceTipAIGenerate          = Key("workspace.tip.aiGenerate")
 	WorkspaceAIGenerating           = Key("workspace.ai.generating")
+	WorkspaceAIGenerateFailed       = Key("workspace.ai.generateFailed")
 	WorkspaceAINotConfigured        = Key("workspace.ai.notConfigured")
 	WorkspaceAIOpenSettings         = Key("workspace.ai.openSettings")
 
@@ -235,6 +236,7 @@ func init() {
 		WorkspaceTipExpandMessage:       "Expand the commit message",
 		WorkspaceTipAIGenerate:          "Write the message with AI",
 		WorkspaceAIGenerating:           "Writing the message…",
+		WorkspaceAIGenerateFailed:       "The AI could not write the message",
 		WorkspaceAINotConfigured:        "Set the AI endpoint and model in the settings first",
 		WorkspaceAIOpenSettings:         "Open settings…",
 
@@ -377,6 +379,7 @@ func init() {
 		WorkspaceTipExpandMessage:       "展开提交说明",
 		WorkspaceTipAIGenerate:          "用 AI 生成提交说明",
 		WorkspaceAIGenerating:           "正在生成提交说明…",
+		WorkspaceAIGenerateFailed:       "AI 没能生成提交说明",
 		WorkspaceAINotConfigured:        "请先在设置里填写 AI 端点和模型",
 		WorkspaceAIOpenSettings:         "打开设置…",
 

@@ -70,7 +70,6 @@ var (
 	idCmOptions         = tree.ID(fCommit, "commit-options")
 	idCmOptionsDropdown = tree.ID(fCommit, "commit-options-dropdown")
 	idCmAI              = tree.ID(fCommit, "commit-ai")
-	idCmAISettings      = tree.ID(fCommit, "commit-ai-settings")
 	idAIFetchModels     = tree.ID(fCommit, "ai-fetch-models")
 	idAIEye             = tree.ID(fCommit, "ai-eye")
 	idCmCommit          = tree.ID(fCommit, "commit-button")
