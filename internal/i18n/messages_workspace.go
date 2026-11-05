@@ -98,6 +98,17 @@ const (
 	WorkspaceBannerRebasing   = Key("workspace.banner.rebasing")
 	WorkspaceBannerMerging    = Key("workspace.banner.merging")
 
+	// Git LFS detection (ADR 0031): the warning shown when the repository uses
+	// LFS rules but this machine has no git-lfs. Viff never installs it; the
+	// banner and notification offer the install command to copy.
+	WorkspaceLFSMissingTitle = Key("workspace.lfs.missingTitle")
+	WorkspaceLFSRuleOne      = Key("workspace.lfs.ruleOne")
+	WorkspaceLFSRuleMany     = Key("workspace.lfs.ruleMany")
+	WorkspaceLFSCopyInstall  = Key("workspace.lfs.copyInstall")
+	WorkspaceLFSNotifyBody   = Key("workspace.lfs.notifyBody")
+	WorkspaceLFSCopiedTitle  = Key("workspace.lfs.copiedTitle")
+	WorkspaceLFSCopiedBody   = Key("workspace.lfs.copiedBody")
+
 	// Buttons.
 	WorkspaceButtonContinue = Key("workspace.button.continue")
 	WorkspaceButtonSkip     = Key("workspace.button.skip")
@@ -249,6 +260,14 @@ func init() {
 		WorkspaceBannerRebasing:   "Rebasing %s onto %s",
 		WorkspaceBannerMerging:    "Merging into %s",
 
+		WorkspaceLFSMissingTitle: "Git LFS is not installed",
+		WorkspaceLFSRuleOne:      "%d LFS rule",
+		WorkspaceLFSRuleMany:     "%d LFS rules",
+		WorkspaceLFSCopyInstall:  "Copy Install Command",
+		WorkspaceLFSNotifyBody:   "This repository uses Git LFS, but git-lfs was not found.\nFiles tracked by LFS cannot be downloaded or pushed until it is installed.\nInstall it with %s, then run git lfs install once.",
+		WorkspaceLFSCopiedTitle:  "Git LFS",
+		WorkspaceLFSCopiedBody:   "Install command copied: %s",
+
 		WorkspaceButtonContinue: "Continue",
 		WorkspaceButtonSkip:     "Skip",
 		WorkspaceButtonAbort:    "Abort",
@@ -391,6 +410,14 @@ func init() {
 		WorkspaceBannerInProgress: "%s 进行中",
 		WorkspaceBannerRebasing:   "正在把 %s 变基到 %s",
 		WorkspaceBannerMerging:    "正在合并到 %s",
+
+		WorkspaceLFSMissingTitle: "未安装 Git LFS",
+		WorkspaceLFSRuleOne:      "%d 条 LFS 规则",
+		WorkspaceLFSRuleMany:     "%d 条 LFS 规则",
+		WorkspaceLFSCopyInstall:  "复制安装命令",
+		WorkspaceLFSNotifyBody:   "这个仓库使用 Git LFS，但没有找到 git-lfs。\n安装前，受 LFS 管理的文件无法下载或推送。\n可用 %s 安装，然后在终端执行一次 git lfs install。",
+		WorkspaceLFSCopiedTitle:  "Git LFS",
+		WorkspaceLFSCopiedBody:   "已复制安装命令：%s",
 
 		WorkspaceButtonContinue: "继续",
 		WorkspaceButtonSkip:     "跳过",

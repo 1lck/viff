@@ -378,13 +378,32 @@ func (w *Window) paintStatus(r ui.Rect) {
 	tw = w.p.text(rs.HeadLabel(), rect(x, r.Y, 300, r.Height), fontUI, regular, w.pal.TextMuted)
 	x += tw
 
+	// A repository that uses Git LFS gets a quiet marker with its managed file
+	// count. It turns into a warning colour when the LFS rules exist but
+	// git-lfs is missing, the case the Commit panel and notification explain.
+	x += 20
+	if rs.LFS.Managed {
+		label := w.lfsStatusLabel(rs)
+		lw := w.p.width(label, fontUI, regular)
+		lr := rect(x, r.Y, lw+8, r.Height)
+		color := w.pal.Link
+		if rs.LFS.NeedsInstall() {
+			color = w.pal.Warning
+		}
+		w.p.text(label, lr, fontUI, regular, color)
+		tip := w.lfsStatusTip(rs)
+		w.c.HitWithOptions(idStatusLFS, lr, tip, ui.HitOptions{Role: ui.RoleStatus, SkipFocus: true})
+		w.tip(idStatusLFS, tip)
+		x = right(lr) + 12
+	}
+
 	// Diagnostics recording is a quiet status marker, not a dialog: the user
 	// keeps working while it lasts. Clicking it stops the recording and saves
 	// the bundle, the same as Help > Stop Recording and Save Diagnostics.
 	if w.ws.ProblemRecording() {
 		label := w.t(i18n.ChromeStatusRecording)
 		lw := w.p.width(label, fontUI, regular)
-		rr := rect(x+20, r.Y, lw+10, r.Height)
+		rr := rect(x, r.Y, lw+10, r.Height)
 		w.p.text(label, rr, fontUI, regular, w.pal.Warning)
 		w.c.HitWithOptions(idStatusRecording, rr, w.t(i18n.ChromeStatusRecordingLabel), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
 		w.tip(idStatusRecording, w.t(i18n.ChromeTipRecording))
