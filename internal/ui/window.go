@@ -31,6 +31,10 @@ type Window struct {
 	c        *ui.Canvas
 	size     ui.Size
 	mono     ui.MonoFace
+	// native is the window the application opened; nil in headless runs.
+	native *app.Window
+	// quit closes the application from the status item's menu.
+	quit func()
 
 	// Registries rebuilt by every paint; event handlers read the latest.
 	scrolls  []scrollRegion
@@ -157,6 +161,44 @@ func (w *Window) applyTheme() {
 	w.theme = w.pal.viewTheme()
 }
 
+// onMinimize keeps Viff in the status area instead of the taskbar: the platform
+// minimizes the window first, and it hides itself so only the icon remains.
+func (w *Window) onMinimize(minimized bool) {
+	if minimized && w.native != nil {
+		w.native.Hide()
+	}
+}
+
+// SetTray hands the window the native handle the application opened and how to
+// quit, which the status item's menu uses. Headless runs leave it nil.
+func (w *Window) SetTray(native *app.Window, quit func()) {
+	w.native = native
+	w.quit = quit
+}
+
+// ShowFromTray brings the window back after a press on the status item.
+func (w *Window) ShowFromTray() {
+	if w.native == nil {
+		return
+	}
+	w.native.Show()
+	w.Invalidate()
+}
+
+// TrayMenu is the status item's menu: bring the window back, or quit.
+func (w *Window) TrayMenu() []app.MenuItem {
+	quit := w.quit
+	return []app.MenuItem{
+		{Title: "Show Viff", OnSelect: w.ShowFromTray},
+		{Separator: true},
+		{Title: "Quit Viff", OnSelect: func() {
+			if quit != nil {
+				quit()
+			}
+		}},
+	}
+}
+
 // Config is the Viva window configuration.
 func (w *Window) Config() app.Config {
 	s := w.ws.Settings
@@ -190,6 +232,7 @@ func (w *Window) Config() app.Config {
 		Invalidator:    &w.inv,
 		OnWake:         w.onWake,
 		OnClosed:       w.onClosed,
+		OnMinimize:     w.onMinimize,
 	}
 }
 
