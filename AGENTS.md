@@ -15,6 +15,22 @@ Viff 是一个用 Go 和 Viva 编写的原生 Git 桌面客户端：一个 Go �
 - 取舍写进 ADR：影响架构、兼容性或维护成本的选择，按 `docs/decisions` 记录背景、替代项、代价与复审条件，让后来者知道为什么这么设计。
 - 「改动最小化」指范围而不是标准：只改该改的地方，但改到能长期维护的完成度；不为省事违反分层、跳过测试或欠文档。
 
+## 任务路由：写代码和改文档都必须先加载 skill
+
+skill 是必读步骤，不是可选参考。按改动类型加载，跨类型就叠加加载：
+
+| 你在做什么 | 必载 skill | 不能跳过 |
+| --- | --- | --- |
+| 改 Go 代码、加包、加依赖 | `viff-go-conventions` + 对应领域 skill | gofmt/vet/mod tidy、错误与取消路径、依赖与许可证 |
+| 写或改测试 | `viff-testing` | 临时仓库与配置隔离、无头标签、断言状态而非像素 |
+| 改界面、主题、图标 | `viff-ui-viva` | 明暗主题、英文文案、键盘可达、无头断言 |
+| 改 Git 命令或输出解析 | `viff-git-integration` | 机器格式、失败分类、stale 重查、取消语义 |
+| 加日志、错误码、诊断、脱敏 | `viff-observability-privacy` | 脱敏先于落盘、事件目录、配额 |
+| 改文档、ADR、发布说明 | `viff-docs-adr`（发布说明再加 `viff-release-ci`） | 双语同步、ADR 字段、validator |
+| 动 CI、打包、发版 | `viff-release-ci` | docs-only 分类、门禁语义、产物集合 |
+
+**代码与文档同一次交付。** 行为变化必须在同一个改动里更新 README、`docs/` 或新增 ADR，不做「代码先合、文档后补」；确实要分批时开 issue，并在 PR 里写明剩余项与复审条件。纯文档改动同样按上表加载 skill，不因为「只是文档」跳过检查。
+
 ## 开始前必读
 
 | 主题 | 文件 |
@@ -128,14 +144,14 @@ python3 scripts/release_notes.py docs/releases/vTAG.md --tag vTAG  # 发布说�
 - 临时脚本与验证产物放 `.viff-test/`（已被忽略），不留在仓库树里。
 - 需要并行开发多个任务时用 `git worktree`（本仓库实践：`.agents/worktrees/<branch>/`），每条分支独立、写完各自验证。
 
-## Skill 索引
+## Skill 文件
 
-| skill | 何时加载 |
-| --- | --- |
-| [viff-go-conventions](.agents/skills/viff-go-conventions/SKILL.md) | 写/改 Go 代码、加包、加依赖、做重构或错误处理时 |
-| [viff-testing](.agents/skills/viff-testing/SKILL.md) | 写测试、修 flaky、跑无头 UI 套件、准备证据时 |
-| [viff-ui-viva](.agents/skills/viff-ui-viva/SKILL.md) | 改界面、主题、绘制、交互、图标或 UI 截图时 |
-| [viff-git-integration](.agents/skills/viff-git-integration/SKILL.md) | 新增 Git 命令、解析机器输出、处理进程/取消/写操作时 |
-| [viff-observability-privacy](.agents/skills/viff-observability-privacy/SKILL.md) | 加日志事件、错误码、崩溃处理、诊断导出、脱敏时 |
-| [viff-docs-adr](.agents/skills/viff-docs-adr/SKILL.md) | 改文档、写 ADR、同步双语、更新 README/features 时 |
-| [viff-release-ci](.agents/skills/viff-release-ci/SKILL.md) | 动 CI/发布/打包/发布说明/版本号/依赖升级时 |
+触发条件见上面的「任务路由」，每个 skill 的完整步骤在其目录内：
+
+- [viff-go-conventions](.agents/skills/viff-go-conventions/SKILL.md)
+- [viff-testing](.agents/skills/viff-testing/SKILL.md)
+- [viff-ui-viva](.agents/skills/viff-ui-viva/SKILL.md)
+- [viff-git-integration](.agents/skills/viff-git-integration/SKILL.md)
+- [viff-observability-privacy](.agents/skills/viff-observability-privacy/SKILL.md)
+- [viff-docs-adr](.agents/skills/viff-docs-adr/SKILL.md)
+- [viff-release-ci](.agents/skills/viff-release-ci/SKILL.md)
