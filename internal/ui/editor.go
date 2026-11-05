@@ -436,7 +436,7 @@ func (w *Window) paintEditorEmpty(r ui.Rect) {
 	for _, h := range hints {
 		lw := w.p.width(h[0], fontUI, regular)
 		w.p.text(h[0], rect(cx-lw-6, y, lw+2, lineH), fontUI, regular, w.pal.TextSecond)
-		w.p.text(h[1], rect(cx+6, y, 200, lineH), fontUI, regular, w.pal.Link)
+		w.p.text(kbdHint(h[1]), rect(cx+6, y, 200, lineH), fontUI, regular, w.pal.Link)
 		y += lineH
 	}
 	w.p.textCenter("Select a file in the Commit tool window or the Git log to see its changes", rect(r.X, y+14, r.Width, 22), fontSmall, regular, w.pal.TextDisable)

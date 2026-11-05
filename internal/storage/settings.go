@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -165,6 +166,14 @@ func (s *Settings) sanitize() {
 	}
 	if s.FontSize < 9 || s.FontSize > 28 {
 		s.FontSize = d.FontSize
+	}
+	// EditorFont is a family name the settings page offered from the system's
+	// installed fixed-pitch faces. Trim it, and refuse an implausible name
+	// instead of handing the renderer something it cannot resolve.
+	if name := strings.TrimSpace(s.EditorFont); len(name) <= 96 {
+		s.EditorFont = name
+	} else {
+		s.EditorFont = ""
 	}
 	if s.Theme != "dark" && s.Theme != "light" && s.Theme != "system" {
 		s.Theme = d.Theme

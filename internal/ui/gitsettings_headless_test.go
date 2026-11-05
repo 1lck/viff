@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vivaui/viva/app"
+	"github.com/vivaui/viva/ui"
 )
 
 // TestGitSettingsDialog edits the Git page and checks that the values are
@@ -92,4 +95,83 @@ func runGit(t *testing.T, f *uiFixture, args ...string) string {
 		t.Fatalf("git %v: %v", args, err)
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// The General page ends with the interface font picker.
+func TestInterfaceFontSectionShown(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openSettings()
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+
+	if !f.s.HasText("Fonts") || !f.s.HasText("Interface font:") {
+		t.Fatalf("the font section is missing; texts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+}
+
+// A family the system does not have must fall back quietly instead of breaking
+// the next paint, and clearing the setting hands the face back to the platform.
+func TestInterfaceFontFallsBack(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+
+	f.ws.Settings.EditorFont = "Viff Missing Family"
+	f.win.applyFont()
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if got := f.ws.Settings.EditorFont; got != "Viff Missing Family" {
+		t.Fatalf("EditorFont = %q, want the chosen value", got)
+	}
+
+	f.ws.Settings.EditorFont = ""
+	f.win.applyFont()
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if f.ws.Settings.EditorFont != "" {
+		t.Fatal("EditorFont should be empty after clearing")
+	}
+	f.assertIdle()
+}
+
+// Picking a family in the dropdown stores it. The row is clicked by coordinate
+// because a popup is drawn on its own layer: the label lookup that reaches form
+// controls does not reach a row of an open menu.
+func TestInterfaceFontSelection(t *testing.T) {
+	families := app.FontFamilies()
+	if len(families) == 0 {
+		t.Skip("the platform reports no font families")
+	}
+	target := families[0]
+
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openSettings()
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+
+	f.click("Default (system interface font)")
+	f.s.Settle(40*time.Millisecond, time.Second)
+
+	var row ui.Rect
+	found := false
+	for _, hit := range f.s.Snapshot().Hits {
+		if hit.Label == target {
+			row, found = hit.Bounds, true
+		}
+	}
+	if !found {
+		t.Fatalf("the dropdown has no row for %q", target)
+	}
+	if err := f.s.Click(row.X+row.Width/2, row.Y+row.Height/2); err != nil {
+		t.Fatalf("click %q: %v", target, err)
+	}
+	f.s.Settle(60*time.Millisecond, time.Second)
+
+	f.click("OK")
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if got := f.ws.Settings.EditorFont; got != target {
+		t.Fatalf("EditorFont = %q, want %q", got, target)
+	}
+	f.assertIdle()
 }
