@@ -45,10 +45,14 @@ const (
 	ChromeTipTracking    = Key("chrome.tip.tracking")
 	ChromeTipAheadBehind = Key("chrome.tip.aheadBehind")
 	ChromeTipRecording   = Key("chrome.tip.recording")
+	ChromeTipLFSFiles    = Key("chrome.tip.lfsFiles")
+	ChromeTipLFSRules    = Key("chrome.tip.lfsRules")
+	ChromeTipLFSMissing  = Key("chrome.tip.lfsMissing")
 
 	// Status bar markers.
 	ChromeStatusRecording      = Key("chrome.status.recording")
 	ChromeStatusRecordingLabel = Key("chrome.status.recordingLabel")
+	ChromeStatusLFS            = Key("chrome.status.lfs")
 
 	// Native dialog titles.
 	ChromeDialogOpenRepository = Key("chrome.dialog.openRepository")
@@ -218,9 +222,13 @@ func init() {
 		ChromeTipTracking:    "Tracking %s",
 		ChromeTipAheadBehind: " (↑%s ↓%s)",
 		ChromeTipRecording:   "Recording diagnostics — click to stop and save",
+		ChromeTipLFSFiles:    "Git LFS: %d managed files",
+		ChromeTipLFSRules:    "Git LFS: %d rules",
+		ChromeTipLFSMissing:  "git-lfs is not installed",
 
 		ChromeStatusRecording:      "● Recording diagnostics…",
 		ChromeStatusRecordingLabel: "Recording diagnostics",
+		ChromeStatusLFS:            "LFS",
 
 		ChromeDialogOpenRepository: "Open Git Repository",
 
@@ -377,9 +385,13 @@ func init() {
 		ChromeTipTracking:    "跟踪 %s",
 		ChromeTipAheadBehind: "（↑%s ↓%s）",
 		ChromeTipRecording:   "正在记录诊断信息 — 点击停止并保存",
+		ChromeTipLFSFiles:    "Git LFS：%d 个受管文件",
+		ChromeTipLFSRules:    "Git LFS：%d 条规则",
+		ChromeTipLFSMissing:  "未安装 git-lfs",
 
 		ChromeStatusRecording:      "● 正在记录诊断信息…",
 		ChromeStatusRecordingLabel: "正在记录诊断信息",
+		ChromeStatusLFS:            "LFS",
 
 		ChromeDialogOpenRepository: "打开 Git 仓库",
 

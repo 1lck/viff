@@ -174,6 +174,12 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	if rs.Operation.Active() {
 		content = w.paintOperationBanner(content)
 	}
+	// The LFS warning sits below the operation banner: an in-progress merge or
+	// rebase is the more urgent state, and both clear once the effective
+	// problem is resolved.
+	if rs.LFS.NeedsInstall() {
+		content = w.paintLFSBanner(content)
+	}
 
 	// Toolbar.
 	tb := splitTop(&content, 34)
