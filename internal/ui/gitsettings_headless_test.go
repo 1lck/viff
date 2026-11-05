@@ -113,7 +113,7 @@ func TestInterfaceFontSectionShown(t *testing.T) {
 	f.win.Invalidate()
 	f.s.Settle(60*time.Millisecond, 2*time.Second)
 
-	if !f.s.HasText("Fonts") || !f.s.HasText("Interface font:") {
+	if !f.s.HasText("Fonts") || !f.s.HasText("Interface font:") || !f.s.HasText("Diff font:") {
 		t.Fatalf("the font section is missing; texts: %s", strings.Join(f.s.Texts(), " | "))
 	}
 }
@@ -180,6 +180,50 @@ func TestInterfaceFontSelection(t *testing.T) {
 	f.s.Settle(60*time.Millisecond, time.Second)
 	if got := f.ws.Settings.EditorFont; got != target {
 		t.Fatalf("EditorFont = %q, want %q", got, target)
+	}
+	f.assertIdle()
+}
+
+// Picking a fixed-pitch family for diffs stores it and leaves the interface font
+// alone; the two settings are independent.
+func TestDiffFontSelection(t *testing.T) {
+	mono := app.MonospaceFamilies()
+	if len(mono) == 0 {
+		t.Skip("the platform reports no fixed-pitch families")
+	}
+	target := mono[0]
+
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openSettings()
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+
+	f.click("Default (bundled or system fixed-pitch)")
+	f.s.Settle(40*time.Millisecond, time.Second)
+
+	var row ui.Rect
+	found := false
+	for _, hit := range f.s.Snapshot().Hits {
+		if hit.Label == target {
+			row, found = hit.Bounds, true
+		}
+	}
+	if !found {
+		t.Fatalf("the diff font menu has no row for %q", target)
+	}
+	if err := f.s.Click(row.X+row.Width/2, row.Y+row.Height/2); err != nil {
+		t.Fatalf("click %q: %v", target, err)
+	}
+	f.s.Settle(60*time.Millisecond, time.Second)
+
+	f.click("OK")
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if got := f.ws.Settings.DiffFont; got != target {
+		t.Fatalf("DiffFont = %q, want %q", got, target)
+	}
+	if got := f.ws.Settings.EditorFont; got != "" {
+		t.Errorf("EditorFont = %q, want empty: the diff choice must not touch it", got)
 	}
 	f.assertIdle()
 }
