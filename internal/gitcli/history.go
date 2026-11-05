@@ -254,6 +254,37 @@ func (r *Runner) Refs(ctx context.Context, repo domain.Repo) ([]domain.Ref, erro
 	return refs, nil
 }
 
+// RemoteHeads maps each remote to the branch its HEAD points at, the default
+// branch a comparison or a pull request targets. Git writes that symbolic ref
+// on clone and on `git remote set-head`; a remote without one is absent from
+// the map. The query stays local: it reads refs and never contacts a remote,
+// because `git remote show` would go to the network.
+func (r *Runner) RemoteHeads(ctx context.Context, repo domain.Repo) (map[string]string, error) {
+	out, err := r.Run(ctx, repo.Root, "for-each-ref", "--format=%(refname)%00%(symref)", "refs/remotes")
+	if err != nil {
+		return nil, err
+	}
+	heads := map[string]string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Split(line, "\x00")
+		if len(f) < 2 {
+			continue
+		}
+		// Only symbolic refs have a target; a plain ref prints an empty one.
+		name, ok := strings.CutPrefix(f[0], "refs/remotes/")
+		if !ok || !strings.HasSuffix(name, "/HEAD") || f[1] == "" {
+			continue
+		}
+		remote := strings.TrimSuffix(name, "/HEAD")
+		target, ok := strings.CutPrefix(f[1], "refs/remotes/")
+		if !ok || !strings.HasPrefix(target, remote+"/") {
+			continue
+		}
+		heads[remote] = strings.TrimPrefix(target, remote+"/")
+	}
+	return heads, nil
+}
+
 func parseTrack(ref *domain.Ref, track string) {
 	if track == "gone" {
 		ref.Gone = true

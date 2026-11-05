@@ -35,6 +35,10 @@ type RepoState struct {
 	Remotes      []domain.Remote
 	Stashes      []domain.Stash
 	RefsLoaded   bool
+	// RemoteHeads maps a remote to the branch its HEAD points at, the default
+	// branch a pull request targets. Git writes refs/remotes/<remote>/HEAD; a
+	// remote without it is absent, and BaseBranch falls back to main/master.
+	RemoteHeads map[string]string
 	// RefsByHash maps a commit to the refs pointing at it, for the log.
 	RefsByHash map[string][]domain.Ref
 
@@ -303,6 +307,9 @@ func (w *Workspace) Refresh(meta bool) {
 		}
 		worktrees, worktreesErr := w.Git.Worktrees(ctx, repo)
 		shallow, shallowErr := w.Git.IsShallow(ctx, repo)
+		// The remote HEAD names the branch a pull request targets; it is read
+		// with the other refs so a comparison never guesses while it is known.
+		remoteHeads, headsErr := w.Git.RemoteHeads(ctx, repo)
 		w.post(func() {
 			if w.Repo != rs || rs.statusSeq != seq {
 				return
@@ -354,6 +361,9 @@ func (w *Workspace) Refresh(meta bool) {
 			}
 			if shallowErr == nil {
 				rs.Shallow = shallow
+			}
+			if headsErr == nil {
+				rs.RemoteHeads = remoteHeads
 			}
 			// Keep the workspace overview row of the active repository in
 			// step with the view; a failure keeps the known status.

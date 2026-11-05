@@ -318,6 +318,42 @@ func TestBranchesTagsRefs(t *testing.T) {
 	}
 }
 
+// The remote's default branch is read from refs/remotes/<remote>/HEAD and
+// nothing else: the query must stay local, so a remote that is unreachable or
+// slow cannot hang a refresh, and a remote without the symbolic ref is simply
+// absent instead of guessed.
+func TestRemoteHeads(t *testing.T) {
+	tr := newTestRepo(t)
+	tr.write("a", "1\n")
+	tr.commitAll("one")
+	heads, err := tr.r.RemoteHeads(ctx, tr.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(heads) != 0 {
+		t.Fatalf("heads without a remote = %v", heads)
+	}
+	tr.git("update-ref", "refs/remotes/origin/main", "HEAD")
+	tr.git("update-ref", "refs/remotes/origin/topic", "HEAD")
+	tr.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	tr.git("update-ref", "refs/remotes/upstream/main", "HEAD")
+	heads, err = tr.r.RemoteHeads(ctx, tr.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if heads["origin"] != "main" {
+		t.Fatalf("heads = %v, want origin -> main", heads)
+	}
+	// A remote branch is not a default branch, and a remote without HEAD stays
+	// out of the map.
+	if _, ok := heads["upstream"]; ok {
+		t.Fatalf("heads = %v, upstream has no HEAD", heads)
+	}
+	if heads["origin"] == "topic" {
+		t.Fatalf("heads = %v, topic is not the default branch", heads)
+	}
+}
+
 func TestRemotePushFetchTracking(t *testing.T) {
 	remote := newTestRepo(t)
 	remote.git("config", "receive.denyCurrentBranch", "updateInstead")

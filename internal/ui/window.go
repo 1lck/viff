@@ -39,6 +39,9 @@ type Window struct {
 	native *app.Window
 	// quit closes the application from the status item's menu.
 	quit func()
+	// openURL opens a web link in the system browser. Tests replace it to assert
+	// which address an action would open without starting a browser.
+	openURL func(string) error
 
 	// Registries rebuilt by every paint; event handlers read the latest.
 	scrolls  []scrollRegion
@@ -132,7 +135,7 @@ const (
 // New creates the window for a workspace. The caller sets the invalidate
 // hook of the workspace to w.Invalidate.
 func New(ws *vapp.Workspace) *Window {
-	w := &Window{ws: ws, commitOpen: true, gitOpen: true}
+	w := &Window{ws: ws, commitOpen: true, gitOpen: true, openURL: platform.OpenURL}
 	ws.ConfirmCheckout = w.confirmStashCheckout
 	w.applyFont()
 	w.applyLanguage()
