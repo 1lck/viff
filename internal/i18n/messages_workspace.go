@@ -80,6 +80,8 @@ const (
 	WorkspaceTipStageToCommit       = Key("workspace.tip.stageToCommit")
 	WorkspaceTipEnterMessage        = Key("workspace.tip.enterMessage")
 	WorkspaceTipCommitOptions       = Key("workspace.tip.commitOptions")
+	WorkspaceTipCollapseMessage     = Key("workspace.tip.collapseMessage")
+	WorkspaceTipExpandMessage       = Key("workspace.tip.expandMessage")
 
 	WorkspaceHintPush          = Key("workspace.hint.push")
 	WorkspaceHintUpdateProject = Key("workspace.hint.updateProject")
@@ -225,6 +227,8 @@ func init() {
 		WorkspaceTipStageToCommit:       "Stage changes to commit",
 		WorkspaceTipEnterMessage:        "Enter a commit message",
 		WorkspaceTipCommitOptions:       "Commit Options",
+		WorkspaceTipCollapseMessage:     "Collapse the commit message",
+		WorkspaceTipExpandMessage:       "Expand the commit message",
 
 		WorkspaceHintPush:          "Push",
 		WorkspaceHintUpdateProject: "Update Project",
@@ -361,6 +365,8 @@ func init() {
 		WorkspaceTipStageToCommit:       "暂存改动后再提交",
 		WorkspaceTipEnterMessage:        "请输入提交说明",
 		WorkspaceTipCommitOptions:       "提交选项",
+		WorkspaceTipCollapseMessage:     "折叠提交说明",
+		WorkspaceTipExpandMessage:       "展开提交说明",
 
 		WorkspaceHintPush:          "推送",
 		WorkspaceHintUpdateProject: "更新项目",
