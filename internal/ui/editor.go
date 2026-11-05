@@ -53,6 +53,11 @@ type diffTab struct {
 	conflictBlock int
 	busy          bool
 
+	// Decoded pictures of an image diff, kept per tab so a repaint does not
+	// decode again.
+	picOld, picNew       *ui.Bitmap
+	picOldErr, picNewErr string
+
 	// File view annotations (Git blame).
 	annotate  bool
 	blame     *domain.Blame
@@ -128,6 +133,10 @@ func (w *Window) closeTab(i int) {
 	if i < 0 || i >= len(v.tabs) {
 		return
 	}
+	// Drop the decoded pictures before the tab leaves the slice: one image diff
+	// can hold 16 MiB per side, and nothing would free it until the garbage
+	// collector happened to run.
+	v.tabs[i].picOld, v.tabs[i].picNew = nil, nil
 	v.tabs = append(v.tabs[:i], v.tabs[i+1:]...)
 	if v.active >= len(v.tabs) {
 		v.active = len(v.tabs) - 1
@@ -162,6 +171,8 @@ func (w *Window) loadTab(t *diffTab) {
 			return
 		}
 		first := t.res == nil
+		t.picOld, t.picNew = nil, nil
+		t.picOldErr, t.picNewErr = "", ""
 		t.res = res
 		w.prepareTab(t)
 		if first {

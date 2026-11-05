@@ -62,6 +62,9 @@ type DiffResult struct {
 	Mode      domain.WhitespaceMode
 	// Notice explains a diff that cannot be shown as text.
 	Notice string
+	// Image is set when the sides are pictures; the interface draws them
+	// instead of the text panes, so Notice stays empty then.
+	Image *ImageDiff
 	// ModeChange is "100644 → 100755" when only the mode changed.
 	ModeChange string
 	Loaded     time.Time
@@ -267,6 +270,10 @@ func finishDiff(res *DiffResult) {
 	res.ModeChange = modeChange(o, n)
 	switch {
 	case o.Binary || n.Binary:
+		if img := imageDiffInfo(o, n); img != nil {
+			res.Image = img
+			return
+		}
 		res.Notice = binaryNotice(o, n)
 		return
 	case o.TooLarge || n.TooLarge:
