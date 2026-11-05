@@ -65,6 +65,10 @@ type diffTab struct {
 	blameSeq  uint64
 	blameRank []int
 	blameN    int
+
+	// textSel is the read-only file view's text selection (selection.go). It
+	// is meaningful only when src.View.
+	textSel textSel
 }
 
 // uline is one row of the unified view.
@@ -81,6 +85,18 @@ type searchHit struct {
 func (v *editorView) reset() {
 	v.tabs = nil
 	v.active = 0
+}
+
+// activate switches to tab i, dropping text selections: a selection belongs to
+// the visit, not to the tab, so it does not reappear when the reader comes back.
+func (v *editorView) activate(i int) {
+	if i < 0 || i >= len(v.tabs) {
+		return
+	}
+	for _, t := range v.tabs {
+		t.clearTextSel()
+	}
+	v.active = i
 }
 
 func (v *editorView) cur() *diffTab {
@@ -104,7 +120,7 @@ func (w *Window) showDiff(src vapp.DiffSource, pin bool) {
 	key := src.Key()
 	for i, t := range v.tabs {
 		if t.src.Key() == key {
-			v.active = i
+			v.activate(i)
 			if pin {
 				t.preview = false
 			}
@@ -118,13 +134,13 @@ func (w *Window) showDiff(src vapp.DiffSource, pin bool) {
 	for i, o := range v.tabs {
 		if o.preview {
 			v.tabs[i] = t
-			v.active = i
+			v.activate(i)
 			w.loadTab(t)
 			return
 		}
 	}
 	v.tabs = append(v.tabs, t)
-	v.active = len(v.tabs) - 1
+	v.activate(len(v.tabs) - 1)
 	w.loadTab(t)
 }
 
@@ -146,14 +162,19 @@ func (w *Window) closeTab(i int) {
 	if v.active < 0 {
 		v.active = 0
 	}
+	for _, t := range v.tabs {
+		t.clearTextSel()
+	}
 }
 
 func (w *Window) whitespace() domain.WhitespaceMode {
 	return domain.WhitespaceMode(w.ws.Settings.DiffWhitespace)
 }
 
-// loadTab (re)loads a tab's diff, keeping its scroll position.
+// loadTab (re)loads a tab's diff, keeping its scroll position and dropping any
+// text selection, which would index text that is about to change.
 func (w *Window) loadTab(t *diffTab) {
+	t.clearTextSel()
 	w.ed.seq++
 	seq := w.ed.seq
 	t.seq = seq
@@ -186,6 +207,7 @@ func (w *Window) loadTab(t *diffTab) {
 		}
 		clear(t.selOld)
 		clear(t.selNew)
+		t.clearTextSel() // the display lines this selection indexed are gone
 		t.hitQuery = "\x00"
 	})
 }
@@ -387,7 +409,7 @@ func (w *Window) paintTabs(r ui.Rect) {
 			w.after(func() { w.closeTab(i) })
 		} else if w.c.Clicked(id) {
 			i := i
-			w.after(func() { v.active = i })
+			w.after(func() { v.activate(i) })
 		}
 		w.onDouble(id, func() { t.preview = false })
 		w.onContext(id, func(x, y float32) {
@@ -396,6 +418,7 @@ func (w *Window) paintTabs(r ui.Rect) {
 				{title: "Close", shortcut: "⌘W", run: func() { w.closeTab(i) }},
 				{title: "Close Other Tabs", run: func() {
 					v.tabs = []*diffTab{t}
+					t.clearTextSel()
 					v.active = 0
 				}},
 				{title: "Close All Tabs", run: func() { v.reset() }},
@@ -419,15 +442,17 @@ func (w *Window) tabTip(t *diffTab) string {
 // paintEditorEmpty shows the editor's empty-state hints like IntelliJ.
 func (w *Window) paintEditorEmpty(r ui.Rect) {
 	hints := [][2]string{
+		{"Project", "⌘1"},
 		{"Commit", "⌘K"},
 		{"Push", "⇧⌘K"},
 		{"Update Project", "⌘T"},
 		{"Branches", "⌥⇧`"},
+		{"Open File", "⇧⌘O"},
 		{"Show Diff of Selection", "⌘D"},
 	}
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
-		hints = [][2]string{{"Commit", "⌘K"}, {"Branches", "⌥⇧`"}, {"Show Diff of Selection", "⌘D"}}
+		hints = [][2]string{{"Project", "⌘1"}, {"Commit", "⌘K"}, {"Branches", "⌥⇧`"}, {"Open File", "⇧⌘O"}, {"Show Diff of Selection", "⌘D"}}
 	}
 	lineH := float32(30)
 	total := float32(len(hints)) * lineH
@@ -439,7 +464,7 @@ func (w *Window) paintEditorEmpty(r ui.Rect) {
 		w.p.text(kbdHint(h[1]), rect(cx+6, y, 200, lineH), fontUI, regular, w.pal.Link)
 		y += lineH
 	}
-	w.p.textCenter("Select a file in the Commit tool window or the Git log to see its changes", rect(r.X, y+14, r.Width, 22), fontSmall, regular, w.pal.TextDisable)
+	w.p.textCenter("Select a file in the Project panel, the Commit tool window or the Git log to see its changes", rect(r.X, y+14, r.Width, 22), fontSmall, regular, w.pal.TextDisable)
 }
 
 // ---- file icons ----------------------------------------------------------------

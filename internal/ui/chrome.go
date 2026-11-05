@@ -44,7 +44,21 @@ func (w *Window) paintMain(full ui.Rect) {
 			func(d float32) { s.GitPanelHeight = clampF(start-d, 120, max(120, full.Height-toolbarH-statusH-160)) },
 			w.saveSettings)
 	}
-	if w.commitOpen {
+	// The left dock holds one tool window at a time, like IntelliJ's left
+	// stripe: the Project tree replaces the Commit panel instead of squeezing
+	// the editor with two fixed panels.
+	if w.projectOpen {
+		pw := clampF(s.ProjectPanelWidth, 240, max(240, area.Width-320))
+		pr := splitLeft(&area, pw)
+		area.X += islandGap
+		area.Width -= islandGap
+		w.paintProject(pr)
+		start := pw
+		w.splitter(idSplitProject, rect(right(pr), pr.Y, islandGap, pr.Height), true,
+			func() { start = pw },
+			func(d float32) { s.ProjectPanelWidth = clampF(start+d, 240, max(240, full.Width-2*stripeW-300)) },
+			w.saveSettings)
+	} else if w.commitOpen {
 		cw := clampF(s.CommitPanelWidth, 240, max(240, area.Width-300))
 		cr := splitLeft(&area, cw)
 		area.X += islandGap
@@ -237,12 +251,31 @@ func (w *Window) projectMenu() []item {
 	}
 	if w.ws.Repo != nil {
 		out = append(out, sep(),
+			item{title: "Open File…", icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
 			item{title: "Show in Finder", icon: icons.Folder, run: func() { revealPath(cur) }},
 			item{title: "Open in Terminal", icon: icons.Shell, run: func() { openTerminal(cur) }},
 			sep(),
 			item{title: "Close Project", run: func() { w.ws.Close() }})
 	}
 	return out
+}
+
+// toggleProject shows the Project tree in the left dock. The dock holds one
+// tool window at a time, so opening it hides the Commit panel; the stripe
+// icons switch back and forth.
+func (w *Window) toggleProject() {
+	w.projectOpen = !w.projectOpen
+	if w.projectOpen {
+		w.commitOpen = false
+	}
+}
+
+// toggleCommit shows the Commit panel in the left dock.
+func (w *Window) toggleCommit() {
+	w.commitOpen = !w.commitOpen
+	if w.commitOpen {
+		w.projectOpen = false
+	}
 }
 
 // chooseRepoNow is chooseRepo outside a paint (menu actions run after it).
@@ -258,8 +291,12 @@ func (w *Window) chooseRepoNow() {
 
 func (w *Window) paintStripes(left, rightS ui.Rect) {
 	y := left.Y + 6
+	if w.stripeButton(idStripeProject, rect(left.X+5, y, 30, 30), icons.Project, "Project\t⌘1", w.projectOpen) {
+		w.after(w.toggleProject)
+	}
+	y += 36
 	if w.stripeButton(idStripeCommit, rect(left.X+5, y, 30, 30), icons.Commit, "Commit\t⌘0", w.commitOpen) {
-		w.after(func() { w.commitOpen = !w.commitOpen })
+		w.after(w.toggleCommit)
 	}
 	by := bottom(left) - 36
 	if w.stripeButton(idStripeGit, rect(left.X+5, by, 30, 30), icons.Vcs, "Git\t⌘9", w.gitOpen) {
