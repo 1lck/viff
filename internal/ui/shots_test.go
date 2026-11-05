@@ -162,7 +162,7 @@ func (f *uiFixture) settle() {
 	f.t.Helper()
 	err := f.s.WaitFor(func(app.Snapshot) bool {
 		rs := f.ws.Repo
-		return rs != nil && rs.StatusLoaded && rs.RefsLoaded && rs.Log.Loaded() && !rs.Log.Loading && !f.ws.Busy() && !f.ws.Pending() && !rs.DetailLoading
+		return rs != nil && rs.StatusLoaded && rs.RefsLoaded && rs.Log.Loaded() && !rs.Log.Loading && !rs.Refreshing() && !f.ws.Busy() && !f.ws.Pending() && !rs.DetailLoading
 	}, 20*time.Second)
 	if err != nil {
 		f.t.Fatal(err)

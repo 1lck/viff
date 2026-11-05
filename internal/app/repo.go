@@ -507,6 +507,11 @@ func refOrder(r domain.Ref) int {
 // CurrentBranch is the checked-out branch name, "" when detached.
 func (rs *RepoState) CurrentBranch() string { return rs.Status.Branch.Branch }
 
+// Refreshing reports whether a status query is still in flight. The window
+// reads it on the UI thread like the rest of the state; the headless fixture
+// waits on it so a test reads the state a write produced, not the one before.
+func (rs *RepoState) Refreshing() bool { return rs.refreshing }
+
 // CurrentRef returns the local ref of the current branch.
 func (rs *RepoState) CurrentRef() (domain.Ref, bool) {
 	for _, r := range rs.Refs {
