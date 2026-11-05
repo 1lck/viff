@@ -132,6 +132,11 @@ type Workspace struct {
 
 	// repos is the private state behind Repositories; see repositories.go.
 	repos repositoriesState
+	// undos is the session undo history, newest last; undoing marks a running
+	// Undo task. Both are UI-thread state and are cleared when the repository
+	// changes (see undo.go).
+	undos   []*undoEntry
+	undoing bool
 	// nextGen is the repository generation counter. It only ever grows: a
 	// generation is never reused after a repository is closed or removed, so a
 	// stale view can never match a newer repository.

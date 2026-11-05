@@ -280,7 +280,16 @@ func (w *Window) projectMenu() []item {
 		}
 	}
 	if w.ws.Repo != nil {
-		out = append(out, sep(),
+		// The newest recorded operation, named as the user performed it. The
+		// same action is on Command-Z; the menu is the discoverable copy and
+		// stays disabled while another command is changing the history.
+		undo := item{title: w.t(i18n.ChromeMenuUndo), icon: icons.Undo, shortcut: "⌘Z", disabled: true}
+		if name := w.ws.UndoName(); name != "" {
+			undo.title = w.t(i18n.ChromeMenuUndoOperation, name)
+			undo.disabled = w.ws.Busy()
+			undo.run = w.ws.Undo
+		}
+		out = append(out, sep(), undo,
 			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
 			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, run: func() { revealPath(cur) }},
 			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: w.openTerminal},

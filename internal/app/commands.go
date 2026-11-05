@@ -40,6 +40,14 @@ type RunOptions struct {
 // queried again from Git, because a cancelled write may have done part of
 // its work.
 func (w *Workspace) Run(title string, op Op, o RunOptions) {
+	w.run(title, nil, op, o)
+}
+
+// run is Run plus the undo record a successful command hands to the session.
+// The HEAD states are read from Git on either side of op while the write lock
+// is held, so a failed or cancelled command records nothing and a successful
+// record names the state the command really saw, not the view the user saw.
+func (w *Workspace) run(title string, undo *undoSpec, op Op, o RunOptions) {
 	rs := w.Repo
 	if rs == nil {
 		return
@@ -55,12 +63,34 @@ func (w *Workspace) Run(title string, op Op, o RunOptions) {
 			lock = writeLock(repo)
 			lock.Lock()
 		}
+		var before gitcli.HeadState
+		capture := false
+		if undo != nil {
+			// An unborn branch has no commit to go back to, so it is not
+			// recorded; undo needs a before state it can name.
+			if hs, err := w.Git.Head(ctx, repo); err == nil && hs.Head != "" {
+				before, capture = hs, true
+			}
+		}
 		err := op(ctx, repo, func(line string) { w.setProgress(task, line) })
+		var entry *undoEntry
+		if err == nil && capture && (!undo.kind.needsRef() || undo.hash != "") {
+			if after, herr := w.Git.Head(ctx, repo); herr == nil {
+				entry = &undoEntry{
+					kind: undo.kind, repoRoot: repo.Root, before: before, after: after,
+					name: undo.name, oldName: undo.oldName, hash: undo.hash,
+					previous: undo.previous, when: w.now(),
+				}
+			}
+		}
 		if lock != nil {
 			lock.Unlock()
 		}
 		w.post(func() {
 			finish()
+			if entry != nil {
+				w.recordUndo(entry)
+			}
 			if w.Repo == rs {
 				w.Refresh(true)
 			}
@@ -241,7 +271,11 @@ func (w *Workspace) Commit(req CommitRequest, after func()) {
 	if req.Amend {
 		body = w.tr(i18n.AppNoticeAmendedBody, subject)
 	}
-	w.Run("Commit", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	spec := &undoSpec{kind: undoCommit}
+	if req.Amend {
+		spec.kind = undoAmend
+	}
+	w.run("Commit", spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.Commit(ctx, repo, gitcli.CommitOptions{Message: req.Message, Amend: req.Amend, SignOff: req.SignOff, NoVerify: req.NoVerify})
 		return err
 	}, RunOptions{Success: w.tr(i18n.AppNoticeCommitted), SuccessBody: body, After: after})
@@ -266,7 +300,7 @@ func (w *Workspace) LastMessage(done func(string)) {
 
 // Checkout switches to a ref.
 func (w *Workspace) Checkout(ref domain.Ref) {
-	w.Run("Checkout "+ref.Short, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	w.run("Checkout "+ref.Short, &undoSpec{kind: undoCheckout}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.Checkout(ctx, repo, ref)
 	}, RunOptions{OnError: func(err error) bool {
 		if w.checkoutBlocked(CheckoutBlocked{Ref: ref, Err: err}) {
@@ -280,7 +314,7 @@ func (w *Workspace) Checkout(ref domain.Ref) {
 
 // CheckoutRevision detaches HEAD.
 func (w *Workspace) CheckoutRevision(rev string) {
-	w.Run("Checkout "+domain.ShortHash(rev), func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	w.run("Checkout "+domain.ShortHash(rev), &undoSpec{kind: undoCheckout}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.CheckoutRevision(ctx, repo, rev)
 	}, RunOptions{OnError: func(err error) bool {
 		return w.checkoutBlocked(CheckoutBlocked{Rev: rev, Err: err})
@@ -289,15 +323,33 @@ func (w *Workspace) CheckoutRevision(rev string) {
 
 // NewBranch creates a branch.
 func (w *Workspace) NewBranch(name, start string, checkout, overwrite bool) {
-	w.Run("Create branch "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.CreateBranch(ctx, repo, name, start, checkout, overwrite)
+	spec := &undoSpec{kind: undoCreateBranch, name: name}
+	w.run("Create branch "+name, spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		if overwrite {
+			// Remember what the overwrite replaces so undo can put it back.
+			spec.previous, _ = w.Git.ResolveRef(ctx, repo, "refs/heads/"+name)
+		}
+		if err := w.Git.CreateBranch(ctx, repo, name, start, checkout, overwrite); err != nil {
+			return err
+		}
+		// Undo only deletes the branch while it still holds this commit; a
+		// commit made on it afterwards must keep the branch alive.
+		spec.hash, _ = w.Git.ResolveRef(ctx, repo, "refs/heads/"+name)
+		return nil
 	}, RunOptions{Success: w.tr(i18n.AppNoticeCreatedBranch, name)})
 }
 
 // RenameBranch renames a local branch.
 func (w *Workspace) RenameBranch(old, name string) {
-	w.Run("Rename branch", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.RenameBranch(ctx, repo, old, name)
+	spec := &undoSpec{kind: undoRenameBranch, name: name, oldName: old}
+	w.run("Rename branch", spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		if err := w.Git.RenameBranch(ctx, repo, old, name); err != nil {
+			return err
+		}
+		// A rename keeps the commit, but recording it lets undo refuse when
+		// the renamed branch moved in the meantime.
+		spec.hash, _ = w.Git.ResolveRef(ctx, repo, "refs/heads/"+name)
+		return nil
 	}, RunOptions{Success: w.tr(i18n.AppNoticeRenamedBranch, old, name)})
 }
 
@@ -311,8 +363,16 @@ func (w *Workspace) DeleteBranch(ref domain.Ref, force bool) {
 		return
 	}
 	target := ref.Target
-	w.Run("Delete "+ref.Short, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.DeleteBranch(ctx, repo, ref.Short, force)
+	spec := &undoSpec{kind: undoDeleteBranch, name: ref.Short}
+	w.run("Delete "+ref.Short, spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		// Read the tip Git is about to delete, not the one the last refresh
+		// showed: an external commit since then must be restorable too.
+		sha, _ := w.Git.ResolveRef(ctx, repo, "refs/heads/"+ref.Short)
+		if err := w.Git.DeleteBranch(ctx, repo, ref.Short, force); err != nil {
+			return err
+		}
+		spec.hash = sha
+		return nil
 	}, RunOptions{
 		OnError: func(err error) bool {
 			if gitcli.KindOf(err) == gitcli.ErrNotMerged {
@@ -580,7 +640,7 @@ func (w *Workspace) operationError(title string) func(error) bool {
 
 // Merge merges rev into the current branch.
 func (w *Workspace) Merge(rev string, noFF bool) {
-	w.Run("Merge "+rev, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	w.run("Merge "+rev, &undoSpec{kind: undoMerge}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.Merge(ctx, repo, rev, noFF, false)
 		return err
 	}, RunOptions{OnError: w.operationError("Merge"), Success: w.tr(i18n.AppNoticeMerged, rev)})
@@ -588,7 +648,7 @@ func (w *Workspace) Merge(rev string, noFF bool) {
 
 // Rebase rebases the current branch onto rev.
 func (w *Workspace) Rebase(onto string) {
-	w.Run("Rebase onto "+onto, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	w.run("Rebase onto "+onto, &undoSpec{kind: undoRebase}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.Rebase(ctx, repo, onto)
 		return err
 	}, RunOptions{OnError: w.operationError("Rebase"), Success: w.tr(i18n.AppNoticeRebasedOnto, onto)})
@@ -596,7 +656,7 @@ func (w *Workspace) Rebase(onto string) {
 
 // CherryPick applies commits onto HEAD.
 func (w *Workspace) CherryPick(hashes []string) {
-	w.Run("Cherry-pick", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	w.run("Cherry-pick", &undoSpec{kind: undoCherryPick}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.CherryPick(ctx, repo, hashes)
 		return err
 	}, RunOptions{OnError: w.operationError("Cherry-pick"), Success: w.trPlural(len(hashes), i18n.AppNoticeCherryPicked, i18n.AppNoticeCherryPickedMany, len(hashes))})
@@ -604,7 +664,7 @@ func (w *Workspace) CherryPick(hashes []string) {
 
 // RevertCommits reverts commits with new commits.
 func (w *Workspace) RevertCommits(hashes []string) {
-	w.Run("Revert commits", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	w.run("Revert commits", &undoSpec{kind: undoRevert}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.RevertCommits(ctx, repo, hashes)
 		return err
 	}, RunOptions{OnError: w.operationError("Revert"), Success: w.trPlural(len(hashes), i18n.AppNoticeReverted, i18n.AppNoticeRevertedMany, len(hashes))})
@@ -616,7 +676,7 @@ func (w *Workspace) Reset(mode gitcli.ResetMode, rev string) {
 	if w.Repo != nil {
 		before = w.Repo.Status.Branch.Head
 	}
-	w.Run("Reset", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	w.run("Reset", &undoSpec{kind: undoReset}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.Reset(ctx, repo, mode, rev)
 	}, RunOptions{After: func() {
 		w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeResetTo, domain.ShortHash(rev)), w.tr(i18n.AppNoticeResetBody, domain.ShortHash(before)),
@@ -1087,7 +1147,7 @@ func (w *Workspace) RebaseCommits(from string, done func(list []gitcli.RebaseCom
 // Conflicts stop it like any rebase; the operation banner then offers
 // Continue, Skip and Abort.
 func (w *Workspace) InteractiveRebase(base string, steps []gitcli.RebaseStep) {
-	w.Run("Interactive rebase", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+	w.run("Interactive rebase", &undoSpec{kind: undoRebase}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.InteractiveRebase(ctx, repo, base, steps)
 		return err
 	}, RunOptions{OnError: w.operationError("Rebase"), Success: w.tr(i18n.AppNoticeRebaseFinished)})
