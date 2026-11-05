@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"viff/internal/domain"
-	"viff/internal/gitcli"
+	"viff/internal/vcs"
 )
 
 // LogPage is how many commits are read per page.
@@ -25,7 +25,7 @@ type LogState struct {
 	// Gen increases with each reload so the UI can reset its selection.
 	Gen uint64
 
-	reader *gitcli.LogReader
+	reader vcs.LogReader
 	layout domain.GraphLayout
 	seq    uint64
 	loaded bool
@@ -116,7 +116,7 @@ func (w *Workspace) LoadMoreLog() {
 	go func() {
 		var err error
 		if reader == nil {
-			gf := gitcli.LogFilter{Text: filter.Text, Author: filter.Author}
+			gf := vcs.LogFilter{Text: filter.Text, Author: filter.Author}
 			if filter.Branch != "" {
 				gf.Revisions = []string{filter.Branch}
 			}

@@ -70,7 +70,9 @@ func (w *Window) openBranchPopup(anchor ui.Rect) {
 			items = append(items, w.branchItem(r))
 		}
 	}
-	items = append(items, sep(), item{title: "Worktrees…", icon: icons.Folder, run: w.openWorktrees})
+	if w.ws.Caps.Worktrees != nil {
+		items = append(items, sep(), item{title: "Worktrees…", icon: icons.Folder, run: w.openWorktrees})
+	}
 	p := &popup{x: anchor.X, y: bottom(anchor) + 4, items: items, sel: -1, minWidth: 340, title: "Git Branches", search: text.NewEditor("")}
 	if anchor.Height == 0 {
 		// Opened from the status bar: grow upwards.
@@ -183,10 +185,16 @@ func (w *Window) refActions(r domain.Ref) []item {
 		item{title: "Show Changed Files", icon: icons.Diff, disabled: cur == "" || r.Target == "", run: func() { w.compareBranchFiles(r) }},
 		item{title: "Show Diff with Working Tree", icon: icons.Diff, run: func() { w.compareWithWorking(r.Name) }},
 		sep(),
-		item{title: "Rebase " + curQ + " onto " + q, disabled: cur == "" || busy, run: func() { w.ws.Rebase(r.Name) }},
-		item{title: "Merge " + q + " into " + curQ, icon: icons.Merge, disabled: cur == "" || busy, run: func() { w.ws.Merge(r.Name, false) }},
-		sep(),
 	)
+	// Rebase and merge rewrite history; a backend without that (Subversion)
+	// does not offer them at all.
+	if w.ws.Caps.HistoryWriter != nil {
+		items = append(items,
+			item{title: "Rebase " + curQ + " onto " + q, disabled: cur == "" || busy, run: func() { w.ws.Rebase(r.Name) }},
+			item{title: "Merge " + q + " into " + curQ, icon: icons.Merge, disabled: cur == "" || busy, run: func() { w.ws.Merge(r.Name, false) }},
+			sep(),
+		)
+	}
 	if r.Kind == domain.RefLocal {
 		items = append(items,
 			item{title: "Push…", icon: icons.Push, disabled: len(rs.Remotes) == 0, run: func() { w.openPushFor(r) }},

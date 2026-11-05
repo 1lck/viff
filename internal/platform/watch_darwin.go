@@ -90,7 +90,7 @@ func viffFSEvent(handle C.uintptr_t, path *C.char) {
 func Watch(repo domain.Repo, changed func(meta bool)) (Watcher, error) {
 	w := &fsWatch{repo: repo, debounce: newDebouncer(250*time.Millisecond, changed)}
 	roots := []string{repo.Root}
-	for _, d := range []string{repo.GitDir, repo.CommonDir} {
+	for _, d := range []string{repo.MetaDir, repo.CommonDir} {
 		if d != "" && !strings.HasPrefix(filepath.Clean(d)+"/", filepath.Clean(repo.Root)+"/") {
 			roots = append(roots, d)
 		}
@@ -108,8 +108,8 @@ func Watch(repo domain.Repo, changed func(meta bool)) (Watcher, error) {
 			C.free(unsafe.Pointer(p))
 		}
 	}()
-	if real, err := filepath.EvalSymlinks(repo.GitDir); err == nil {
-		w.repo.GitDir = real
+	if real, err := filepath.EvalSymlinks(repo.MetaDir); err == nil {
+		w.repo.MetaDir = real
 	}
 	if real, err := filepath.EvalSymlinks(repo.CommonDir); err == nil {
 		w.repo.CommonDir = real

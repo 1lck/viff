@@ -88,3 +88,10 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - 冲突支持逐块接受两侧内容；自由文本编辑、二进制或不可靠冲突标记仍需要外部编辑器，见 [0019](decisions/0019-git-issue-gaps.md)。
 - 已有分支创建工作树见 [0018](decisions/0018-existing-branch-worktree.md)；prunable 工作树只能查看、不能删除。嵌套子模块的移除和 deinit 需要先打开其所属仓库，见 [0019](decisions/0019-git-issue-gaps.md)。
 - 应用内更新没有系统签名校验（macOS ad-hoc 签名、Windows 无 Authenticode），只做 HTTPS + SHA-256；宿主的系统安全提示仍可能出现。DEB 安装受权限限制只能提示手动安装；随包文档在 Windows/Linux 自替换后保持旧版本，见 [0023](decisions/0023-app-update.md)。旧版本（v0.1.0 及更早）没有更新器，升级到第一个带更新器的版本需要手动下载一次。
+- Subversion 支持见 [0024](decisions/0024-svn-support.md)，其限制与 Git 不同：
+  - 历史查询需要访问仓库（网络或 `file://`），因此保留本地缓存；离线时显示缓存并显式标注为陈旧，此时看到的历史不是最新。
+  - 没有暂存区，提交改用显式的提交目标集；`Ahead` 恒为 0，「有远程更新」由工作副本 BASE 与仓库 HEAD 比较得出。
+  - 提交是远程原子操作，没有本地提交；提交完成后无法在本地撤销，中断后须重新查询工作副本确认是否已提交，不自动重试。目录过期时 SVN 自身会拒绝提交，需要先 update。
+  - 不支持 rebase、stash、worktree、reflog、submodule；这些入口按能力位隐藏，而不是显示后报错。
+  - 分支是目录约定加 `switch` 语义，不是轻量引用，所以「分支」操作的效果与 Git 不同。
+  - 冲突解决后会在工作副本留下 `.mine` / `.r2` / `.r3` 辅助文件；Viff 已把它们从状态列表中过滤，但用户仍可能在文件系统里看到。

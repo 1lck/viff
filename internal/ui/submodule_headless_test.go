@@ -12,6 +12,7 @@ import (
 	"github.com/vivaui/viva/app"
 
 	vapp "viff/internal/app"
+	"viff/internal/gitcli"
 )
 
 // TestSubmodulesDialogAndMenu covers the two entry points: the changes list
@@ -33,7 +34,10 @@ func TestSubmodulesDialogAndMenu(t *testing.T) {
 	}
 	f.gitIn(child, "add", "-A")
 	f.gitIn(child, "commit", "-q", "-m", "Add lib")
-	f.ws.Git.Env = append(f.ws.Git.Env, "GIT_ALLOW_PROTOCOL=file")
+	// The workspace holds the backend contract, so the Git runner is addressed
+	// directly here: the test is about Git's own transport policy.
+	runner := f.ws.Git.(*gitcli.Runner)
+	runner.Env = append(runner.Env, "GIT_ALLOW_PROTOCOL=file")
 	f.git("-c", "protocol.file.allow=always", "submodule", "add", child, "deps/lib")
 
 	f.start(1280, 800)

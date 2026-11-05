@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/vcs"
 )
 
 // ErrBranchCheckedOut reports an update of a branch that a worktree has
@@ -19,14 +20,8 @@ var ErrBranchCheckedOut = errors.New("branch is checked out in a worktree")
 // branch keeps its commits, so nothing was written.
 var ErrBranchDiverged = errors.New("branch has diverged from the remote")
 
-// BranchUpdate describes a fast-forward update of a local branch.
-type BranchUpdate struct {
-	Branch   string
-	Old      string
-	New      string
-	Commits  int // commits gained; 0 when up to date
-	UpToDate bool
-}
+// BranchUpdate is shared with every backend and lives in internal/vcs.
+type BranchUpdate = vcs.BranchUpdate
 
 // UpdateBranch fast-forwards the local branch from remote's same-named
 // branch. The remote branch is fetched into its remote-tracking ref first;

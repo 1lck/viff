@@ -24,10 +24,6 @@ import (
 	"viff/internal/observability"
 )
 
-// Git is the subset of the Git adapter the use cases need. It is satisfied by
-// *gitcli.Runner; tests may pass the same runner with an isolated environment.
-type Git = *gitcli.Runner
-
 // Notification is a balloon shown to the user.
 type Notification struct {
 	ID      uint64
@@ -85,6 +81,12 @@ type Workspace struct {
 	// Repo is the open repository, nil on the welcome screen.
 	Repo *RepoState
 
+	// Caps are the optional features of the active backend, derived from the
+	// instance by NewWorkspace. The UI hides what the backend cannot do instead
+	// of showing an entry that fails later, which is how rebase and stash stay
+	// visible for Git and absent for Subversion.
+	Caps Capabilities
+
 	// Repositories is the explicit multi-repository list, in the order the user
 	// added them. Only the active repository (Repo) runs Git commands and has a
 	// file watcher; the other rows show their last known status and are
@@ -141,6 +143,10 @@ type Workspace struct {
 	pending    []func()
 	nextID     uint64
 	watcher    Watcher
+	// backends are the adapters this workspace may use, registered by the
+	// composition root. A single entry means one version control system; the
+	// field is written before any command runs and read-only afterwards.
+	backends []probeTarget
 	// Watch starts file-system watching for a repository; set by the
 	// composition root so platform code stays out of this package.
 	Watch func(repo domain.Repo, changed func(meta bool)) (Watcher, error)
@@ -164,12 +170,13 @@ type Watcher interface{ Close() }
 // working unchanged.
 func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
 	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now, obs: observability.Nop{}, inc: observability.Nop{}}
+	w.Caps = CapabilitiesOf(git)
 	w.SetLogLevel("")
 	w.initUpdateState()
 	if settings != nil {
 		w.SetLogLevel(settings.LogLevel)
 	}
-	git.Log = w.logCommand
+	git.SetCommandLog(w.logCommand)
 	w.loadRepositories()
 	w.ApplyGitSettings()
 	return w

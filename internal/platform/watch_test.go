@@ -13,7 +13,7 @@ import (
 )
 
 func TestClassify(t *testing.T) {
-	repo := domain.Repo{Root: "/r", GitDir: "/r/.git", CommonDir: "/r/.git"}
+	repo := domain.Repo{Root: "/r", MetaDir: "/r/.git", CommonDir: "/r/.git"}
 	cases := []struct {
 		path           string
 		relevant, meta bool
@@ -38,7 +38,7 @@ func TestWatchReportsChangesOnce(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(err, string(out))
 	}
-	repo := domain.Repo{Root: dir, GitDir: filepath.Join(dir, ".git"), CommonDir: filepath.Join(dir, ".git")}
+	repo := domain.Repo{Root: dir, MetaDir: filepath.Join(dir, ".git"), CommonDir: filepath.Join(dir, ".git")}
 	var worktree, meta atomic.Int32
 	w, err := Watch(repo, func(m bool) {
 		if m {

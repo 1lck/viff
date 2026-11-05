@@ -10,6 +10,8 @@ import (
 
 	"github.com/vivaui/viva/app"
 	"github.com/vivaui/viva/ui"
+
+	"viff/internal/gitcli"
 )
 
 // TestGitSettingsDialog edits the Git page and checks that the values are
@@ -90,7 +92,13 @@ func TestGitSettingsWarnsAboutMissingCommand(t *testing.T) {
 
 func runGit(t *testing.T, f *uiFixture, args ...string) string {
 	t.Helper()
-	out, err := f.ws.Git.Run(context.Background(), f.dir, args...)
+	// The workspace holds the backend contract; these tests assert what Git
+	// received on its command line, which is deliberately below the contract.
+	runner, ok := f.ws.Git.(*gitcli.Runner)
+	if !ok {
+		t.Fatalf("backend is not a Git runner: %T", f.ws.Git)
+	}
+	out, err := runner.Run(context.Background(), f.dir, args...)
 	if err != nil {
 		t.Fatalf("git %v: %v", args, err)
 	}

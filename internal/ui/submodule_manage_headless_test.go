@@ -12,6 +12,7 @@ import (
 	"github.com/vivaui/viva/app"
 
 	vapp "viff/internal/app"
+	"viff/internal/gitcli"
 )
 
 // waitSubmoduleDialog waits for a dialog with the given title that also shows
@@ -78,7 +79,10 @@ func TestSubmoduleAddDialog(t *testing.T) {
 	}
 	f.gitIn(child, "add", "-A")
 	f.gitIn(child, "commit", "-q", "-m", "Add lib")
-	f.ws.Git.Env = append(f.ws.Git.Env, "GIT_ALLOW_PROTOCOL=file")
+	// The workspace holds the backend contract, so the Git runner is addressed
+	// directly here: the test is about Git's own transport policy.
+	runner := f.ws.Git.(*gitcli.Runner)
+	runner.Env = append(runner.Env, "GIT_ALLOW_PROTOCOL=file")
 
 	f.start(1440, 900)
 	f.win.openRepo(f.dir)
@@ -109,7 +113,8 @@ func TestSubmoduleAddDialog(t *testing.T) {
 	}
 
 	// A URL Git cannot reach leaves the dialog open with Git's own message.
-	f.ws.Git.Env = append(f.ws.Git.Env, "GIT_ALLOW_PROTOCOL=file")
+	runner2 := f.ws.Git.(*gitcli.Runner)
+	runner2.Env = append(runner2.Env, "GIT_ALLOW_PROTOCOL=file")
 	missing := filepath.Join(root, "missing repo")
 	f.click("Add Submodule…")
 	waitSubmoduleDialog(t, f, "Add Submodule")
@@ -171,7 +176,8 @@ func TestSubmoduleRemoveDialog(t *testing.T) {
 	f.settle()
 
 	openSubmodulesDialog(t, f)
-	f.ws.Git.Env = append(f.ws.Git.Env, "GIT_ALLOW_PROTOCOL=file")
+	runner3 := f.ws.Git.(*gitcli.Runner)
+	runner3.Env = append(runner3.Env, "GIT_ALLOW_PROTOCOL=file")
 	f.snap("submodule-management-actions")
 	f.click("Deinit")
 	waitSubmoduleDialog(t, f, "Deinit Submodule")

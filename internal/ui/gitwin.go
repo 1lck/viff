@@ -92,9 +92,16 @@ const (
 
 func (w *Window) paintGitWindow(r ui.Rect) {
 	w.island(r)
-	content, ax := w.toolHeader(r, scGitTabs, []string{"Log", "Console", "Reflog"}, w.gitTab, func(i int) {
+	// Subversion has no reflog, so the tab is absent rather than always empty.
+	tabs := []string{"Log", "Console"}
+	reflogTab := -1
+	if w.ws.Caps.Reflog != nil {
+		reflogTab = len(tabs)
+		tabs = append(tabs, "Reflog")
+	}
+	content, ax := w.toolHeader(r, scGitTabs, tabs, w.gitTab, func(i int) {
 		w.gitTab = i
-		if i == 2 {
+		if i == reflogTab {
 			w.loadReflog()
 		}
 	})
@@ -731,20 +738,23 @@ func (w *Window) commitMenu() []item {
 			w.openCompareCommits(older.Hash, newer.Hash)
 		}})
 	}
+	// Rewriting committed history needs a backend that can rewrite it at all:
+	// a Subversion revision is immutable once committed.
+	canRewrite := w.ws.Caps.HistoryWriter != nil
 	items = append(items,
 		sep(),
-		item{title: "Reset Current Branch to Here…", icon: icons.Reset, disabled: !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
-		item{title: "Revert Commit", icon: icons.Revert, disabled: rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
-		item{title: "Interactively Rebase from Here…", disabled: !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
+		item{title: "Reset Current Branch to Here…", icon: icons.Reset, disabled: !canRewrite || !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
+		item{title: "Revert Commit", icon: icons.Revert, disabled: !canRewrite || rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
+		item{title: "Interactively Rebase from Here…", disabled: !canRewrite || !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
 	)
-	if single && isHead && len(c.Parents) == 1 && rs.Status.Branch.Ahead > 0 {
+	if canRewrite && single && isHead && len(c.Parents) == 1 && rs.Status.Branch.Ahead > 0 {
 		items = append(items, item{title: "Undo Commit…", icon: icons.Undo, run: func() {
 			w.confirm("Undo Commit", "Undo the last commit '"+c.Subject+"'? Its changes stay staged so you can commit them again.", "Undo Commit", func() {
 				w.ws.Reset(gitcli.ResetSoft, "HEAD~1")
 			})
 		}})
 	}
-	if single {
+	if canRewrite && single {
 		// Editing history replays the commits after the target, so it needs
 		// a commit with exactly one parent and no operation in flight.
 		canEdit := len(c.Parents) == 1 && !rs.Operation.Active()

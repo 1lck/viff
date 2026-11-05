@@ -95,7 +95,14 @@ func (w *Window) buildRows() {
 	v := &w.cm
 	v.rows = v.rows[:0]
 	tree := w.ws.Settings.CommitTree
+	// A backend without a staging area (Subversion) reports every change in
+	// the unstaged column, so a "Staged" group would always be empty. Skipping
+	// it keeps one list instead of a permanent dead section.
+	indexable := w.ws.Caps.Index
 	for _, a := range areaOrder {
+		if a == domain.AreaStaged && !indexable {
+			continue
+		}
 		entries := w.changeListEntries(a)
 		if len(entries) == 0 && a != domain.AreaStaged && a != domain.AreaUnstaged {
 			continue
@@ -140,7 +147,12 @@ func (w *Window) buildRows() {
 
 func (w *Window) paintCommitWindow(r ui.Rect) {
 	w.island(r)
-	content, ax := w.toolHeader(r, idBanner, []string{"Commit", "Stash"}, w.commitTab, func(i int) { w.commitTab = i })
+	// Subversion has no stash, so the tab is absent rather than empty.
+	tabs := []string{"Commit"}
+	if w.ws.Caps.Stash != nil {
+		tabs = append(tabs, "Stash")
+	}
+	content, ax := w.toolHeader(r, idBanner, tabs, w.commitTab, func(i int) { w.commitTab = i })
 	if w.action(idHideCommit, ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, "Hide\t⇧⎋", actOpts{}) {
 		w.after(func() { w.commitOpen = false })
 	}
@@ -201,8 +213,11 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 		})
 	}
 	x += actionSize + 2
-	if w.action(idCmStash, x, y, icons.Shelve, "Stash Changes…", actOpts{disabled: rs.Status.Clean()}) {
-		w.after(w.openStashDialog)
+	if w.ws.Caps.Stash != nil {
+		if w.action(idCmStash, x, y, icons.Shelve, "Stash Changes…", actOpts{disabled: rs.Status.Clean()}) {
+			w.after(w.openStashDialog)
+		}
+		x += actionSize + 2
 	}
 
 	// Change-list bar: the active filter and how many files it shows. It also

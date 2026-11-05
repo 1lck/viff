@@ -67,11 +67,7 @@ type RepoState struct {
 var writeLocks sync.Map
 
 func writeLock(repo domain.Repo) *sync.Mutex {
-	key := repo.CommonDir
-	if key == "" {
-		key = repo.GitDir
-	}
-	m, _ := writeLocks.LoadOrStore(key, &sync.Mutex{})
+	m, _ := writeLocks.LoadOrStore(repo.LockKey(), &sync.Mutex{})
 	return m.(*sync.Mutex)
 }
 
@@ -94,7 +90,17 @@ func (w *Workspace) Open(dir string, done func(error)) {
 	start := time.Now()
 	_, ctx, finish := w.startTask("Opening "+filepath.Base(dir), false)
 	go func() {
-		repo, err := w.Git.Discover(ctx, dir)
+		backend := w.pickBackend(dir)
+		if backend == nil {
+			w.post(func() {
+				finish()
+				if done != nil {
+					done(ErrUnsupported)
+				}
+			})
+			return
+		}
+		repo, err := backend.Discover(ctx, dir)
 		took := time.Since(start)
 		w.post(func() {
 			finish()
@@ -135,6 +141,7 @@ func (w *Workspace) Open(dir string, done func(error)) {
 				}
 				return
 			}
+			w.useBackend(backend)
 			w.setRepo(repo)
 			w.record(observability.Event{
 				Event: observability.EventRepoOpen, Level: observability.LevelInfo,
@@ -298,9 +305,15 @@ func (w *Workspace) Refresh(meta bool) {
 		refs, refsErr = w.Git.Refs(ctx, repo)
 		if refsErr == nil {
 			remotes, _ = w.Git.Remotes(ctx, repo)
-			stashes, _ = w.Git.Stashes(ctx, repo)
+			if sw, serr := w.stash(); serr == nil {
+				stashes, _ = sw.Stashes(ctx, repo)
+			}
 		}
-		worktrees, worktreesErr := w.Git.Worktrees(ctx, repo)
+		var worktrees []domain.Worktree
+		var worktreesErr error
+		if wt, werr := w.worktrees(); werr == nil {
+			worktrees, worktreesErr = wt.Worktrees(ctx, repo)
+		}
 		shallow, shallowErr := w.Git.IsShallow(ctx, repo)
 		w.post(func() {
 			if w.Repo != rs || rs.statusSeq != seq {
@@ -336,7 +349,7 @@ func (w *Workspace) Refresh(meta bool) {
 				w.warnChangeListSync(w.SyncChangeListRenames())
 			}
 			if refsErr == nil {
-				key := refsFingerprint(refs, st.Branch.Head)
+				key := refsFingerprint(refs, st.Branch)
 				changed := key != rs.refsKey
 				rs.Refs, rs.Remotes, rs.Stashes, rs.RefsLoaded = refs, remotes, stashes, true
 				rs.RefsByHash = indexRefs(refs, st.Branch)
@@ -380,9 +393,18 @@ func (w *Workspace) Refresh(meta bool) {
 	}()
 }
 
-func refsFingerprint(refs []domain.Ref, head string) string {
+// refsFingerprint identifies the state the loaded log was built from.
+//
+// The upstream revision is part of it because a Subversion commit moves the
+// repository's HEAD while leaving both the branch directories and the working
+// copy's own base revision untouched: without it, committing and refreshing
+// would keep showing the revision before the one just made.
+func refsFingerprint(refs []domain.Ref, branch domain.BranchStatus) string {
 	var b strings.Builder
-	b.WriteString(head)
+	b.WriteString(branch.Head)
+	b.WriteByte(0)
+	b.WriteString(branch.Upstream)
+	b.WriteByte(0)
 	for _, r := range refs {
 		b.WriteString(r.Name)
 		b.WriteByte(0)

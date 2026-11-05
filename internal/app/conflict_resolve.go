@@ -79,7 +79,11 @@ func (w *Workspace) ResolveConflict(d *DiffResult, block int, choice domain.Reso
 	expected := append([]byte(nil), cv.Current.Content.Data...)
 	title := "Accept " + choice.String()
 	w.Run(title, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.ResolveConflictBlock(ctx, repo, gitcli.ConflictResolveRequest{
+		resolver, rerr := w.conflictResolver()
+		if rerr != nil {
+			return rerr
+		}
+		_, err := resolver.ResolveConflictBlock(ctx, repo, gitcli.ConflictResolveRequest{
 			Path:     path,
 			Block:    block,
 			Choice:   choice,

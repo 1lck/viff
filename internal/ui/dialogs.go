@@ -594,6 +594,7 @@ func (w *Window) openSettings() {
 	fonts := app.FontFamilies()
 	font := text.NewEditor(strconv.Itoa(int(s.FontSize)))
 	gitPath := text.NewEditor(s.GitPath)
+	svnPath := text.NewEditor(s.SVNPath)
 	editor := text.NewEditor(s.ExternalEditor)
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
 	autoUpdate, autoUpdateWas := s.AutoUpdateCheck, s.AutoUpdateCheck
@@ -644,6 +645,9 @@ func (w *Window) openSettings() {
 			f.gap(6)
 			f.bold("Git executable")
 			f.field("Path to Git:", gitPath, "Detected automatically", false)
+			f.gap(6)
+			f.bold("Subversion executable")
+			f.field("Path to svn:", svnPath, "Detected automatically", false)
 			f.gap(6)
 			f.bold("Tools")
 			f.field("External editor command:", editor, "code -g {file}:{line}", false)
@@ -700,6 +704,8 @@ func (w *Window) openSettings() {
 			s.FontSize = float32(n)
 			s.GitPath = strings.TrimSpace(gitPath.String())
 			w.ws.Git.SetPath(s.GitPath)
+			s.SVNPath = strings.TrimSpace(svnPath.String())
+			w.ws.SetSVNPath(s.SVNPath)
 			s.ExternalEditor = strings.TrimSpace(editor.String())
 			gitDraft.commit(s)
 			s.AutoFetch, s.FetchPrune, s.PullMode = autoFetch, prune, pull

@@ -88,7 +88,13 @@ func (w *Workspace) SmartCheckout(b CheckoutBlocked) {
 // in both outcomes: after a successful checkout they follow the user, and
 // after a failed one they belong to the branch that is still checked out.
 func (w *Workspace) checkoutStashing(ctx context.Context, repo domain.Repo, b CheckoutBlocked) (stashCheckoutResult, error) {
-	if err := w.Git.StashPush(ctx, repo, "viff: checkout "+b.label(), true, false); err != nil {
+	sw, serr := w.stash()
+	if serr != nil {
+		// A backend without stash cannot move local changes aside; the caller
+		// then reports the block instead of silently discarding work.
+		return stashNotCreated, serr
+	}
+	if err := sw.StashPush(ctx, repo, "viff: checkout "+b.label(), true, false); err != nil {
 		return stashNotCreated, fmt.Errorf("stash local changes: %w", err)
 	}
 	var checkoutErr error
@@ -99,7 +105,7 @@ func (w *Workspace) checkoutStashing(ctx context.Context, repo domain.Repo, b Ch
 	}
 	// git stash pop removes the entry only when it applies cleanly, so a
 	// conflict leaves the changes in the stash and the user can recover them.
-	if _, popErr := w.Git.StashApply(ctx, repo, "stash@{0}", true, false); popErr != nil {
+	if _, popErr := sw.StashApply(ctx, repo, "stash@{0}", true, false); popErr != nil {
 		return stashKept, checkoutErr
 	}
 	return stashRestored, checkoutErr
