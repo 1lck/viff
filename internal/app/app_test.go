@@ -140,7 +140,7 @@ func TestOpenRefreshAndLog(t *testing.T) {
 		t.Fatalf("hash filter = %d", n)
 	}
 	f.w.SelectCommit(head.Hash)
-	f.settle(func() bool { return f.w.Repo.Detail != nil })
+	f.settle(func() bool { return f.w.Repo.Detail != nil && len(f.w.Repo.DetailBranches) > 0 })
 	if f.w.Repo.Detail.Subject != "commit E" || len(f.w.Repo.DetailBranches) == 0 {
 		t.Fatalf("detail = %+v", f.w.Repo.Detail)
 	}

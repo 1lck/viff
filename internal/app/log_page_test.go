@@ -128,3 +128,44 @@ func TestLogPaginationBoundaryAndGraph(t *testing.T) {
 		t.Fatalf("LoadMoreLog after done changed the log to %d commits", got)
 	}
 }
+
+// TestReloadLogWhileLoading reloads twice before the first page arrives, which
+// is what a metadata refresh during the first load does on a large repository.
+// The canceled load must not leave the log stuck in its loading state.
+func TestReloadLogWhileLoading(t *testing.T) {
+	f := newFixture(t)
+	f.write("a.txt", "one\n")
+	f.git("add", "-A")
+	f.git("commit", "-q", "-m", "one")
+	f.open()
+
+	f.w.ReloadLog()
+	if !f.w.Repo.Log.Loading {
+		t.Fatal("ReloadLog did not start loading")
+	}
+	f.w.ReloadLog()
+	f.settle(func() bool { return f.idle() && f.w.Repo.Log.Done && len(f.w.Repo.Log.Commits) == 1 })
+	if len(f.w.Repo.Log.Rows) != 1 {
+		t.Fatalf("rows = %d", len(f.w.Repo.Log.Rows))
+	}
+}
+
+// TestSelectCommitClearStopsLoading covers clearing the selection while its
+// detail is in flight: the panel must not stay on "loading" and the late
+// result must be dropped.
+func TestSelectCommitClearStopsLoading(t *testing.T) {
+	f := newFixture(t)
+	f.write("a.txt", "one\n")
+	f.git("add", "-A")
+	f.git("commit", "-q", "-m", "one")
+	f.open()
+	head := f.w.Repo.Log.Commits[0].Hash
+
+	f.w.SelectCommit(head)
+	f.w.SelectCommit("")
+	f.settle(func() bool { return !f.w.Repo.DetailLoading && !f.w.Pending() })
+	f.w.Drain()
+	if f.w.Repo.Detail != nil || len(f.w.Repo.DetailBranches) != 0 {
+		t.Fatalf("cleared selection kept detail: %+v branches=%v", f.w.Repo.Detail, f.w.Repo.DetailBranches)
+	}
+}
