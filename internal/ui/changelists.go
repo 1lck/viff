@@ -221,7 +221,7 @@ func (w *Window) paintChangeListsBar(r ui.Rect) {
 
 	x := right(combo) + 10
 	n := w.visibleChangeFileCount()
-	w.p.text(w.pluralT(n, i18n.ChangelistFilesOne, i18n.ChangelistFilesMany, n), rect(x, row.Y, max(0, right(r)-x-8), row.Height), fontUI, regular, w.pal.TextSecond)
+	w.p.text(w.pluralT(n, i18n.ChangelistFilesOne, i18n.ChangelistFilesMany), rect(x, row.Y, max(0, right(r)-x-8), row.Height), fontUI, regular, w.pal.TextSecond)
 
 	if w.cm.listID == allChangeLists {
 		return
@@ -239,7 +239,7 @@ func (w *Window) changeListsMenu() []item {
 		header(w.t(i18n.ChangelistTitle)),
 		{
 			title: w.t(i18n.ChangelistAllLists), icon: icons.Changes, checked: v.listID == allChangeLists,
-			hint: w.pluralT(w.changeListCount(allChangeLists), i18n.ChangelistFilesOne, i18n.ChangelistFilesMany, w.changeListCount(allChangeLists)),
+			hint: w.pluralT(w.changeListCount(allChangeLists), i18n.ChangelistFilesOne, i18n.ChangelistFilesMany),
 			run:  func() { w.setChangeList(allChangeLists) },
 		},
 	}
@@ -247,7 +247,7 @@ func (w *Window) changeListsMenu() []item {
 		l := l
 		items = append(items, item{
 			title: l.Name, icon: icons.Changelist, checked: v.listID == l.ID,
-			hint: w.pluralT(w.changeListCount(l.ID), i18n.ChangelistFilesOne, i18n.ChangelistFilesMany, w.changeListCount(l.ID)),
+			hint: w.pluralT(w.changeListCount(l.ID), i18n.ChangelistFilesOne, i18n.ChangelistFilesMany),
 			run:  func() { w.setChangeList(l.ID) },
 		})
 	}
@@ -289,7 +289,7 @@ func (w *Window) changeListMoveItems(sel []changeRow) []item {
 		l := l
 		items = append(items, item{
 			title: l.Name, icon: icons.Changelist, checked: common == l.ID,
-			hint: w.pluralT(w.changeListCount(l.ID), i18n.ChangelistFilesOne, i18n.ChangelistFilesMany, w.changeListCount(l.ID)),
+			hint: w.pluralT(w.changeListCount(l.ID), i18n.ChangelistFilesOne, i18n.ChangelistFilesMany),
 			run:  func() { w.moveToChangeList(paths, l.ID) },
 		})
 	}
@@ -440,7 +440,7 @@ func (w *Window) openDeleteChangeList() {
 		return
 	}
 	n := w.changeListCount(id)
-	w.confirm(w.t(i18n.ChangelistDeleteTitle), w.t(i18n.ChangelistDeleteBody, cur.Name, w.pluralT(n, i18n.ChangelistFilesOne, i18n.ChangelistFilesMany, n)), w.t(i18n.ChangelistDeleteButton), func() {
+	w.confirm(w.t(i18n.ChangelistDeleteTitle), w.t(i18n.ChangelistDeleteBody, cur.Name, w.pluralT(n, i18n.ChangelistFilesOne, i18n.ChangelistFilesMany)), w.t(i18n.ChangelistDeleteButton), func() {
 		if err := w.ws.DeleteChangeList(id); err != nil {
 			w.ws.NotifyError(w.t(i18n.ChangelistCannotDelete), err)
 			return

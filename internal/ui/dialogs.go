@@ -318,7 +318,7 @@ func (w *Window) openPushFor(r domain.Ref) {
 			})
 			f.gap(10)
 			if !loading && len(commits) > 0 {
-				f.muted(w.pluralT(len(commits), i18n.DialogWillBePushedOne, i18n.DialogWillBePushedMany, len(commits)))
+				f.muted(w.pluralT(len(commits), i18n.DialogWillBePushedOne, i18n.DialogWillBePushedMany))
 			}
 			f.check(w.t(i18n.DialogPushTags), &tags)
 			f.check(w.t(i18n.DialogPushForce), &force)
