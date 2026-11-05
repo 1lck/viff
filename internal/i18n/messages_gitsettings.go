@@ -31,6 +31,7 @@ const (
 	GitAIBaseURL        = Key("gitsettings.aiBaseURL")
 	GitAIFetchModels    = Key("gitsettings.aiFetchModels")
 	GitAIFetching       = Key("gitsettings.aiFetching")
+	GitAIShowKey        = Key("gitsettings.aiShowKey")
 )
 
 func init() {
@@ -64,6 +65,7 @@ func init() {
 		GitAIBaseURL:        "Base URL:",
 		GitAIFetchModels:    "Get models",
 		GitAIFetching:       "Loading models…",
+		GitAIShowKey:        "Show or hide the key",
 	})
 	register(ZHCN, map[Key]string{
 		GitSSHCommand:       "SSH 命令：",
@@ -95,5 +97,6 @@ func init() {
 		GitAIBaseURL:        "Base URL：",
 		GitAIFetchModels:    "获取模型",
 		GitAIFetching:       "正在获取模型…",
+		GitAIShowKey:        "显示或隐藏密钥",
 	})
 }

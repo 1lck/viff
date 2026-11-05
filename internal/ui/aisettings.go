@@ -21,12 +21,29 @@ type aiProviderPreset struct {
 	Protocol string // one of aiProtocols
 }
 
+// aiProviderPresets lists the endpoints people actually use. Every entry here
+// speaks an OpenAI-compatible API except Anthropic, so the protocol can be
+// corrected by hand when a gateway differs.
 var aiProviderPresets = []aiProviderPreset{
 	{"openai", "OpenAI", "https://api.openai.com/v1", "openai-completions"},
 	{"anthropic", "Anthropic", "https://api.anthropic.com", "anthropic-messages"},
+	{"google", "Google AI", "https://generativelanguage.googleapis.com/v1beta/openai", "openai-completions"},
+	{"mistral", "Mistral", "https://api.mistral.ai/v1", "openai-completions"},
+	{"groq", "Groq", "https://api.groq.com/openai/v1", "openai-completions"},
+	{"xai", "xAI", "https://api.x.ai/v1", "openai-completions"},
 	{"deepseek", "DeepSeek", "https://api.deepseek.com/v1", "openai-completions"},
+	{"cerebras", "Cerebras", "https://api.cerebras.ai/v1", "openai-completions"},
+	{"together", "Together AI", "https://api.together.xyz/v1", "openai-completions"},
+	{"fireworks", "Fireworks", "https://api.fireworks.ai/inference/v1", "openai-completions"},
 	{"openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "openai-completions"},
+	{"moonshot", "Moonshot", "https://api.moonshot.cn/v1", "openai-completions"},
+	{"zai", "Z.ai", "https://api.z.ai/api/paas/v4", "openai-completions"},
+	{"minimax", "MiniMax", "https://api.minimax.chat/v1", "openai-completions"},
+	{"nvidia", "NVIDIA", "https://integrate.api.nvidia.com/v1", "openai-completions"},
+	{"huggingface", "Hugging Face", "https://router.huggingface.co/v1", "openai-completions"},
+	{"baseten", "Baseten", "https://inference.baseten.co/v1", "openai-completions"},
 	{"ollama", "Ollama", "http://localhost:11434/v1", "openai-completions"},
+	{"lmstudio", "LM Studio", "http://localhost:1234/v1", "openai-completions"},
 }
 
 func presetByID(id string) (aiProviderPreset, bool) {
@@ -38,7 +55,7 @@ func presetByID(id string) (aiProviderPreset, bool) {
 	return aiProviderPreset{}, false
 }
 
-// aiProtocols maps the radio buttons to the wire formats the generator speaks.
+// aiProtocols maps the dropdown entries to the wire formats.
 var aiProtocols = []string{"openai-completions", "openai-responses", "anthropic-messages"}
 
 func aiProtocolIndex(name string) int {
@@ -56,6 +73,17 @@ func aiProtocolIndex(name string) int {
 	return 0
 }
 
+// protocolTitle names a wire format for the dropdown.
+func protocolTitle(w *Window, index int) string {
+	switch index {
+	case 1:
+		return w.t(i18n.GitAIProtoResponses)
+	case 2:
+		return w.t(i18n.GitAIProtoAnthropic)
+	}
+	return w.t(i18n.GitAIProtoChat)
+}
+
 // aiSettingsDraft holds the AI page while the dialog is open. Values move into
 // storage.Settings only on OK, the same way the Git page works.
 type aiSettingsDraft struct {
@@ -66,6 +94,7 @@ type aiSettingsDraft struct {
 	model    *text.Editor
 	key      *text.Editor
 	protocol int
+	showKey  bool // the key is masked until the eye is pressed
 	models   []string
 	fetching bool
 	fetchErr string
@@ -111,18 +140,21 @@ func (d *aiSettingsDraft) form(f *form) {
 	if d.custom {
 		f.field(w.t(i18n.GitAIName), d.name, "My gateway", false)
 		f.field(w.t(i18n.GitAIBaseURL), d.endpoint, "https://example.com/v1", false)
-		f.text(w.t(i18n.GitAIProtocol))
-		f.radio([]string{
-			w.t(i18n.GitAIProtoChat),
-			w.t(i18n.GitAIProtoResponses),
-			w.t(i18n.GitAIProtoAnthropic),
-		}, &d.protocol)
-	} else {
+	}
+	f.combo(w.t(i18n.GitAIProtocol), protocolTitle(w, d.protocol), func() []item {
+		items := make([]item, 0, len(aiProtocols))
+		for i := range aiProtocols {
+			i := i
+			items = append(items, item{title: protocolTitle(w, i), checked: d.protocol == i, run: func() { d.protocol = i }})
+		}
+		return items
+	})
+	if !d.custom {
 		f.custom(22, func(r ui.Rect) {
 			w.p.text(w.t(i18n.GitAIBaseURL)+" "+d.endpoint.String(), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextSecond)
 		})
 	}
-	f.field(w.t(i18n.GitAIKey), d.key, "sk-…", false)
+	f.secretField(w.t(i18n.GitAIKey), d.key, &d.showKey, "sk-…")
 	f.field(w.t(i18n.GitAIModel), d.model, "gpt-4o-mini", false)
 	f.custom(26, func(r ui.Rect) {
 		d.anchor = rect(r.X+f.labelW, r.Y, 120, 26)
@@ -192,22 +224,20 @@ func (d *aiSettingsDraft) openModelMenu(w *Window) {
 }
 
 // commit writes the draft back into the settings. A built-in provider stores
-// its base URL and protocol, so the generator does not have to look them up.
+// its base URL, so the generator does not have to look it up.
 func (d *aiSettingsDraft) commit(s *storage.Settings) {
 	s.AIModel = strings.TrimSpace(d.model.String())
 	s.AIKey = strings.TrimSpace(d.key.String())
+	s.AIProtocol = aiProtocols[d.protocol]
 	if d.custom {
 		s.AIProvider = strings.TrimSpace(d.name.String())
 		s.AIEndpoint = strings.TrimSpace(d.endpoint.String())
-		s.AIProtocol = aiProtocols[d.protocol]
 		return
 	}
 	if p, ok := presetByID(d.provider); ok {
 		s.AIProvider = p.ID
 		s.AIEndpoint = p.BaseURL
-		s.AIProtocol = p.Protocol
 		return
 	}
 	s.AIEndpoint = strings.TrimSpace(d.endpoint.String())
-	s.AIProtocol = aiProtocols[d.protocol]
 }

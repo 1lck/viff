@@ -1,6 +1,9 @@
 package viffui
 
 import (
+	"strings"
+	"unicode/utf8"
+
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
@@ -222,6 +225,35 @@ func (f *form) field(label string, ed *text.Editor, placeholder string, invalid 
 	}
 	if f.w.field(id, ed, rect(x, f.y, width, fieldH), fieldOpts{placeholder: placeholder, invalid: invalid, label: label}) {
 		f.w.after(f.w.submitDialog)
+	}
+	f.y += fieldH + 12
+	return id
+}
+
+// secretField is a masked input with an eye button that reveals the text.
+func (f *form) secretField(label string, ed *text.Editor, shown *bool, placeholder string) ui.ID {
+	id := scDialogFields.At(f.fields)
+	f.fields++
+	x, width := f.x, f.width
+	if label != "" && f.labelW > 0 {
+		f.w.p.text(label, rect(f.x, f.y, f.labelW, fieldH), fontUI, regular, f.w.pal.Text)
+		x += f.labelW
+		width -= f.labelW
+	}
+	const eyeW = float32(28)
+	display := ""
+	if !*shown {
+		display = strings.Repeat("•", utf8.RuneCountInString(ed.String()))
+	}
+	if f.w.field(id, ed, rect(x, f.y, width-eyeW-4, fieldH), fieldOpts{placeholder: placeholder, label: label, display: display}) {
+		f.w.after(f.w.submitDialog)
+	}
+	eye := icons.EyeClosed
+	if *shown {
+		eye = icons.Eye
+	}
+	if f.w.action(idAIEye, right(rect(x, f.y, width, fieldH))-eyeW+4, f.y+3, eye, f.w.t(i18n.GitAIShowKey), actOpts{}) {
+		f.w.after(func() { *shown = !*shown })
 	}
 	f.y += fieldH + 12
 	return id
