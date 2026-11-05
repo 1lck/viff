@@ -4,7 +4,7 @@
 
 # Viff
 
-**A lightweight, native Git desktop client.**
+**A lightweight, native Git client, with a read-only project browser, an English/Chinese interface, and optional AI-written commit messages.**
 
 Go + Viva. No Electron. No WebView. No bundled browser.
 
@@ -22,9 +22,11 @@ Go + Viva. No Electron. No WebView. No bundled browser.
 
 ## Keep the tool lightweight. Keep the workflow complete.
 
-Viff puts your working tree, diffs, and history in one native desktop window.
-It is written in Go with [Viva](https://github.com/vivaui/viva), renders without a
-browser engine, and runs your installed Git executable.
+Git stays the core. Around it, Viff adds a read-only project browser with
+Quick Open, picture diffs, an English/Chinese interface, and optional
+model-written commit messages. It is written in Go with
+[Viva](https://github.com/vivaui/viva), renders without a browser engine, and
+runs your installed Git executable.
 
 - **A small distribution:** one application executable, plus license files. No separate browser runtime or local server to install.
 - **A native desktop foundation:** Viva handles rendering and platform integration; Viff does not ship an Electron or WebView application.

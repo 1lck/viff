@@ -1,6 +1,6 @@
 # 功能指南
 
-用 Go 和 [Viva](https://github.com/vivaui/viva) 编写的 Git 桌面客户端。界面与交互参照最新版 IntelliJ IDEA 的新 UI（Islands 主题），目标是低内存，并保证 Git 状态正确。
+用 Go 和 [Viva](https://github.com/vivaui/viva) 编写的原生 Git 客户端，内置只读项目浏览、中英双语界面与可选的 AI 提交说明。界面与交互参照最新版 IntelliJ IDEA 的新 UI（Islands 主题），目标是低内存，并保证 Git 状态正确。
 
 设计文档见 [docs/design.md](design.md)，架构决策见 [docs/decisions](decisions/README.md)。
 
