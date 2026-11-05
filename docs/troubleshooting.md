@@ -44,6 +44,12 @@
 4. macOS 若提示"无法打开 Viff.app"（Gatekeeper），先按 [README.zh-CN.md](../README.zh-CN.md) 的 macOS 一节处理，再判断是否为程序问题。
 5. Windows 的 GUI 构建没有可见的 stderr，启动失败优先看系统消息框、`%AppData%\Viff\crash\` 与日志目录。
 
+### Windows 打开后一直闪黑框
+
+- 现象：Windows 上打开 Viff 后，黑色控制台窗口连续闪现，空闲时也周期性出现，界面几乎无法操作。
+- 原因：Windows GUI 构建自身没有控制台，系统会为它启动的每条控制台子命令新建一个控制台窗口。Viff 的仓库刷新会连续执行多条 `git` 命令，轮询监听每 6 秒触发一次刷新，所以黑框会反复出现。
+- 处理：升级到包含该修复的版本。v0.1.0-alpha.2 及更早的 Windows 构建存在此问题；升级后如果仍持续闪黑框，按"如何生成诊断包"导出诊断包，并说明是否有外部终端、编辑器或 hook 参与。
+
 ### 提示找不到 Git（`git.missing`）
 
 - 在终端运行 `git --version`。如果终端也没有，先安装 Git 并重启 Viff。

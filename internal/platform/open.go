@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"viff/internal/process"
 )
 
 // Reveal shows path in the system file manager.
@@ -26,7 +28,9 @@ func OpenWith(command, path string, line int) error {
 		case "darwin":
 			return exec.Command("open", path).Start()
 		case "windows":
-			return exec.Command("cmd", "/c", "start", "", path).Start()
+			cmd := exec.Command("cmd", "/c", "start", "", path)
+			process.HideConsoleWindow(cmd)
+			return cmd.Start()
 		}
 		return exec.Command("xdg-open", path).Start()
 	}
@@ -42,6 +46,8 @@ func OpenTerminal(dir string) error {
 		return exec.Command("open", "-a", "Terminal", dir).Start()
 	case "windows":
 		cmd := exec.Command("cmd", "/c", "start", "cmd")
+		// Hide only the wrapper console; "start" opens the requested window.
+		process.HideConsoleWindow(cmd)
 		cmd.Dir = dir
 		return cmd.Start()
 	}
