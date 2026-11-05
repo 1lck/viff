@@ -45,7 +45,7 @@ Run from the branch worktree / 在分支工作目录执行：
 | `go build -tags 'vivahead litheaudit' ./...` | 通过 pass |
 | `go test -count=1 ./internal/domain/... ./internal/svncli/... ./internal/storage/...` | 通过 pass |
 | `go test -count=1 ./internal/app/...` | 仅 `TestScenarioRenameModeSymlinkBinaryDelete` 失败（环境限制） |
-| `go test -count=1 -tags 'vivahead litheaudit' ./internal/ui` | 通过 pass |
+| `go test -count=1 -tags 'vivahead litheaudit' ./internal/ui` | 通过 pass（`ok 525.431s`，0 失败）。中途曾让 `Update Project` 对 SVN 跳过对话框，导致 `TestSVNUIUpdateThroughTheWindow` 失败；该改动与分支设计意图冲突，已回退后复跑通过 |
 | `go test -count=1 ./internal/gitcli/...` | 仅 `TestTreeAt` 失败（环境限制） |
 
 Two failures are environment limitations, not regressions / 两处失败均为环境限制而非回归：
