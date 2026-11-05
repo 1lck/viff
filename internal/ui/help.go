@@ -1,6 +1,7 @@
 package viffui
 
 import (
+	vapp "viff/internal/app"
 	"viff/internal/ui/icons"
 )
 
@@ -17,8 +18,14 @@ func (w *Window) helpMenu() []item {
 	} else {
 		items = append(items, item{title: "Save Diagnostics…", icon: icons.Archive, run: w.saveDiagnostics})
 	}
+	title := "Check for Updates…"
+	if w.ws.Update.Phase == vapp.UpdateAvailable && w.ws.Update.Version != "" {
+		title = "Update Viff to " + w.ws.Update.Version + "…"
+	}
 	items = append(items,
 		item{title: "Open Log Folder", icon: icons.Folder, run: w.openLogFolder},
+		sep(),
+		item{title: title, icon: icons.Update, run: w.checkForUpdates},
 		sep(),
 		item{title: "About Viff", icon: icons.Info, run: w.openAbout},
 	)

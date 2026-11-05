@@ -73,14 +73,25 @@ not establish full desktop compatibility.
 ## Choose the package / 选择安装包
 
 For `v0.1.0`, the artifact names are:
+`v0.1.0` was published before the Windows portable ZIP existed; the next release
+adds it, so the ZIP row applies to that release onward.
 
-| Platform / 平台             | Artifact / 文件                            | Installation / 安装                                           |
-| --------------------------- | ------------------------------------------ | ------------------------------------------------------------- |
-| macOS 13+, Apple Silicon    | `viff-v0.1.0-darwin-arm64.dmg`             | Drag Viff.app to Applications / 将 Viff.app 拖入 Applications |
-| macOS 13+, Intel            | `viff-v0.1.0-darwin-amd64.dmg`             | Drag Viff.app to Applications / 将 Viff.app 拖入 Applications |
-| Windows x64                 | `viff-v0.1.0-windows-amd64-setup.exe`      | Per-user installation / 安装到当前用户目录                    |
-| Debian/Ubuntu x64           | `viff-v0.1.0-linux-amd64.deb`              | `sudo apt install ./viff-v0.1.0-linux-amd64.deb`              |
-| Linux x64 portable / 便携包 | `viff-v0.1.0-linux-amd64.tar.gz`           | Extract, then run `./viff` / 解压后执行 `./viff`              |
+| Platform / 平台                 | Artifact / 文件                            | Installation / 安装                                           |
+| ------------------------------- | ------------------------------------------ | ------------------------------------------------------------- |
+| macOS 13+, Apple Silicon        | `viff-v0.1.0-darwin-arm64.dmg`             | Drag Viff.app to Applications / 将 Viff.app 拖入 Applications |
+| macOS 13+, Intel                | `viff-v0.1.0-darwin-amd64.dmg`             | Drag Viff.app to Applications / 将 Viff.app 拖入 Applications |
+| Windows x64                     | `viff-v0.1.0-windows-amd64-setup.exe`      | Per-user installation / 安装到当前用户目录                    |
+| Windows x64 portable / 便携 ZIP | `viff-v0.1.0-windows-amd64.zip`            | Extract, then run `viff.exe` / 解压后执行 `viff.exe`          |
+| Debian/Ubuntu x64               | `viff-v0.1.0-linux-amd64.deb`              | `sudo apt install ./viff-v0.1.0-linux-amd64.deb`              |
+| Linux x64 portable / 便携包     | `viff-v0.1.0-linux-amd64.tar.gz`           | Extract, then run `./viff` / 解压后执行 `./viff`              |
+
+In-app updates read these releases from GitHub and download the DMG, the Windows
+portable ZIP, or the Linux portable `tar.gz`, checking every download against
+`SHA256SUMS`. The DEB stays a manual install because it needs elevation.
+
+应用内更新从 GitHub Releases 读取上述产物，下载 DMG、Windows 便携 ZIP 或 Linux 便携包
+`tar.gz`，并用 `SHA256SUMS` 校验每次下载；DEB 安装需要提权，仍保持手动安装。
+`v0.1.0` 发布时还没有 Windows 便携 ZIP，从下一个版本开始提供，因此 ZIP 一行从该版本起适用。
 
 The macOS arm64 package is built natively on the Apple Silicon runner. GitHub no
 longer provides an Intel macOS runner, so the amd64 package is cross-compiled on

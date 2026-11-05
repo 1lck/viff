@@ -592,6 +592,7 @@ func (w *Window) openSettings() {
 	gitPath := text.NewEditor(s.GitPath)
 	editor := text.NewEditor(s.ExternalEditor)
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
+	autoUpdate, autoUpdateWas := s.AutoUpdateCheck, s.AutoUpdateCheck
 	debugLog := s.LogLevel == "debug"
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
@@ -656,6 +657,9 @@ func (w *Window) openSettings() {
 			f.custom(22, func(r ui.Rect) {
 				w.p.text("Writes detailed events for troubleshooting. Logs stay on this computer.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
+			f.gap(6)
+			f.bold("Updates")
+			f.check("Check for updates at startup", &autoUpdate)
 		},
 		okDisabled: func() bool {
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
@@ -678,6 +682,7 @@ func (w *Window) openSettings() {
 			s.ExternalEditor = strings.TrimSpace(editor.String())
 			gitDraft.commit(s)
 			s.AutoFetch, s.FetchPrune, s.PullMode = autoFetch, prune, pull
+			s.AutoUpdateCheck = autoUpdate
 			if m > 0 {
 				s.AutoFetchMins = m
 			}
@@ -689,6 +694,9 @@ func (w *Window) openSettings() {
 			w.applyTheme()
 			w.flushSettings()
 			w.startAutoFetch()
+			if autoUpdate && !autoUpdateWas {
+				w.ws.CheckForUpdates(false)
+			}
 			return true
 		},
 	})

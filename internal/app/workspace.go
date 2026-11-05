@@ -112,6 +112,13 @@ type Workspace struct {
 	Console       []ConsoleEntry
 	Tasks         []*Task
 
+	// Update is the in-app update flow rendered by the update dialog. The UI
+	// only reads it; CheckForUpdates, DownloadUpdate, and InstallUpdate move
+	// it forward (update.go). Background work applies its result through post.
+	Update UpdateState
+	// updates is the private state behind Update; see update.go.
+	updates updateMachine
+
 	// obs records structured events. It is observability.Nop{} until the
 	// composition root installs a logger, so call sites never check for nil
 	// and a workspace without logging behaves exactly like before.
@@ -158,6 +165,7 @@ type Watcher interface{ Close() }
 func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
 	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now, obs: observability.Nop{}, inc: observability.Nop{}}
 	w.SetLogLevel("")
+	w.initUpdateState()
 	if settings != nil {
 		w.SetLogLevel(settings.LogLevel)
 	}

@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -99,6 +100,30 @@ def nsis_string(value):
     return str(value).replace("$", "$$").replace('"', '$\\"')
 
 
+def package_windows_zip(payload, name, dest):
+    """Write the portable ZIP and verify what in-app updates will download."""
+    zip_path = dest / f"{name}.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(payload.rglob("*")):
+            relative = path.relative_to(payload).as_posix()
+            archive.write(path, arcname=f"{name}/{relative}")
+    with zipfile.ZipFile(zip_path) as archive:
+        if archive.testzip() is not None:
+            raise RuntimeError("Portable ZIP is damaged")
+        entries = set(archive.namelist())
+        if not entries or any(not entry.startswith(f"{name}/") for entry in entries):
+            raise RuntimeError("Portable ZIP has the wrong top-level directory")
+        executable = f"{name}/viff.exe"
+        if executable not in entries or archive.getinfo(executable).is_dir():
+            raise RuntimeError("Portable ZIP has no viff.exe")
+        if archive.read(executable) != (payload / "viff.exe").read_bytes():
+            raise RuntimeError("Portable ZIP binary differs from build")
+        for relative in ("LICENSE", "THIRD_PARTY_NOTICES.md", "assets/icons/intellij/LICENSE"):
+            if f"{name}/{relative}" not in entries:
+                raise RuntimeError(f"Portable ZIP is missing {relative}")
+    return zip_path
+
+
 def package_windows(binary, name, version, work, dest, smoke):
     payload = work / "payload"
     copy_notices(payload)
@@ -176,6 +201,9 @@ Section "Uninstall"
     run(makensis, "-V3", script)
     if output.read_bytes()[:2] != b"MZ":
         raise RuntimeError("Installer is not a Windows executable")
+    # The portable ZIP mirrors the Linux tarball and is what in-app updates
+    # download on Windows; the installer stays the manual installation path.
+    zip_path = package_windows_zip(payload, name, dest)
     if smoke:
         import winreg
 
@@ -201,7 +229,7 @@ Section "Uninstall"
                 raise RuntimeError("Uninstall left its registration behind")
         except FileNotFoundError:
             pass
-    return [output]
+    return [output, zip_path]
 
 
 def package_linux(binary, name, version, arch, work, dest, smoke):

@@ -40,6 +40,7 @@
 - **更新未检出的分支**：分支弹窗里非当前分支的本地分支有“Update from Remote”，快进到远端同名分支并说明前进了几个提交；分叉时拒绝且分支不变。浅克隆时 Git 工具窗口的 ⋯ 菜单会多出“Fetch Full History (Unshallow)”。
 - **Git 设置**：设置对话框的 Git 页可以指定 SSH 命令、GPG 程序、签名格式（Git 默认 / OpenPGP / SSH）、签名密钥、默认签名提交与 credential helper；保存后对下一次 Git 调用立即生效，不改写仓库或全局 Git 配置。
 - **通知**：右下角气泡（成功消息 10 秒后自动隐藏），以及通知工具窗口。
+- **应用内更新**：`Help → Check for Updates…` 或启动时自动检查；发现新版本后应用内下载、用 `SHA256SUMS` 校验，点“Restart to Update”自动替换并重启，不需要打开浏览器。Windows 使用便携 ZIP，Linux 便携包使用 tar.gz；DEB 安装需要 `sudo apt install` 完成。
 - **主题**：Islands Dark、Islands Light，或跟随系统。
 
 ## 构建与运行
@@ -85,3 +86,4 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - 界面字体使用系统字体（SF Pro），没有使用 Inter，见 [0002](decisions/0002-fonts.md)。
 - 冲突支持逐块接受两侧内容；自由文本编辑、二进制或不可靠冲突标记仍需要外部编辑器，见 [0019](decisions/0019-git-issue-gaps.md)。
 - 已有分支创建工作树见 [0018](decisions/0018-existing-branch-worktree.md)；prunable 工作树只能查看、不能删除。嵌套子模块的移除和 deinit 需要先打开其所属仓库，见 [0019](decisions/0019-git-issue-gaps.md)。
+- 应用内更新没有系统签名校验（macOS ad-hoc 签名、Windows 无 Authenticode），只做 HTTPS + SHA-256；宿主的系统安全提示仍可能出现。DEB 安装受权限限制只能提示手动安装；随包文档在 Windows/Linux 自替换后保持旧版本，见 [0023](decisions/0023-app-update.md)。旧版本（v0.1.0 及更早）没有更新器，升级到第一个带更新器的版本需要手动下载一次。

@@ -1,15 +1,24 @@
 # 隐私与数据说明
 
-Viff 是本地优先的 Git 桌面客户端。默认情况下，**Viff 自身不联网、不自动上传任何诊断数据，也没有使用统计或产品分析**（只有你主动执行 `clone` / `fetch` / `push` 时，Git 才会访问你配置的 remote）。日志、崩溃记录和诊断信息只保存在这台电脑上，是否交给维护者由你决定。
+Viff 是本地优先的 Git 桌面客户端。**Viff 不自动上传诊断数据，也没有使用统计或产品分析**。它唯一的默认网络请求是[应用内更新检查](#应用内更新检查)（可在设置中关闭）；此外只有你主动执行 `clone` / `fetch` / `push` 时，Git 才会访问你配置的 remote。日志、崩溃记录和诊断信息只保存在这台电脑上，是否交给维护者由你决定。
 
 本文说明 Viff 记录什么、放在哪里、保留多久、如何删除，以及把诊断包发到公开 Issue 前要注意什么。面向维护者的实现说明见 [observability.md](observability.md)。
 
 ## 一句话总结
 
-- 只有你主动执行 `clone` / `fetch` / `push` 等 Git 操作时，Git 才会按你配置的 remote 访问网络；Viff 自身不会为了日志或诊断发起网络请求。
+- 只有你主动执行 `clone` / `fetch` / `push` 等 Git 操作时，Git 才会按你配置的 remote 访问网络；Viff 自身唯一的网络请求是应用内更新检查，不会为了日志或诊断发起请求。
 - 日志默认写在本地配置目录，最多 5 个文件、总量约 10 MiB、保留 14 天。
 - 诊断包只在你点击保存时生成，保存位置由你选择，不会自动上传。
 - 发给公开 Issue 前请先预览内容；安全漏洞请走私密渠道（见 [SECURITY.md](../SECURITY.md)）。
+
+## 应用内更新检查
+
+- **时机**：启动时检查一次（设置里“Check for updates at startup”默认开启，可关闭），或点击 `Help → Check for Updates…` 手动检查。
+- **请求**：`GET https://api.github.com/repos/1lck/viff/releases`，只读取公开的版本、发布说明、资产文件名/大小和 `SHA256SUMS`。请求不含账号身份、令牌、仓库内容、路径或使用数据；`User-Agent` 只带 Viff 版本号。
+- **下载**：发现新版本后，只有你点击 Update 才会从 GitHub Releases 下载对应平台的安装包；下载完成后用 `SHA256SUMS` 做 SHA-256 校验，不一致不会安装。
+- **缓存**：安装包与替换 helper 保存在用户缓存目录的 `Viff/updates/` 下（macOS `~/Library/Caches/Viff/updates/`，Windows `%LocalAppData%\Viff\updates\`，Linux `$XDG_CACHE_HOME/Viff/updates/`）。安装成功后旧文件会自动清理；你也可以直接删除该目录，Viff 下次需要时会重新下载。
+- **失败与关闭**：自动检查失败时静默，不打扰你；手动检查才显示错误。关闭自动检查后，Viff 不会在启动时发起该请求。
+- **边界**：更新检查不包含遥测、A/B 实验或远程配置；它只用于回答“是否有新版本”和下载用户确认的安装包。
 
 ## Viff 会记录什么
 
@@ -103,7 +112,8 @@ GitHub Issue 的正文和附件对所有人可见，并可能被搜索引擎、�
 2. 打开日志目录：`Help → Open Log Folder`，或按上表手动进入。
 3. 删除 `logs/` 目录；如需一并删除崩溃记录，回到上一级删除 `crash/` 目录。
 4. 已导出的诊断包 zip 在你保存的位置，请自行删除。
-5. 最近事件的内存环在进程退出后清空；Viff 不保留云端副本，删除后无法恢复。
+5. 更新下载缓存可在缓存目录的 `Viff/updates/` 中删除（见[应用内更新检查](#应用内更新检查)）。
+6. 最近事件的内存环在进程退出后清空；Viff 不保留云端副本，删除后无法恢复。
 
 只想清理日志、保留设置时，只删 `logs/` 与 `crash/`；删除整个 `Viff` 目录会同时移除设置和最近项目记录。
 
@@ -121,3 +131,4 @@ GitHub Issue 的正文和附件对所有人可见，并可能被搜索引擎、�
 - 遇到问题如何排查、如何生成诊断包：[troubleshooting.md](troubleshooting.md)
 - 安全漏洞私密报告：[SECURITY.md](../SECURITY.md)
 - 维护者设计说明：[observability.md](observability.md)（日志/诊断的设计与实现）
+- 应用内更新的取舍与限制：[decisions/0023-app-update.md](decisions/0023-app-update.md)
