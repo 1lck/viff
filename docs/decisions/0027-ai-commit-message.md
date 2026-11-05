@@ -11,7 +11,7 @@
 ## 决定
 
 - **协议**：支持三种线格式，用字符串命名，便于以后加分支：`openai-completions`（`POST {base}/chat/completions`，Bearer 鉴权）、`openai-responses`（`POST {base}/responses`，system 走 `instructions`）、`anthropic-messages`（`POST {base}/v1/messages`，`x-api-key` 与 `anthropic-version` 头）。空值按 chat completions 处理，旧设置文件因此照旧可用。
-- **提供商**：内置 OpenAI、Anthropic、DeepSeek、OpenRouter、Ollama，选中它们只带出 Base URL 与协议，用户只需填密钥与模型。自定义写名称、协议、Base URL、密钥四项。内置只是把已知的地址写成表，不发任何请求。
+- **提供商**：内置一批常用提供商（OpenAI、Anthropic、DeepSeek、OpenRouter、Ollama、Google AI 等），选中它们只带出 Base URL 与协议，用户只需填密钥与模型。自定义写名称、协议、Base URL、密钥四项。内置只是把已知的地址写成表，不发任何请求。
 - **发送什么**：分支名、最近五条提交的哈希与标题、变更文件的状态与路径、每个文件的 diff。有暂存改动时只用暂存，否则用工作区。
 - **不发什么**：仓库内容以外的文件、未变更文件、凭据与设置、诊断与日志。diff 每个文件截断到 4000 字符、最多 8 个文件；lock 文件（`go.sum`、`package-lock.json`、`*.lock`、`*.min.js` 等）与二进制 diff 直接跳过。
 - **密钥**：明文存在 `settings.json` 的 `aiKey`，与 SSH、签名设置同一处理方式。这是本机单用户应用，设置文件本来就持有这类信息；不接受的做法是把它写进日志、诊断包或通知。
