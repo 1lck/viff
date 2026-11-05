@@ -68,7 +68,7 @@ func init() {
 		PatchApply:        "Apply Patch…",
 		PatchApplyIndex:   "Apply Patch to Index…",
 		PatchFetchFull:    "Fetch Full History (Unshallow)",
-		ShowInFileManager: "Show in File Manager",
+		ShowInFileManager: "Show in Finder",
 
 		CompareTitle:   "Compare %s → %s",
 		CompareLoading: "Loading changed files…",
