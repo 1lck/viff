@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -75,6 +76,14 @@ func (r *Runner) svn() (string, error) {
 		return "", r.findErr
 	}
 	if r.Path != "" {
+		// A configured path is validated here, not left to exec: a wrong path
+		// in the settings must reach the user as "not found" so the UI can
+		// offer the install/path hint, instead of surfacing a raw
+		// "executable file not found in $PATH" from the failed fork.
+		if _, err := os.Stat(r.Path); err != nil {
+			r.findErr = &vcs.Error{Kind: vcs.ErrNoGit, Tool: "svn", Err: err}
+			return "", r.findErr
+		}
 		r.resolved = r.Path
 		return r.resolved, nil
 	}

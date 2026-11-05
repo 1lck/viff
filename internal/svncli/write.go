@@ -2,6 +2,7 @@ package svncli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -140,6 +141,11 @@ func (r *Runner) CreatePatch(ctx context.Context, repo domain.Repo, paths []stri
 // cached and reverse are Git concepts: Subversion applies patches to the
 // working copy only and has no reverse mode, so a reverse request is rejected
 // rather than silently applied forwards.
+//
+// svn patch takes the patch as a file argument and cannot read stdin
+// ("E205001: Not enough arguments provided"), so the bytes go to a temporary
+// file that is removed afterwards. The file lives in the system temporary
+// directory rather than the repository, so it never shows up in a status query.
 func (r *Runner) ApplyPatch(ctx context.Context, repo domain.Repo, patch []byte, cached, reverse bool) error {
 	if reverse {
 		return errorf(vcs.ErrOther, "Subversion cannot apply a patch in reverse")
@@ -147,10 +153,23 @@ func (r *Runner) ApplyPatch(ctx context.Context, repo domain.Repo, patch []byte,
 	if cached {
 		return errorf(vcs.ErrOther, "Subversion has no staging area to apply a patch to")
 	}
-	if _, err := r.RunInput(ctx, repo.Root, patch, "patch", "--strip", "0"); err != nil {
-		return err
+	f, err := os.CreateTemp("", "viff-*.patch")
+	if err != nil {
+		return fmt.Errorf("create patch file: %w", err)
 	}
-	return nil
+	name := f.Name()
+	defer os.Remove(name)
+	if _, err := f.Write(patch); err != nil {
+		f.Close()
+		return fmt.Errorf("write patch file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close patch file: %w", err)
+	}
+	// WCPATH is the working copy root, so a patch whose paths are relative to
+	// it applies from there; svn otherwise assumes the current directory.
+	_, err = r.Run(ctx, repo.Root, "patch", name, ".")
+	return err
 }
 
 // Fetch is a no-op: Subversion has no separate fetch step, because `svn
