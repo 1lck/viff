@@ -1113,9 +1113,13 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	if v.amend {
 		pl = w.t(i18n.WorkspaceButtonAmendCommitAndPush)
 	}
-	pw := w.buttonWidth(pl)
-	if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
-		w.after(func() { w.doCommit(true) })
+	// Without a separate publish step the commit already reached the server,
+	// so a second button would either repeat the commit or do nothing.
+	if w.ws.Caps.SeparatePush {
+		pw := w.buttonWidth(pl)
+		if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
+			w.after(func() { w.doCommit(true) })
+		}
 	}
 }
 

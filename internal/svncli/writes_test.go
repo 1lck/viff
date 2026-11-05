@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"viff/internal/domain"
 	"viff/internal/vcs"
 )
 
@@ -423,5 +424,62 @@ func TestSparseCheckout(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(shallowWC, "README.md")); err != nil {
 		t.Fatalf("Unshallow did not bring the files: %v", err)
+	}
+}
+
+// TestBranchWrites covers the local branch writes, which are directory copies
+// on the server rather than refs: create copies trunk into branches/<name>,
+// delete removes it, and rename moves it.
+func TestBranchWrites(t *testing.T) {
+	f := newFullFixture(t)
+	r, repo := f.r, f.repo
+	ctx := f.ctx()
+
+	if err := r.CreateBranch(ctx, repo, "topic", "trunk", false, false); err != nil {
+		t.Fatalf("create branch: %v", err)
+	}
+	refs, err := r.Refs(ctx, repo)
+	if err != nil {
+		t.Fatalf("refs: %v", err)
+	}
+	found := false
+	for _, ref := range refs {
+		if ref.Short == "topic" && ref.Kind == domain.RefLocal {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("created branch missing from refs: %+v", refs)
+	}
+
+	if err := r.RenameBranch(ctx, repo, "topic", "renamed"); err != nil {
+		t.Fatalf("rename branch: %v", err)
+	}
+	refs, err = r.Refs(ctx, repo)
+	if err != nil {
+		t.Fatalf("refs after rename: %v", err)
+	}
+	for _, ref := range refs {
+		if ref.Short == "topic" {
+			t.Fatalf("the old branch name survived the rename: %+v", refs)
+		}
+	}
+
+	if err := r.DeleteBranch(ctx, repo, "renamed", false); err != nil {
+		t.Fatalf("delete branch: %v", err)
+	}
+	refs, err = r.Refs(ctx, repo)
+	if err != nil {
+		t.Fatalf("refs after delete: %v", err)
+	}
+	for _, ref := range refs {
+		if ref.Short == "renamed" {
+			t.Fatalf("the deleted branch is still listed: %+v", refs)
+		}
+	}
+
+	// trunk is not a branch Viff may delete.
+	if err := r.DeleteBranch(ctx, repo, "trunk", false); err == nil {
+		t.Fatal("deleting trunk should be refused")
 	}
 }

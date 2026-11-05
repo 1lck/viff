@@ -745,7 +745,7 @@ func (w *Window) openRepo(dir string) {
 
 func (w *Window) chooseRepo() {
 	w.after(func() {
-		dir, err := app.OpenDirectory(app.OpenDirectoryOptions{Title: "Open Git Repository"})
+		dir, err := app.OpenDirectory(app.OpenDirectoryOptions{Title: w.t(i18n.ChromeDialogOpenRepository)})
 		if err != nil || dir == "" {
 			return
 		}

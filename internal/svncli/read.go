@@ -132,8 +132,14 @@ func (r *Runner) Status(ctx context.Context, repo domain.Repo) (domain.Status, e
 }
 
 // statusLetter maps svn's item attribute onto the letter the rest of Viff
-// already understands. 'missing' becomes '!' because the file is gone from
-// disk but still recorded, which is what '!' means in the status model.
+// already understands.
+//
+// 'missing' becomes 'D', not '!': both mean the path is gone from disk while
+// still versioned, and a commit deletes it. '!' is the status model's ignored
+// letter, so a missing file mapped there disappears from the changes list
+// entirely (domain.StatusEntry.Ignored). Git never emits '!' either — its
+// status call does not ask for ignored files — so the letter has no other
+// producer to stay compatible with.
 func statusLetter(item string) byte {
 	switch item {
 	case "modified":
@@ -143,7 +149,7 @@ func statusLetter(item string) byte {
 	case "deleted":
 		return 'D'
 	case "missing":
-		return '!'
+		return 'D'
 	case "unversioned":
 		return '?'
 	case "conflicted":

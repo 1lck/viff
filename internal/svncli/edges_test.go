@@ -179,14 +179,19 @@ func TestEdgesDeletedAndMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// "missing" is reported as 'D', the same letter as a scheduled deletion:
+	// both mean the path is gone from disk and a commit removes it. '!' is the
+	// status model's ignored letter, so mapping a missing file there would drop
+	// it from the changes list instead of showing the deletion the user has to
+	// commit or revert (domain.StatusEntry.Ignored).
 	var missing bool
 	for _, e := range st.Entries {
-		if e.Path == "README.md" && e.Worktree == '!' {
+		if e.Path == "README.md" && e.Worktree == 'D' {
 			missing = true
 		}
 	}
 	if !missing {
-		t.Fatalf("a file gone from disk should be '!': %+v", st.Entries)
+		t.Fatalf("a file gone from disk should be 'D': %+v", st.Entries)
 	}
 
 	// Reading the base side must still work: the recorded version exists even
@@ -363,5 +368,69 @@ func TestEdgesMixedRevision(t *testing.T) {
 	// The base side of a stale path still reads.
 	if _, err := r.Read(ctx, repo, vcs.RevIndex, "README.md"); err != nil {
 		t.Fatalf("read base on a mixed-revision copy: %v", err)
+	}
+}
+
+// TestEdgesStageResolvesConflict pins what "Mark as Resolved" means for
+// Subversion: the path is conflicted, so `svn add` refuses it (E155015) and the
+// only way to make it committable is `svn resolve --accept working`. Stage is
+// the single entry point the UI reaches, so it has to do that.
+func TestEdgesStageResolvesConflict(t *testing.T) {
+	f := newFullFixture(t)
+	r, repo := f.r, f.repo
+	ctx := f.ctx()
+
+	parent := filepath.Join(f.root, "resolve")
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Clone(ctx, parent, f.url, "other", nil); err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	otherWC := filepath.Join(parent, "other")
+	otherRepo, err := r.Discover(ctx, otherWC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(otherWC, "README.md"), []byte("THEIRS\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := r.Commit(ctx, otherRepo, vcs.CommitOptions{Message: "theirs", Paths: []string{"README.md"}}); err != nil {
+		t.Fatalf("commit other: %v: %s", err, out.Stdout)
+	}
+	f.write("README.md", "OURS\n")
+	if _, err := r.Pull(ctx, repo, vcs.PullMerge, nil); err != nil {
+		t.Fatalf("update into a conflict: %v", err)
+	}
+
+	st, err := r.Status(ctx, repo)
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	conflicted := false
+	for _, e := range st.Entries {
+		if e.Path == "README.md" && e.Conflicted() {
+			conflicted = true
+		}
+	}
+	if !conflicted {
+		t.Fatalf("the update did not conflict: %+v", st.Entries)
+	}
+
+	if err := r.Stage(ctx, repo, []string{"README.md"}); err != nil {
+		t.Fatalf("stage a conflicted path: %v", err)
+	}
+	st, err = r.Status(ctx, repo)
+	if err != nil {
+		t.Fatalf("status after resolve: %v", err)
+	}
+	for _, e := range st.Entries {
+		if e.Path == "README.md" && e.Conflicted() {
+			t.Fatalf("README.md is still conflicted after Stage: %+v", e)
+		}
+	}
+	// Resolving keeps the working file, so the path is now committable.
+	if out, err := r.Commit(ctx, repo, vcs.CommitOptions{Message: "resolved", Paths: []string{"README.md"}}); err != nil {
+		t.Fatalf("commit after resolve: %v: %s", err, out.Stdout)
 	}
 }

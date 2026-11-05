@@ -224,7 +224,7 @@ func init() {
 		ChromeStatusRecording:      "● Recording diagnostics…",
 		ChromeStatusRecordingLabel: "Recording diagnostics",
 
-		ChromeDialogOpenRepository: "Open Git Repository",
+		ChromeDialogOpenRepository: "Open Repository",
 
 		ChromePopupCloseMenu: "Close menu",
 		ChromePopupSearch:    "Search",
@@ -385,7 +385,7 @@ func init() {
 		ChromeStatusRecording:      "● 正在记录诊断信息…",
 		ChromeStatusRecordingLabel: "正在记录诊断信息",
 
-		ChromeDialogOpenRepository: "打开 Git 仓库",
+		ChromeDialogOpenRepository: "打开仓库",
 
 		ChromePopupCloseMenu: "关闭菜单",
 		ChromePopupSearch:    "搜索",

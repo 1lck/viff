@@ -17,5 +17,9 @@ func (r *Runner) Model() vcs.ModelFlags {
 		Properties:     true,
 		Locks:          true,
 		OfflineHistory: true,
+		// svn commit is the server operation itself: nothing is left to
+		// publish afterwards, so Push, Fetch and "Commit and Push" have no
+		// meaning and the UI hides them.
+		SeparatePush: false,
 	}
 }

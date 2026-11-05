@@ -59,6 +59,15 @@ func (w *Workspace) refs() (vcs.ReferenceWriter, error) {
 	return w.Caps.References, nil
 }
 
+// branches reaches the local branch writes. It is separate from refs because a
+// backend may have branches without tags, remotes or refspecs (Subversion).
+func (w *Workspace) branches() (vcs.BranchWriter, error) {
+	if w.Caps.Branches == nil {
+		return nil, ErrUnsupported
+	}
+	return w.Caps.Branches, nil
+}
+
 func (w *Workspace) conflictResolver() (vcs.ConflictResolver, error) {
 	if w.Caps.Conflicts == nil {
 		return nil, ErrUnsupported

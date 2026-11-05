@@ -17,12 +17,25 @@ import (
 // schedules the removal. This method therefore does exactly that, which is the
 // same user intention ("include this in the next commit") expressed the only
 // way this version control system can.
+//
+// A conflicted path is the exception: svn refuses to add it (E155015, "is an
+// existing item in conflict") and it must be marked resolved before it can be
+// committed at all, so it goes through `svn resolve --accept working` instead.
+// That is what the UI's "Mark as Resolved" step means for Subversion.
 func (r *Runner) Stage(ctx context.Context, repo domain.Repo, paths []string) error {
 	if len(paths) == 0 {
 		return nil
 	}
-	var toAdd, toDelete []string
+	conflicted, err := r.conflictedPaths(ctx, repo)
+	if err != nil {
+		return err
+	}
+	var toAdd, toDelete, toResolve []string
 	for _, p := range paths {
+		if conflicted[p] {
+			toResolve = append(toResolve, p)
+			continue
+		}
 		full := filepath.Join(repo.Root, filepath.FromSlash(p))
 		if _, err := os.Lstat(full); err != nil {
 			// Gone from disk: schedule the removal instead of the addition.
@@ -30,6 +43,11 @@ func (r *Runner) Stage(ctx context.Context, repo domain.Repo, paths []string) er
 			continue
 		}
 		toAdd = append(toAdd, p)
+	}
+	if len(toResolve) > 0 {
+		if _, err := r.Run(ctx, repo.Root, append([]string{"resolve", "--accept", "working"}, toResolve...)...); err != nil {
+			return err
+		}
 	}
 	if len(toAdd) > 0 {
 		if _, err := r.Run(ctx, repo.Root, append([]string{"add", "--parents"}, toAdd...)...); err != nil {
@@ -42,6 +60,29 @@ func (r *Runner) Stage(ctx context.Context, repo domain.Repo, paths []string) er
 		}
 	}
 	return nil
+}
+
+// conflictedPaths lists the working copy's conflicted paths, keyed the way the
+// rest of the application names them (slash separators, working-copy relative).
+// A failure to read the status is reported, not ignored: staging a conflicted
+// path with `svn add` fails with an error that says nothing about the real
+// problem.
+func (r *Runner) conflictedPaths(ctx context.Context, repo domain.Repo) (map[string]bool, error) {
+	out, err := r.Run(ctx, repo.Root, "status", "--xml")
+	if err != nil {
+		return nil, err
+	}
+	entries, err := ParseStatus(out)
+	if err != nil {
+		return nil, err
+	}
+	conflicted := make(map[string]bool)
+	for _, e := range entries {
+		if e.Conflicted() {
+			conflicted[filepath.ToSlash(e.Path)] = true
+		}
+	}
+	return conflicted, nil
 }
 
 // Unstage reverses Stage: a scheduled addition is un-scheduled, a scheduled

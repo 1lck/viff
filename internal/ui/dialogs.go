@@ -365,6 +365,12 @@ func (w *Window) pullMode() gitcli.PullMode {
 }
 
 // openUpdate is IntelliJ's Update Project dialog.
+//
+// The three choices describe how incoming commits are joined with the local
+// ones (merge, rebase, fast-forward). A backend that cannot rewrite or replay
+// history has no such choice — a Subversion update simply merges the server's
+// changes into the working copy — so the update runs directly instead of
+// offering options the backend would ignore.
 func (w *Window) openUpdate() {
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
@@ -372,6 +378,12 @@ func (w *Window) openUpdate() {
 	}
 	if rs.Status.Branch.Upstream == "" {
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyCannotUpdateTitle), w.t(i18n.NotifyCannotUpdateBody))
+		return
+	}
+	if w.ws.Caps.HistoryWriter == nil {
+		// The mode is ignored by such a backend, so the merge value only fills
+		// the contract.
+		w.ws.Pull(gitcli.PullMerge)
 		return
 	}
 	mode := int(w.pullMode())

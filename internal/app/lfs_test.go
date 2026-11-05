@@ -14,7 +14,7 @@ import (
 func TestLFSStateFollowsAttributes(t *testing.T) {
 	f := newFixture(t)
 	f.write(".gitattributes", "*.bin filter=lfs diff=lfs merge=lfs -text\n")
-	f.w.Git.LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	f.w.Git.(*gitcli.Runner).LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 		return nil, errors.New("git: 'lfs' is not a git command")
 	}
 	f.open()
@@ -43,7 +43,7 @@ func TestLFSStateFollowsAttributes(t *testing.T) {
 func TestLFSDetectionIsThrottled(t *testing.T) {
 	f := newFixture(t)
 	f.write(".gitattributes", "*.bin filter=lfs\n")
-	f.w.Git.LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	f.w.Git.(*gitcli.Runner).LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 		return nil, errors.New("git: 'lfs' is not a git command")
 	}
 	f.open()

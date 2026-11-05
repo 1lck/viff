@@ -13,6 +13,11 @@ import (
 	"viff/internal/ui/icons"
 )
 
+// canWriteBranches reports whether the active backend can create, rename and
+// delete local branches. A nil capability means the entries stay disabled
+// rather than opening a dialog that cannot do anything.
+func (w *Window) canWriteBranches() bool { return w.ws.Caps.Branches != nil }
+
 // openBranchPopup opens IntelliJ's Git Branches popup under the widget.
 func (w *Window) openBranchPopup(anchor ui.Rect) {
 	rs := w.repo()
@@ -35,9 +40,14 @@ func (w *Window) openBranchPopup(anchor ui.Rect) {
 	items = append(items,
 		item{title: w.t(i18n.ChromeTbUpdate), icon: icons.Update, shortcut: "⌘T", disabled: !hasRemote, run: w.openUpdate},
 		item{title: w.t(i18n.ChromeTbCommit), icon: icons.Commit, shortcut: "⌘K", run: w.focusCommit},
-		item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, shortcut: "⇧⌘K", disabled: !rs.HasHead(), run: w.openPush},
+	)
+	// A backend whose commit is the server operation has nothing to push.
+	if w.ws.Caps.SeparatePush {
+		items = append(items, item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, shortcut: "⇧⌘K", disabled: !rs.HasHead(), run: w.openPush})
+	}
+	items = append(items,
 		sep(),
-		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, shortcut: "⌥⌘N", disabled: !rs.HasHead(), run: func() { w.openNewBranch("", rs.HeadLabel()) }},
+		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, shortcut: "⌥⌘N", disabled: !rs.HasHead() || !w.canWriteBranches(), run: func() { w.openNewBranch("", rs.HeadLabel()) }},
 		item{title: w.t(i18n.ChromeMenuCheckoutTagRev), run: w.openCheckoutRevision},
 	)
 	locals := rs.RefsOf(domain.RefLocal)
@@ -196,10 +206,12 @@ func (w *Window) refActions(r domain.Ref) []item {
 		)
 	}
 	if r.Kind == domain.RefLocal {
+		if w.ws.Caps.SeparatePush {
+			items = append(items, item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, disabled: len(rs.Remotes) == 0, run: func() { w.openPushFor(r) }})
+		}
 		items = append(items,
-			item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, disabled: len(rs.Remotes) == 0, run: func() { w.openPushFor(r) }},
-			item{title: w.t(i18n.ChromeMenuRename), icon: icons.Edit, run: func() { w.openRename(r) }},
-			item{title: w.t(i18n.ChromeActionDelete), icon: icons.Delete, run: func() { w.ws.DeleteBranch(r, false) }},
+			item{title: w.t(i18n.ChromeMenuRename), icon: icons.Edit, disabled: !w.canWriteBranches(), run: func() { w.openRename(r) }},
+			item{title: w.t(i18n.ChromeActionDelete), icon: icons.Delete, disabled: !w.canWriteBranches(), run: func() { w.ws.DeleteBranch(r, false) }},
 		)
 		if len(rs.Remotes) > 0 {
 			items = append(items, item{title: w.t(i18n.ChromeMenuUpdateFromRemote), icon: icons.Update, disabled: busy, run: func() { w.updateBranchFromRemote(r) }})

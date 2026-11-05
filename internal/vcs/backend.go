@@ -188,6 +188,10 @@ type ModelFlags struct {
 	// OfflineHistory reports that history needs the repository, so cached
 	// results must be labelled as possibly stale.
 	OfflineHistory bool
+	// SeparatePush reports that a commit is local and publishing it is a
+	// separate step (push, fetch). Off for a backend whose commit is itself
+	// the server operation.
+	SeparatePush bool
 }
 
 // ModelReporter is implemented by a backend that wants to declare its model
@@ -216,6 +220,11 @@ type Capabilities struct {
 	// local copy. The UI must then label cached results as possibly stale
 	// instead of presenting them as current.
 	OfflineHistory bool
+	// SeparatePush reports that publishing is a step of its own after a commit:
+	// a local commit exists first, and the remote only sees it on push/fetch.
+	// Git has that split; Subversion does not, because svn commit itself is the
+	// server operation, so the UI offers no Push, Fetch or "Commit and Push".
+	SeparatePush bool
 
 	// HistoryWriter merges, rebases and otherwise rewrites history.
 	HistoryWriter HistoryWriter
@@ -229,6 +238,9 @@ type Capabilities struct {
 	Submodules SubmoduleWriter
 	// References creates and deletes branches and tags.
 	References ReferenceWriter
+	// Branches creates, renames and deletes local branches. Git satisfies it
+	// through ReferenceWriter; a backend can offer branches alone.
+	Branches BranchWriter
 	// Conflicts resolves a single conflict block in place.
 	Conflicts ConflictResolver
 }
@@ -283,6 +295,16 @@ type SubmoduleWriter interface {
 	RemoveSubmodule(ctx context.Context, repo domain.Repo, path string, force bool) error
 	UpdateSubmodule(ctx context.Context, repo domain.Repo, path string, init bool, progress func(string)) error
 	SyncSubmodules(ctx context.Context, repo domain.Repo, path string) error
+}
+
+// BranchWriter creates, renames and deletes local branches. It is a slice of
+// ReferenceWriter, split out because a backend can support branches without
+// having tags, remotes or refspecs: Subversion copies and deletes a directory
+// on the server, and has none of the rest.
+type BranchWriter interface {
+	CreateBranch(ctx context.Context, repo domain.Repo, name, start string, checkout, force bool) error
+	RenameBranch(ctx context.Context, repo domain.Repo, old, name string) error
+	DeleteBranch(ctx context.Context, repo domain.Repo, name string, force bool) error
 }
 
 // ReferenceWriter creates, moves and deletes branches and tags. Reading them

@@ -188,10 +188,16 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	ax -= actionSize + 14
 	w.p.vline(ax+actionSize+7, ay+5, actionSize-10, w.pal.Separator)
 	busy := w.ws.Busy()
-	if w.action(idTbPush, ax, ay, icons.Push, w.t(i18n.ChromeTbPush)+"\t⇧⌘K", actOpts{disabled: !rs.HasHead()}) {
-		w.after(w.openPush)
+	// A backend whose commit is itself the server operation has nothing to
+	// publish afterwards, so Push and Fetch are not drawn at all instead of
+	// being shown and doing nothing.
+	separatePush := w.ws.Caps.SeparatePush
+	if separatePush {
+		if w.action(idTbPush, ax, ay, icons.Push, w.t(i18n.ChromeTbPush)+"\t⇧⌘K", actOpts{disabled: !rs.HasHead()}) {
+			w.after(w.openPush)
+		}
+		ax -= actionSize + 4
 	}
-	ax -= actionSize + 4
 	if w.action(idTbCommit, ax, ay, icons.Commit, w.t(i18n.ChromeTbCommit)+"\t⌘K", actOpts{}) {
 		w.after(w.focusCommit)
 	}
@@ -199,9 +205,11 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	if w.action(idTbUpdate, ax, ay, icons.Update, w.t(i18n.ChromeTbUpdate)+"\t⌘T", actOpts{disabled: len(rs.Remotes) == 0}) {
 		w.after(w.openUpdate)
 	}
-	ax -= actionSize + 4
-	if w.action(idTbFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0 || busy && w.taskRunning("Fetch")}) {
-		w.after(func() { w.ws.Fetch(false) })
+	if separatePush {
+		ax -= actionSize + 4
+		if w.action(idTbFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0 || busy && w.taskRunning("Fetch")}) {
+			w.after(func() { w.ws.Fetch(false) })
+		}
 	}
 }
 

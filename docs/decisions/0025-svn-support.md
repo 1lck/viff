@@ -1,6 +1,6 @@
 # 0025 增加 Subversion 日常客户端支持
 
-- 状态：已采用（2026-11；架构设计已定，实现未开始）
+- 状态：已采用（2026-11；Git 与 Subversion 双后端已实现，界面验收见 [svn-acceptance.md](../svn-acceptance.md)）
 - 相关：[0001](0001-git-cli.md)、[0005](0005-read-only-conflicts.md)、[0020](0020-repositories-changelists.md)
 
 ## 背景
@@ -76,17 +76,31 @@ type Backend interface {
 
 ```go
 type Capabilities struct {
-	RefWriter       RefWriter        // 分支创建/切换/删除；SVN 可由 switch 部分实现
-	HistoryWriter   HistoryWriter    // Git: merge/rebase/cherry-pick/reset；SVN: nil
-	Stash           StashService     // SVN: nil
-	Worktrees       WorktreeService  // SVN: nil
-	Submodules      SubmoduleService // SVN: nil
-	Reflog          ReflogService    // SVN: nil
-	ConflictResolve ConflictResolver
-	Indexable       bool             // 有暂存区（Git true，SVN false）
-	PropertyEdits   bool             // 支持属性编辑（SVN true）
+	// 模型差异（布尔位）：Git 侧为默认值，SVN 在 Model() 里覆盖
+	Index          bool // 有暂存区（Git true，SVN false）
+	Amend          bool // 可本地改写最后一次提交（Git true，SVN false）
+	Properties     bool // 支持属性编辑（Git false，SVN true）
+	Locks          bool // 支持仓库锁（Git false，SVN true）
+	OfflineHistory bool // 历史需要访问仓库，缓存须标注陈旧（Git false，SVN true）
+	SeparatePush   bool // 提交是本地操作、发布是另一步（Git true，SVN false）
+
+	// 可选服务（nil 即不支持）
+	HistoryWriter HistoryWriter    // Git: merge/rebase/cherry-pick/reset；SVN: nil
+	Stash         StashWriter      // SVN: nil
+	Worktrees     WorktreeWriter   // SVN: nil
+	Submodules    SubmoduleWriter  // SVN: nil
+	Reflog        ReflogReader     // SVN: nil
+	References    ReferenceWriter  // Git: 分支/tag/remote/refspec 全套；SVN: nil
+	Branches      BranchWriter     // 仅本地分支的增删改；SVN 实现，Git 由 ReferenceWriter 满足
+	Conflicts     ConflictResolver // 逐块改写冲突文件；SVN: nil（只读展示 + svn resolve）
 }
 ```
+
+`SeparatePush` 是实机验收补出来的：没有它，SVN 工作副本的工具栏照样画出 `Push`、
+`Fetch` 与 `Commit and Push`，而这三者都以「本地提交 + 独立发布」为前提。
+`Branches` 是第二个补出来的：`ReferenceWriter` 把 tag、remote 与 refspec 都绑进同一个
+接口，SVN 只有「服务端目录复制」这一种分支写操作，若为实现分支去实现整套
+`ReferenceWriter`，就正好退回本节要避免的「40 个空方法」。
 
 理由：nil 判断可在编译期穷尽，比运行时 `ErrNotSupported` 清晰；避免 `svncli` 出现 40 个空方法。同时**构造函数签名不变**——`*gitcli.Runner` 天然满足必备接口，现有 20 余处 `NewWorkspace(&gitcli.Runner{...})` 测试调用无需改动。
 
@@ -133,7 +147,12 @@ type Repo struct {
 Props byte
 ```
 
-`item` → 字母映射：`modified`→`M`、`added`→`A`、`deleted`→`D`、`missing`→`!`、`unversioned`→`?`、`conflicted`→`C`、`ignored`→`I`、`normal`→` `、`replaced`→`R`、`external`→`X`。
+`item` → 字母映射：`modified`→`M`、`added`→`A`、`deleted`→`D`、`missing`→`D`、`unversioned`→`?`、`conflicted`→`C`、`ignored`→`I`、`normal`→` `、`replaced`→`R`、`external`→`X`、`incomplete`→`!`。
+
+`missing` 不映射 `!`：`!` 是状态模型里的「忽略」字母，`domain.StatusEntry.Ignored()`
+会把带 `!` 的条目从变更列表里过滤掉，结果就是「磁盘上删掉了已跟踪文件」这件事在界面上
+彻底看不见。Git 侧也不会产出 `!`（`git status` 不请求 ignored），所以把它留给 `incomplete`
+这类真正无法展示的状态；`missing` 与 `deleted` 对用户是同一件事——提交会删掉该路径。
 
 **必须修**：`domain.StatusEntry.Conflicted()` 当前只认 `'U'` 与 `AA`/`DD`，不认 `'C'`。不改则 SVN 冲突文件会被当成普通修改，落在错误的列表里。
 

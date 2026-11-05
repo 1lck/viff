@@ -65,17 +65,17 @@ func (w *Workspace) run(title string, undo *undoSpec, op Op, o RunOptions) {
 		}
 		var before gitcli.HeadState
 		capture := false
-		if undo != nil {
+		if undo != nil && w.hasUndo() {
 			// An unborn branch has no commit to go back to, so it is not
 			// recorded; undo needs a before state it can name.
-			if hs, err := w.Git.Head(ctx, repo); err == nil && hs.Head != "" {
+			if hs, err := w.HEAD(ctx, repo); err == nil && hs.Head != "" {
 				before, capture = hs, true
 			}
 		}
 		err := op(ctx, repo, func(line string) { w.setProgress(task, line) })
 		var entry *undoEntry
 		if err == nil && capture && (!undo.kind.needsRef() || undo.hash != "") {
-			if after, herr := w.Git.Head(ctx, repo); herr == nil {
+			if after, herr := w.HEAD(ctx, repo); herr == nil {
 				entry = &undoEntry{
 					kind: undo.kind, repoRoot: repo.Root, before: before, after: after,
 					name: undo.name, oldName: undo.oldName, hash: undo.hash,
@@ -325,7 +325,7 @@ func (w *Workspace) CheckoutRevision(rev string) {
 func (w *Workspace) NewBranch(name, start string, checkout, overwrite bool) {
 	spec := &undoSpec{kind: undoCreateBranch, name: name}
 	w.run("Create branch "+name, spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		refs, err := w.refs()
+		branches, err := w.branches()
 		if err != nil {
 			return err
 		}
@@ -333,7 +333,7 @@ func (w *Workspace) NewBranch(name, start string, checkout, overwrite bool) {
 			// Remember what the overwrite replaces so undo can put it back.
 			spec.previous, _ = w.Git.ResolveRef(ctx, repo, "refs/heads/"+name)
 		}
-		if err := refs.CreateBranch(ctx, repo, name, start, checkout, overwrite); err != nil {
+		if err := branches.CreateBranch(ctx, repo, name, start, checkout, overwrite); err != nil {
 			return err
 		}
 		// Undo only deletes the branch while it still holds this commit; a
@@ -347,11 +347,11 @@ func (w *Workspace) NewBranch(name, start string, checkout, overwrite bool) {
 func (w *Workspace) RenameBranch(old, name string) {
 	spec := &undoSpec{kind: undoRenameBranch, name: name, oldName: old}
 	w.run("Rename branch", spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		refs, err := w.refs()
+		branches, err := w.branches()
 		if err != nil {
 			return err
 		}
-		if err := refs.RenameBranch(ctx, repo, old, name); err != nil {
+		if err := branches.RenameBranch(ctx, repo, old, name); err != nil {
 			return err
 		}
 		// A rename keeps the commit, but recording it lets undo refuse when
@@ -377,14 +377,14 @@ func (w *Workspace) DeleteBranch(ref domain.Ref, force bool) {
 	target := ref.Target
 	spec := &undoSpec{kind: undoDeleteBranch, name: ref.Short}
 	w.run("Delete "+ref.Short, spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		refs, err := w.refs()
+		branches, err := w.branches()
 		if err != nil {
 			return err
 		}
 		// Read the tip Git is about to delete, not the one the last refresh
 		// showed: an external commit since then must be restorable too.
 		sha, _ := w.Git.ResolveRef(ctx, repo, "refs/heads/"+ref.Short)
-		if err := refs.DeleteBranch(ctx, repo, ref.Short, force); err != nil {
+		if err := branches.DeleteBranch(ctx, repo, ref.Short, force); err != nil {
 			return err
 		}
 		spec.hash = sha

@@ -345,7 +345,7 @@ func (w *Workspace) Refresh(meta bool) {
 		shallow, shallowErr := w.Git.IsShallow(ctx, repo)
 		// The remote HEAD names the branch a pull request targets; it is read
 		// with the other refs so a comparison never guesses while it is known.
-		remoteHeads, headsErr := w.Git.RemoteHeads(ctx, repo)
+		remoteHeads, headsErr := w.remoteHeads(ctx, repo)
 		// LFS detection runs a probe and a file listing, so it is neither part
 		// of every status refresh nor on the UI thread. A metadata refresh is
 		// the user's refresh button or the end of a write task, which is
@@ -353,7 +353,7 @@ func (w *Workspace) Refresh(meta bool) {
 		key := lfsAttributesKey(repo.Root)
 		lfs, lfsRefreshed := cachedLFS, false
 		if meta || lfsAt.IsZero() || key != lfsKey || time.Since(lfsAt) >= lfsRecheckInterval {
-			lfs = w.Git.LFS(ctx, repo)
+			lfs = w.lfsStatus(ctx, repo)
 			lfsRefreshed = true
 		}
 		w.post(func() {

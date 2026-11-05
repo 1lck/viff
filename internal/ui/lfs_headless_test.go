@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"viff/internal/gitcli"
 )
 
 // TestLFSStatusMarkerShowsManagedFiles checks the quiet part: a repository
@@ -13,7 +15,7 @@ import (
 // reports, and no warning while git-lfs is installed.
 func TestLFSStatusMarkerShowsManagedFiles(t *testing.T) {
 	f := newUIFixture(t)
-	f.ws.Git.LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	f.ws.Git.(*gitcli.Runner).LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 		if len(args) == 1 && args[0] == "version" {
 			return []byte("git-lfs/9.9.9 (fake build)"), nil
 		}
@@ -47,7 +49,7 @@ func TestLFSStatusMarkerShowsManagedFiles(t *testing.T) {
 // and the status marker is still present.
 func TestLFSWarningWhenGitLFSMissing(t *testing.T) {
 	f := newUIFixture(t)
-	f.ws.Git.LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	f.ws.Git.(*gitcli.Runner).LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 		return nil, errors.New("git: 'lfs' is not a git command")
 	}
 	f.write(".gitattributes", "*.bin filter=lfs diff=lfs merge=lfs -text\n*.psd filter=lfs\n")

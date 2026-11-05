@@ -57,10 +57,11 @@ func (w *Workspace) CommittableCount() int {
 // Git; the model differences come from the backend's own declaration.
 func CapabilitiesOf(g Git) Capabilities {
 	caps := vcs.Capabilities{
-		// Git-shaped defaults: an index, local amend, no properties or locks,
-		// and a fully local object store.
+		// Git-shaped defaults: an index, local amend, a push step after the
+		// commit, no properties or locks, and a fully local object store.
 		Index:          true,
 		Amend:          true,
+		SeparatePush:   true,
 		Locks:          false,
 		OfflineHistory: false,
 		Properties:     false,
@@ -69,6 +70,7 @@ func CapabilitiesOf(g Git) Capabilities {
 		flags := m.Model()
 		caps.Index = flags.Index
 		caps.Amend = flags.Amend
+		caps.SeparatePush = flags.SeparatePush
 		caps.Properties = flags.Properties
 		caps.Locks = flags.Locks
 		caps.OfflineHistory = flags.OfflineHistory
@@ -90,6 +92,9 @@ func CapabilitiesOf(g Git) Capabilities {
 	}
 	if r, ok := g.(vcs.ReferenceWriter); ok {
 		caps.References = r
+	}
+	if b, ok := g.(vcs.BranchWriter); ok {
+		caps.Branches = b
 	}
 	if c, ok := g.(vcs.ConflictResolver); ok {
 		caps.Conflicts = c

@@ -219,10 +219,14 @@ func (w *Window) paintLogFilters(r ui.Rect) {
 	x += cw + 4
 	ax := right(r) - 8 - actionSize
 	ay := r.Y + (r.Height-actionSize)/2
-	if w.action(idLogFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
-		w.after(func() { w.ws.Fetch(false) })
+	// No separate publish step means no fetch either: the update already talks
+	// to the server, and a fetch button would silently do nothing.
+	if w.ws.Caps.SeparatePush {
+		if w.action(idLogFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
+			w.after(func() { w.ws.Fetch(false) })
+		}
+		ax -= actionSize + 2
 	}
-	ax -= actionSize + 2
 	if w.action(idLogRefresh, ax, ay, icons.Refresh, w.t(i18n.ChromeActionRefresh), actOpts{}) {
 		w.after(func() { w.ws.ReloadLog(); w.ws.Refresh(true) })
 	}
@@ -766,8 +770,8 @@ func (w *Window) commitMenu() []item {
 		)
 	}
 	items = append(items, sep(),
-		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: !single, run: func() { w.openNewBranch(c.Hash, short) }},
-		item{title: w.t(i18n.ChromeMenuNewTag), icon: icons.BranchLabel, disabled: !single, run: func() { w.openNewTag(c.Hash, short) }},
+		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: !single || !w.canWriteBranches(), run: func() { w.openNewBranch(c.Hash, short) }},
+		item{title: w.t(i18n.ChromeMenuNewTag), icon: icons.BranchLabel, disabled: !single || w.ws.Caps.References == nil, run: func() { w.openNewTag(c.Hash, short) }},
 		// A merge commit has more than one history, so "up to" is ambiguous.
 		item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }},
 		item{title: w.t(i18n.ChromeMenuBrowseAtRevision), icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }},
@@ -881,8 +885,10 @@ func (w *Window) paintBranches(r ui.Rect) {
 		w.after(func() { w.openNewBranch("", rs.HeadLabel()) })
 	}
 	x += actionSize + 2
-	if w.action(idBrFetch, x, y, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
-		w.after(func() { w.ws.Fetch(false) })
+	if w.ws.Caps.SeparatePush {
+		if w.action(idBrFetch, x, y, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
+			w.after(func() { w.ws.Fetch(false) })
+		}
 	}
 	w.p.hline(r.X, r.Y, r.Width, w.pal.Border)
 	r.Y++
