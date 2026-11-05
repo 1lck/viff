@@ -11,6 +11,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 	"viff/internal/platform"
 	"viff/internal/ui/icons"
 )
@@ -44,7 +45,21 @@ func (w *Window) paintMain(full ui.Rect) {
 			func(d float32) { s.GitPanelHeight = clampF(start-d, 120, max(120, full.Height-toolbarH-statusH-160)) },
 			w.saveSettings)
 	}
-	if w.commitOpen {
+	// The left dock holds one tool window at a time, like IntelliJ's left
+	// stripe: the Project tree replaces the Commit panel instead of squeezing
+	// the editor with two fixed panels.
+	if w.projectOpen {
+		pw := clampF(s.ProjectPanelWidth, 240, max(240, area.Width-320))
+		pr := splitLeft(&area, pw)
+		area.X += islandGap
+		area.Width -= islandGap
+		w.paintProject(pr)
+		start := pw
+		w.splitter(idSplitProject, rect(right(pr), pr.Y, islandGap, pr.Height), true,
+			func() { start = pw },
+			func(d float32) { s.ProjectPanelWidth = clampF(start+d, 240, max(240, full.Width-2*stripeW-300)) },
+			w.saveSettings)
+	} else if w.commitOpen {
 		cw := clampF(s.CommitPanelWidth, 240, max(240, area.Width-300))
 		cr := splitLeft(&area, cw)
 		area.X += islandGap
@@ -95,7 +110,7 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	w.projectBadge(rect(x+6, cy+4, 20, 20), name, 5)
 	w.p.text(name, rect(x+34, cy, pw, 28), fontUI, semibold, w.pal.Text)
 	w.p.iconIn(icons.ChevronDown, rect(right(pr)-22, cy, 16, 28))
-	w.c.HitWithOptions(idProjectWidget, pr, "Project: "+name, ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
+	w.c.HitWithOptions(idProjectWidget, pr, w.t(i18n.ChromeA11yProject, name), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
 	w.tip(idProjectWidget, rs.Repo.Root)
 	if w.clicked(idProjectWidget, nil) {
 		w.after(func() { w.openMenuBelow(pr, w.projectMenu(), 280) })
@@ -119,7 +134,7 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	}
 	w.p.text(branch, rect(tx, cy, bw, 28), fontUI, regular, w.pal.Text)
 	w.p.iconIn(icons.ChevronDown, rect(right(br)-22, cy, 16, 28))
-	w.c.HitWithOptions(idBranchWidget, br, "Branch: "+branch, ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
+	w.c.HitWithOptions(idBranchWidget, br, w.t(i18n.ChromeA11yBranch, branch), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
 	w.tip(idBranchWidget, w.branchTip())
 	if w.clicked(idBranchWidget, nil) {
 		w.after(func() { w.openBranchPopup(br) })
@@ -128,35 +143,35 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	// Right-hand actions.
 	ax := right(r) - trail - 10 - actionSize
 	ay := r.Y + (r.Height-actionSize)/2
-	if w.action(idTbSettings, ax, ay, icons.Settings, "Settings", actOpts{}) {
+	if w.action(idTbSettings, ax, ay, icons.Settings, w.t(i18n.ChromeTbSettings), actOpts{}) {
 		ar := rect(ax-200+actionSize, ay, 200, actionSize)
 		w.after(func() { w.openMenuBelow(ar, w.settingsMenu(), 220) })
 	}
 	ax -= actionSize + 4
-	if w.action(idTbHelp, ax, ay, icons.Help, "Help", actOpts{}) {
+	if w.action(idTbHelp, ax, ay, icons.Help, w.t(i18n.ChromeTbHelp), actOpts{}) {
 		ar := rect(ax-260+actionSize, ay, 260, actionSize)
 		w.after(func() { w.openMenuBelow(ar, w.helpMenu(), 260) })
 	}
 	ax -= actionSize + 4
-	if w.action(idTbSearch, ax, ay, icons.Search, "Search Commits\t⌘F", actOpts{}) {
+	if w.action(idTbSearch, ax, ay, icons.Search, w.t(i18n.ChromeTbSearch)+"\t⌘F", actOpts{}) {
 		w.after(w.focusLogSearch)
 	}
 	ax -= actionSize + 14
 	w.p.vline(ax+actionSize+7, ay+5, actionSize-10, w.pal.Separator)
 	busy := w.ws.Busy()
-	if w.action(idTbPush, ax, ay, icons.Push, "Push…\t⇧⌘K", actOpts{disabled: !rs.HasHead()}) {
+	if w.action(idTbPush, ax, ay, icons.Push, w.t(i18n.ChromeTbPush)+"\t⇧⌘K", actOpts{disabled: !rs.HasHead()}) {
 		w.after(w.openPush)
 	}
 	ax -= actionSize + 4
-	if w.action(idTbCommit, ax, ay, icons.Commit, "Commit…\t⌘K", actOpts{}) {
+	if w.action(idTbCommit, ax, ay, icons.Commit, w.t(i18n.ChromeTbCommit)+"\t⌘K", actOpts{}) {
 		w.after(w.focusCommit)
 	}
 	ax -= actionSize + 4
-	if w.action(idTbUpdate, ax, ay, icons.Update, "Update Project…\t⌘T", actOpts{disabled: len(rs.Remotes) == 0}) {
+	if w.action(idTbUpdate, ax, ay, icons.Update, w.t(i18n.ChromeTbUpdate)+"\t⌘T", actOpts{disabled: len(rs.Remotes) == 0}) {
 		w.after(w.openUpdate)
 	}
 	ax -= actionSize + 4
-	if w.action(idTbFetch, ax, ay, icons.Fetch, "Fetch", actOpts{disabled: len(rs.Remotes) == 0 || busy && w.taskRunning("Fetch")}) {
+	if w.action(idTbFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0 || busy && w.taskRunning("Fetch")}) {
 		w.after(func() { w.ws.Fetch(false) })
 	}
 }
@@ -187,13 +202,13 @@ func (w *Window) branchTip() string {
 	rs := w.repo()
 	b := rs.Status.Branch
 	if b.Detached || b.Branch == "" {
-		return "Detached HEAD at " + rs.HeadLabel()
+		return w.t(i18n.ChromeTipDetached, rs.HeadLabel())
 	}
-	s := "Git Branch: " + b.Branch
+	s := w.t(i18n.ChromeTipBranch, b.Branch)
 	if b.Upstream != "" {
-		s += "\nTracking " + b.Upstream
+		s += "\n" + w.t(i18n.ChromeTipTracking, b.Upstream)
 		if b.Ahead > 0 || b.Behind > 0 {
-			s += " (↑" + itoa(b.Ahead) + " ↓" + itoa(b.Behind) + ")"
+			s += w.t(i18n.ChromeTipAheadBehind, itoa(b.Ahead), itoa(b.Behind))
 		}
 	}
 	return s
@@ -211,17 +226,17 @@ func (w *Window) taskRunning(prefix string) bool {
 // projectMenu lists recent repositories and the project actions.
 func (w *Window) projectMenu() []item {
 	var out []item
-	out = append(out, item{title: "Open…", icon: icons.Open, shortcut: "⌘O", run: w.chooseRepoNow},
-		item{title: "Clone Repository…", icon: icons.Download, run: w.openClone},
-		item{title: "New Repository…", icon: icons.Add, run: w.openInit},
-		item{title: "Repositories…", icon: icons.Project, run: w.openRepositories})
+	out = append(out, item{title: w.t(i18n.ChromeMenuOpen), icon: icons.Open, shortcut: "⌘O", run: w.chooseRepoNow},
+		item{title: w.t(i18n.ChromeMenuClone), icon: icons.Download, run: w.openClone},
+		item{title: w.t(i18n.ChromeMenuNewRepository), icon: icons.Add, run: w.openInit},
+		item{title: w.t(i18n.ChromeMenuRepositories), icon: icons.Project, run: w.openRepositories})
 	cur := ""
 	if w.ws.Repo != nil {
 		cur = w.ws.Repo.Repo.Root
 	}
 	recent := w.ws.Settings.Recent
 	if len(recent) > 0 {
-		out = append(out, sep(), header("Recent Projects"))
+		out = append(out, sep(), header(w.t(i18n.ChromeMenuRecentProjects)))
 		for i, r := range recent {
 			if i >= 12 {
 				break
@@ -237,17 +252,36 @@ func (w *Window) projectMenu() []item {
 	}
 	if w.ws.Repo != nil {
 		out = append(out, sep(),
-			item{title: "Show in Finder", icon: icons.Folder, run: func() { revealPath(cur) }},
-			item{title: "Open in Terminal", icon: icons.Shell, run: func() { openTerminal(cur) }},
+			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
+			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, run: func() { revealPath(cur) }},
+			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: func() { openTerminal(cur) }},
 			sep(),
-			item{title: "Close Project", run: func() { w.ws.Close() }})
+			item{title: w.t(i18n.ChromeMenuCloseProject), run: func() { w.ws.Close() }})
 	}
 	return out
 }
 
+// toggleProject shows the Project tree in the left dock. The dock holds one
+// tool window at a time, so opening it hides the Commit panel; the stripe
+// icons switch back and forth.
+func (w *Window) toggleProject() {
+	w.projectOpen = !w.projectOpen
+	if w.projectOpen {
+		w.commitOpen = false
+	}
+}
+
+// toggleCommit shows the Commit panel in the left dock.
+func (w *Window) toggleCommit() {
+	w.commitOpen = !w.commitOpen
+	if w.commitOpen {
+		w.projectOpen = false
+	}
+}
+
 // chooseRepoNow is chooseRepo outside a paint (menu actions run after it).
 func (w *Window) chooseRepoNow() {
-	dir, err := app.OpenDirectory(app.OpenDirectoryOptions{Title: "Open Git Repository"})
+	dir, err := app.OpenDirectory(app.OpenDirectoryOptions{Title: w.t(i18n.ChromeDialogOpenRepository)})
 	if err != nil || dir == "" {
 		return
 	}
@@ -258,15 +292,19 @@ func (w *Window) chooseRepoNow() {
 
 func (w *Window) paintStripes(left, rightS ui.Rect) {
 	y := left.Y + 6
-	if w.stripeButton(idStripeCommit, rect(left.X+5, y, 30, 30), icons.Commit, "Commit\t⌘0", w.commitOpen) {
-		w.after(func() { w.commitOpen = !w.commitOpen })
+	if w.stripeButton(idStripeProject, rect(left.X+5, y, 30, 30), icons.Project, w.t(i18n.ChromeStripeProject)+"\t⌘1", w.projectOpen) {
+		w.after(w.toggleProject)
+	}
+	y += 36
+	if w.stripeButton(idStripeCommit, rect(left.X+5, y, 30, 30), icons.Commit, w.t(i18n.ChromeStripeCommit)+"\t⌘0", w.commitOpen) {
+		w.after(w.toggleCommit)
 	}
 	by := bottom(left) - 36
-	if w.stripeButton(idStripeGit, rect(left.X+5, by, 30, 30), icons.Vcs, "Git\t⌘9", w.gitOpen) {
+	if w.stripeButton(idStripeGit, rect(left.X+5, by, 30, 30), icons.Vcs, w.t(i18n.ChromeStripeGit)+"\t⌘9", w.gitOpen) {
 		w.after(func() { w.gitOpen = !w.gitOpen })
 	}
 	unread := w.nt.unread(w.ws)
-	if w.stripeButton(idStripeNotify, rect(rightS.X+5, rightS.Y+6, 30, 30), icons.Notifications, "Notifications", w.notifyOpen) {
+	if w.stripeButton(idStripeNotify, rect(rightS.X+5, rightS.Y+6, 30, 30), icons.Notifications, w.t(i18n.ChromeStripeNotifications), w.notifyOpen) {
 		w.after(func() {
 			w.notifyOpen = !w.notifyOpen
 			w.nt.markRead(w.ws)
@@ -310,12 +348,12 @@ func (w *Window) paintStatus(r ui.Rect) {
 	// keeps working while it lasts. Clicking it stops the recording and saves
 	// the bundle, the same as Help > Stop Recording and Save Diagnostics.
 	if w.ws.ProblemRecording() {
-		label := "● Recording diagnostics…"
+		label := w.t(i18n.ChromeStatusRecording)
 		lw := w.p.width(label, fontUI, regular)
 		rr := rect(x+20, r.Y, lw+10, r.Height)
 		w.p.text(label, rr, fontUI, regular, w.pal.Warning)
-		w.c.HitWithOptions(idStatusRecording, rr, "Recording diagnostics", ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
-		w.tip(idStatusRecording, "Recording diagnostics — click to stop and save")
+		w.c.HitWithOptions(idStatusRecording, rr, w.t(i18n.ChromeStatusRecordingLabel), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
+		w.tip(idStatusRecording, w.t(i18n.ChromeTipRecording))
 		w.clicked(idStatusRecording, w.stopRecordingAndSave)
 	}
 
@@ -345,7 +383,7 @@ func (w *Window) paintStatus(r ui.Rect) {
 	if sync != "" {
 		w.p.text(sync, rect(lx+lw+8, br.Y, 100, br.Height), fontUI, regular, w.pal.Link)
 	}
-	w.c.HitWithOptions(idStatusBranch, br, "Branch", ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
+	w.c.HitWithOptions(idStatusBranch, br, w.t(i18n.ChromeA11yBranchButton), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
 	w.tip(idStatusBranch, w.branchTip())
 	if w.clicked(idStatusBranch, nil) {
 		w.after(func() { w.openBranchPopup(rect(br.X, br.Y-2, br.Width, 0)) })
@@ -366,7 +404,7 @@ func (w *Window) paintStatus(r ui.Rect) {
 		x0 := rx - cw - pw - 10 - tw
 		w.p.text(title, rect(x0, r.Y, tw, r.Height), fontUI, regular, w.pal.TextMuted)
 		w.paintProgress(rect(x0+tw+10, r.Y+r.Height/2-2, pw, 4))
-		if w.action(idStatusCancel, rx-cw, r.Y+3, icons.CloseSmall, "Cancel", actOpts{size: 22}) {
+		if w.action(idStatusCancel, rx-cw, r.Y+3, icons.CloseSmall, w.t(i18n.CommonCancel), actOpts{size: 22}) {
 			id := t.ID
 			w.after(func() { w.ws.CancelTask(id) })
 		}

@@ -10,6 +10,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -69,7 +70,7 @@ func (w *Window) openRevisionBrowser(c domain.Commit) {
 	})
 
 	w.openDialog(&dialog{
-		title: "Repository at " + domain.ShortHash(rev),
+		title: w.t(i18n.RevisionTitle, domain.ShortHash(rev)),
 		ok:    "Open File", width: 760,
 		body: func(f *form) {
 			f.custom(26, func(r ui.Rect) {
@@ -89,7 +90,7 @@ func (w *Window) openRevisionBrowser(c domain.Commit) {
 			})
 			f.gap(10)
 			f.custom(30, func(r ui.Rect) {
-				if w.field(idRevisionFilter, filter, r, fieldOpts{icon: icons.Search, placeholder: "Filter files"}) {
+				if w.field(idRevisionFilter, filter, r, fieldOpts{icon: icons.Search, placeholder: w.t(i18n.RevisionFilter)}) {
 					w.after(w.submitDialog)
 				}
 				w.onKeys(idRevisionFilter, func(e ui.KeyEvent) bool {
@@ -125,16 +126,16 @@ func (w *Window) openRevisionBrowser(c domain.Commit) {
 				}
 				switch {
 				case loading:
-					w.p.textCenter("Loading the files of this revision…", inner, fontUI, regular, w.pal.TextSecond)
+					w.p.textCenter(w.t(i18n.RevisionLoading), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case loadErr != nil:
 					w.p.textCenter(vapp.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
 					return
 				case len(entries) == 0:
-					w.p.textCenter("The revision has no files", inner, fontUI, regular, w.pal.TextSecond)
+					w.p.textCenter(w.t(i18n.RevisionEmpty), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case len(shown) == 0:
-					w.p.textCenter("No files match the filter", inner, fontUI, regular, w.pal.TextSecond)
+					w.p.textCenter(w.t(i18n.RevisionNoMatch), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				}
 				n := len(shown)
@@ -196,7 +197,7 @@ func (w *Window) openRevisionBrowser(c domain.Commit) {
 				w.vbar(idRevisionScroll, inner, scroll, content)
 			})
 			f.gap(6)
-			f.muted("Double-click a file to open it at this revision")
+			f.muted(w.t(i18n.RevisionHint))
 		},
 		okDisabled: func() bool { return sel < 0 || sel >= len(shown) },
 		onOK:       func() bool { open(); return true },

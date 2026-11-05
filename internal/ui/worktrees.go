@@ -11,6 +11,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -29,7 +30,7 @@ func (w *Window) openWorktrees() {
 	if !rs.WorktreesLoaded {
 		w.ws.Worktrees(func(_ []domain.Worktree, err error) {
 			if err != nil {
-				w.ws.NotifyError("Cannot list worktrees", err)
+				w.ws.NotifyError(w.t(i18n.WorktreeCannotList), err)
 				return
 			}
 			w.after(w.openWorktrees)
@@ -46,7 +47,7 @@ func (w *Window) showWorktrees() {
 	sel := 0 // the current worktree, which worktreeList puts first
 	scroll := &scroller{}
 	w.openDialog(&dialog{
-		title: "Worktrees", ok: "Close", width: 760, noCancel: true,
+		title: w.t(i18n.WorktreeTitle), ok: w.t(i18n.CommonClose), width: 760, noCancel: true,
 		body: func(f *form) {
 			f.custom(30, func(r ui.Rect) {
 				bw := w.buttonWidth("New Worktree…")
@@ -123,7 +124,7 @@ func (w *Window) showWorktrees() {
 					}
 					x -= 8
 				}
-				w.p.text("Double-click a worktree to open it.", rect(r.X, r.Y, x-r.X-8, 30), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.WorktreeDoubleClickHint), rect(r.X, r.Y, x-r.X-8, 30), fontSmall, regular, w.pal.TextSecond)
 			})
 		},
 	})
@@ -441,9 +442,9 @@ func worktreeChoices(rs *vapp.RepoState) []worktreeChoice {
 
 // worktreeBranchProblem says why branch cannot be checked out in a new
 // worktree; "" when nothing stands in the way.
-func worktreeBranchProblem(rs *vapp.RepoState, branch string) string {
+func (w *Window) worktreeBranchProblem(rs *vapp.RepoState, branch string) string {
 	if branch == "" {
-		return "Select a local branch."
+		return w.t(i18n.WorktreeSelectBranch)
 	}
 	for _, c := range worktreeChoices(rs) {
 		if c.name != branch {
@@ -454,25 +455,24 @@ func worktreeBranchProblem(rs *vapp.RepoState, branch string) string {
 		}
 		where := shortenHome(c.heldIn)
 		if c.name == rs.CurrentBranch() {
-			where = "this checkout"
+			where = w.t(i18n.WorktreeThisCheckout)
 		}
-		return "Branch '" + branch + "' is already checked out in " + where +
-			". A branch can be checked out in one worktree at a time; open that worktree instead."
+		return w.t(i18n.WorktreeAlreadyCheckedOut, branch, where)
 	}
-	return "Branch '" + branch + "' is not a local branch any more. Pick another one."
+	return w.t(i18n.WorktreeNotLocal, branch)
 }
 
 // worktreePathProblem says why the directory cannot take a worktree; "" when
 // it can.
-func worktreePathProblem(p string) string {
+func (w *Window) worktreePathProblem(p string) string {
 	switch {
 	case p == "":
-		return "Enter a path for the worktree."
+		return w.t(i18n.WorktreePathRequired)
 	case !filepath.IsAbs(p):
-		return "Use an absolute path, for example ~/Projects/repo-branch."
+		return w.t(i18n.WorktreePathAbsolute)
 	}
 	if _, err := os.Stat(p); err == nil {
-		return p + " already exists."
+		return w.t(i18n.DialogExists, p)
 	}
 	return ""
 }
@@ -534,32 +534,32 @@ func (w *Window) openNewWorktree() {
 	}
 	problem := func() string {
 		if mode == worktreeModeExisting {
-			if p := worktreeBranchProblem(w.repo(), existing); p != "" {
+			if p := w.worktreeBranchProblem(w.repo(), existing); p != "" {
 				return p
 			}
 		} else if p := w.newWorktreeBranchProblem(strings.TrimSpace(branch.String())); p != "" {
 			return p
 		}
-		return worktreePathProblem(absPath())
+		return w.worktreePathProblem(absPath())
 	}
 
 	w.openDialog(&dialog{
-		title: "New Worktree", ok: "Create", width: 580,
+		title: w.t(i18n.WorktreeNewTitle), ok: w.t(i18n.DialogCreate), width: 580,
 		onCancel: func() { w.after(w.openWorktrees) },
 		body: func(f *form) {
 			f.radio(worktreeModes, &mode)
 			f.gap(2)
 			if mode == worktreeModeExisting {
-				f.muted("Checks out a local branch that no worktree has yet. A branch can be checked out in one worktree at a time.")
+				f.muted(w.t(i18n.WorktreeNewCheckoutHint))
 			} else {
-				f.muted("Creates the branch from the start point and checks it out in a new worktree.")
+				f.muted(w.t(i18n.WorktreeNewBranchHint))
 			}
 			f.gap(4)
 			f.labelW = 96
 
 			choices := worktreeChoices(w.repo())
 			if mode == worktreeModeNew {
-				id := f.field("Branch name:", branch, "feature-login", false)
+				id := f.field(w.t(i18n.WorktreeBranchName), branch, "feature-login", false)
 				if !w.dialog.focused {
 					w.dialog.focus = id
 				}
@@ -568,7 +568,7 @@ func (w *Window) openNewWorktree() {
 				// dialog is painted but cannot be clicked through its focus
 				// trap (0012).
 				f.custom(float32(visible)*worktreeBranchRowH+2, func(r ui.Rect) {
-					w.p.text("Branch:", rect(r.X, r.Y+4, f.labelW, 20), fontUI, regular, w.pal.Text)
+					w.p.text(w.t(i18n.WorktreeBranch), rect(r.X, r.Y+4, f.labelW, 20), fontUI, regular, w.pal.Text)
 					w.paintWorktreeBranches(rect(r.X+f.labelW, r.Y, r.Width-f.labelW, float32(visible)*worktreeBranchRowH+2), choices, &existing, branchScroll)
 				})
 				// Switching to this mode hands the keyboard to the list, so a
@@ -587,17 +587,17 @@ func (w *Window) openNewWorktree() {
 				lastAuto = auto
 				w.after(func() { setText(pathEd, auto) })
 			}
-			f.field("Path:", pathEd, "~/Projects/repo-feature-login", false)
+			f.field(w.t(i18n.WorktreePath), pathEd, "~/Projects/repo-feature-login", false)
 			if mode == worktreeModeNew {
-				f.field("Start point:", start, "HEAD", false)
+				f.field(w.t(i18n.WorktreeStartPoint), start, "HEAD", false)
 			}
 
 			switch {
 			case mode == worktreeModeExisting && existing == "":
 				if len(choices) == 0 {
-					f.message("There are no local branches to check out. Create a new branch instead.", w.pal.Error)
+					f.message(w.t(i18n.WorktreeNoBranches), w.pal.Error)
 				} else {
-					f.message("Every local branch is already checked out in a worktree. Create a new branch instead.", w.pal.Error)
+					f.message(w.t(i18n.WorktreeEveryBranch), w.pal.Error)
 				}
 			case mode == worktreeModeExisting || strings.TrimSpace(branch.String()) != "":
 				if p := problem(); p != "" {
@@ -631,14 +631,14 @@ func (w *Window) confirmDeleteWorktree(wt domain.Worktree) {
 	force := false
 	name := worktreeName(wt)
 	w.openDialog(&dialog{
-		title: "Delete Worktree", ok: "Delete", width: 560,
+		title: w.t(i18n.WorktreeDeleteTitle), ok: w.t(i18n.DialogDelete), width: 560,
 		onCancel: func() { w.after(w.openWorktrees) },
 		body: func(f *form) {
-			f.text("Delete the worktree at " + shortenHome(wt.Path) + "?")
+			f.text(w.t(i18n.WorktreeDeleteQuestion, shortenHome(wt.Path)))
 			f.gap(4)
-			f.muted("The branch '" + name + "' and its commits stay in the repository. Uncommitted changes in that worktree are lost.")
+			f.muted(w.t(i18n.WorktreeDeleteHint, name))
 			f.gap(8)
-			f.check("Force delete (discard modified and untracked files)", &force)
+			f.check(w.t(i18n.WorktreeForceDelete), &force)
 		},
 		onOK: func() bool {
 			w.ws.RemoveWorktree(wt.Path, force, func(err error) {

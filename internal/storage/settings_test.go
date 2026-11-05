@@ -137,3 +137,30 @@ func TestFontFamiliesSanitized(t *testing.T) {
 		}
 	}
 }
+
+// An unknown language falls back to the default, English, and a known one is
+// kept as written.
+func TestLanguageSanitized(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	load := func(value string) *Settings {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{"version": 1, "language": value})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+
+	if got := load("").Language; got != "" {
+		t.Errorf("missing language = %q, want empty, which means the default", got)
+	}
+	if got := load("  zh-CN  ").Language; got != "zh-CN" {
+		t.Errorf("language = %q, want the trimmed zh-CN", got)
+	}
+	if got := load("klingon").Language; got != "" {
+		t.Errorf("unknown language kept: %q", got)
+	}
+}

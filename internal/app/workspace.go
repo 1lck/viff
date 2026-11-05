@@ -21,6 +21,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 	"viff/internal/observability"
 )
 
@@ -484,6 +485,30 @@ func (w *Workspace) notify(kind NoticeKind, title, body, code string, actions ..
 	})
 }
 
+// tr translates an application message into the language the settings name.
+// English is the default, so an empty language, and a workspace built without
+// settings, keep the original text.
+func (w *Workspace) tr(key i18n.Key, args ...any) string {
+	return w.translator().T(key, args...)
+}
+
+// trPlural translates a counted message: the singular form for one, the plural
+// one otherwise. Chinese spells both the same way.
+func (w *Workspace) trPlural(n int, one, many i18n.Key, args ...any) string {
+	return w.translator().Plural(n, one, many, args...)
+}
+
+// translator speaks the language the settings name. It reads the settings on
+// every call, so a change applies to the next message instead of the next
+// start, and it holds no state of its own.
+func (w *Workspace) translator() *i18n.Translator {
+	lang := ""
+	if w.Settings != nil {
+		lang = w.Settings.Language
+	}
+	return i18n.New(i18n.Parse(lang))
+}
+
 // noticeLevelName is the stable name of a notice kind in event fields.
 func noticeLevelName(kind NoticeKind) string {
 	switch kind {
@@ -529,7 +554,7 @@ func (w *Workspace) warnChangeListSync(err error) {
 		return
 	}
 	w.changeListSyncWarned = true
-	w.Notify(NoticeWarning, "Change lists", err.Error())
+	w.Notify(NoticeWarning, w.tr(i18n.AppNoticeChangeLists), err.Error())
 }
 
 // NotifyError shows a Git failure with its message. The notification carries
@@ -539,7 +564,7 @@ func (w *Workspace) NotifyError(title string, err error) {
 		return
 	}
 	if gitcli.KindOf(err) == gitcli.ErrCancelled {
-		w.notify(NoticeInfo, title, "Cancelled", gitcli.CodeOf(err))
+		w.notify(NoticeInfo, title, w.tr(i18n.AppNoticeCancelled), gitcli.CodeOf(err))
 		return
 	}
 	w.notify(NoticeError, title, ErrorText(err), gitcli.CodeOf(err))

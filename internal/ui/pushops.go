@@ -8,6 +8,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -21,7 +22,7 @@ import (
 func (w *Window) openPushUpToCommit(c domain.Commit) {
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
-		w.ws.Notify(vapp.NoticeWarning, "No remote", "Add a remote before pushing (Settings → Manage Remotes).")
+		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNoRemoteTitle), w.t(i18n.NotifyNoRemoteBody))
 		return
 	}
 	remote := w.defaultRemote()
@@ -29,7 +30,7 @@ func (w *Window) openPushUpToCommit(c domain.Commit) {
 	force := false
 	short := domain.ShortHash(c.Hash)
 	w.openDialog(&dialog{
-		title: "Push Up to " + short, ok: "Push", width: 540,
+		title: w.t(i18n.PushUpToTitle, short), ok: w.t(i18n.DialogPush), width: 540,
 		body: func(f *form) {
 			f.labelW = 76
 			f.custom(50, func(rr ui.Rect) {
@@ -39,7 +40,7 @@ func (w *Window) openPushUpToCommit(c domain.Commit) {
 				w.p.text(short+" · "+c.Author, rect(rr.X+32, rr.Y+25, rr.Width-42, 18), fontSmall, regular, w.pal.TextMuted)
 			})
 			f.gap(10)
-			f.combo("Remote", remote, func() []item {
+			f.combo(w.t(i18n.PushRemote), remote, func() []item {
 				var items []item
 				for _, rm := range rs.Remotes {
 					rm := rm
@@ -47,10 +48,10 @@ func (w *Window) openPushUpToCommit(c domain.Commit) {
 				}
 				return items
 			})
-			f.field("Branch", target, "Remote branch", validRefName(strings.TrimSpace(target.String())) != "")
-			f.check("Force push (with lease: protects unseen remote commits)", &force)
+			f.field(w.t(i18n.PushBranch), target, w.t(i18n.DialogRemoteBranch), validRefName(strings.TrimSpace(target.String())) != "")
+			f.check(w.t(i18n.PushForceLease), &force)
 			f.gap(2)
-			f.muted("Pushes " + short + " and every commit before it to " + remote + "/" + branchOrDash(target))
+			f.muted(w.t(i18n.PushUpToBody, short, remote, branchOrDash(target)))
 		},
 		okDisabled: func() bool {
 			return validRefName(strings.TrimSpace(target.String())) != ""
@@ -62,7 +63,7 @@ func (w *Window) openPushUpToCommit(c domain.Commit) {
 			}
 			if force {
 				w.dialog = nil
-				w.confirm("Force Push", "Force-push up to "+short+" to "+remote+"/"+name+"? Commits on the remote that are not in this history will be removed.", "Force Push", func() {
+				w.confirm(w.t(i18n.DialogForcePushTitle), w.t(i18n.PushForceUpToBody, short, remote, name), w.t(i18n.DialogForcePushTitle), func() {
 					w.ws.PushUpTo(remote, name, c.Hash, true)
 				})
 				return false
@@ -78,19 +79,19 @@ func (w *Window) openPushUpToCommit(c domain.Commit) {
 func (w *Window) openPushAnother(r domain.Ref) {
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
-		w.ws.Notify(vapp.NoticeWarning, "No remote", "Add a remote before pushing (Settings → Manage Remotes).")
+		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNoRemoteTitle), w.t(i18n.NotifyNoRemoteBody))
 		return
 	}
 	remote := w.defaultRemote()
 	target := text.NewEditor(r.Short)
 	force := false
 	w.openDialog(&dialog{
-		title: "Push HEAD to Another Remote", ok: "Push", width: 520,
+		title: w.t(i18n.PushAnotherTitle), ok: w.t(i18n.DialogPush), width: 520,
 		body: func(f *form) {
 			f.labelW = 76
-			f.muted("Pushes the current HEAD (" + rs.HeadLabel() + ") to the remote and branch below.")
+			f.muted(w.t(i18n.PushAnotherBody, rs.HeadLabel()))
 			f.gap(8)
-			f.combo("Remote", remote, func() []item {
+			f.combo(w.t(i18n.PushRemote), remote, func() []item {
 				var items []item
 				for _, rm := range rs.Remotes {
 					rm := rm
@@ -98,10 +99,10 @@ func (w *Window) openPushAnother(r domain.Ref) {
 				}
 				return items
 			})
-			f.field("Branch", target, "Remote branch", validRefName(strings.TrimSpace(target.String())) != "")
-			f.check("Force push (with lease: protects unseen remote commits)", &force)
+			f.field(w.t(i18n.PushBranch), target, w.t(i18n.DialogRemoteBranch), validRefName(strings.TrimSpace(target.String())) != "")
+			f.check(w.t(i18n.PushForceLease), &force)
 			f.gap(2)
-			f.muted("The local branch and its upstream are unchanged.")
+			f.muted(w.t(i18n.PushAnotherHint))
 		},
 		okDisabled: func() bool {
 			return validRefName(strings.TrimSpace(target.String())) != ""
@@ -113,7 +114,7 @@ func (w *Window) openPushAnother(r domain.Ref) {
 			}
 			if force {
 				w.dialog = nil
-				w.confirm("Force Push", "Force-push HEAD to "+remote+"/"+name+"? Commits on the remote branch that are not in HEAD will be removed.", "Force Push", func() {
+				w.confirm(w.t(i18n.DialogForcePushTitle), w.t(i18n.PushForceHeadBody, remote, name), w.t(i18n.DialogForcePushTitle), func() {
 					w.ws.PushHeadTo(remote, name, true)
 				})
 				return false
@@ -129,17 +130,17 @@ func (w *Window) openPushAnother(r domain.Ref) {
 func (w *Window) openDeleteRemoteTag(name string) {
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
-		w.ws.Notify(vapp.NoticeWarning, "No remote", "Add a remote before deleting remote tags.")
+		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNoRemoteTitle), w.t(i18n.PushNoRemoteForTag))
 		return
 	}
 	remote := w.defaultRemote()
 	w.openDialog(&dialog{
-		title: "Delete Remote Tag", ok: "Delete", width: 480,
+		title: w.t(i18n.PushDeleteTagTitle), ok: w.t(i18n.DialogDelete), width: 480,
 		body: func(f *form) {
 			f.labelW = 76
-			f.muted("Deletes tag '" + name + "' on the remote. The local tag stays.")
+			f.muted(w.t(i18n.PushDeleteTagBody, name))
 			f.gap(8)
-			f.combo("Remote", remote, func() []item {
+			f.combo(w.t(i18n.PushRemote), remote, func() []item {
 				var items []item
 				for _, rm := range rs.Remotes {
 					rm := rm

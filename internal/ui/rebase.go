@@ -9,6 +9,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -46,12 +47,12 @@ var rebaseActions = []struct {
 func (w *Window) openInteractiveRebase(c domain.Commit) {
 	w.ws.RebaseCommits(c.Hash, func(list []gitcli.RebaseCommit, base string, err error) {
 		if err != nil {
-			w.ws.NotifyError("Cannot rebase from "+domain.ShortHash(c.Hash), err)
+			w.ws.NotifyError(w.t(i18n.RebaseCannotFrom, domain.ShortHash(c.Hash)), err)
 			return
 		}
 		for _, x := range list {
 			if x.Merge {
-				w.ws.NotifyError("Interactive rebase", gitcli.ErrRebaseMerges)
+				w.ws.NotifyError(w.t(i18n.RebaseInteractive), gitcli.ErrRebaseMerges)
 				return
 			}
 		}
@@ -149,9 +150,11 @@ func (w *Window) openRebaseDialog(v *rebaseView) {
 			case err != nil:
 				f.message(err.Error(), w.pal.Error)
 			case v.firstKept() < 0:
-				f.message("Every commit is dropped: the branch will point at the base commit.", w.pal.Warning)
+				f.message(w.t(i18n.RebaseAllDropped), w.pal.Warning)
+				f.gap(4)
+				f.muted(w.t(i18n.RebaseHint))
 			default:
-				f.muted("Local changes are stashed and restored automatically. Conflicts stop the rebase; continue or abort it from the Commit tool window.")
+				f.muted(w.t(i18n.RebaseHint))
 			}
 		},
 		okDisabled: func() bool { return !v.changed() || gitcli.ValidateRebasePlan(v.steps()) != nil },
@@ -210,7 +213,7 @@ func (w *Window) paintRebaseToolbar(v *rebaseView, r ui.Rect) {
 func (w *Window) paintRebaseList(v *rebaseView, r ui.Rect) {
 	w.p.outline(r, radiusCtl, 1, w.pal.ControlBorder, w.pal.ControlBg)
 	inner := inset(r, 1, 1)
-	w.list(idRebaseList, scRebaseRows, inner, "Rebase plan")
+	w.list(idRebaseList, scRebaseRows, inner, w.t(i18n.RebasePlan))
 	focused := w.focused(idRebaseList)
 	content := float32(len(v.rows))*rebaseRowH + 8
 	v.scroll.clamp(content, inner.Height)
@@ -304,8 +307,8 @@ func (w *Window) paintRebaseList(v *rebaseView, r ui.Rect) {
 				items = append(items, item{title: a.title, shortcut: strings.ToUpper(a.key), checked: v.rows[ii].action == act, disabled: dis, run: func() { v.set(act) }})
 			}
 			items = append(items, sep(),
-				item{title: "Move Up", icon: icons.Up, shortcut: "⌥↑", disabled: ii == 0, run: func() { v.move(-1) }},
-				item{title: "Move Down", icon: icons.Down, shortcut: "⌥↓", disabled: ii == len(v.rows)-1, run: func() { v.move(1) }},
+				item{title: w.t(i18n.RebaseMoveUp), icon: icons.Up, shortcut: "⌥↑", disabled: ii == 0, run: func() { v.move(-1) }},
+				item{title: w.t(i18n.RebaseMoveDown), icon: icons.Down, shortcut: "⌥↓", disabled: ii == len(v.rows)-1, run: func() { v.move(1) }},
 			)
 			w.openMenu(x, y, items)
 		})
@@ -321,7 +324,7 @@ func (w *Window) paintRebaseMessage(v *rebaseView, r ui.Rect) {
 		return
 	}
 	row := v.rows[v.sel]
-	label := "Message of " + domain.ShortHash(row.c.Hash)
+	label := w.t(i18n.RebaseMessageOf, domain.ShortHash(row.c.Hash))
 	if row.action != gitcli.RebaseReword {
 		label += " (choose Reword to edit)"
 	}
@@ -344,7 +347,7 @@ func (w *Window) paintRebaseMessage(v *rebaseView, r ui.Rect) {
 	sel := ed.Selection()
 	ss, se := runeToByte(value, min(sel.Start, sel.End)), runeToByte(value, max(sel.Start, sel.End))
 	components.PaintTextarea(w.c, w.theme, mr, components.TextareaSnapshot{
-		ID: idRebaseMessage, Label: "Commit message", Value: value, Placeholder: "Commit message",
+		ID: idRebaseMessage, Label: w.t(i18n.RebaseCommitMessage), Value: value, Placeholder: w.t(i18n.RebaseCommitMessage),
 		ShowCaret: true, HideEditorText: true, Layout: &v.layout,
 		Caret: runeToByte(value, ed.Caret()), SelectionStart: ss, SelectionEnd: se,
 	})

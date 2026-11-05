@@ -1,4 +1,4 @@
-# 0024 增加 Subversion 日常客户端支持
+# 0025 增加 Subversion 日常客户端支持
 
 - 状态：已采用（2026-11；架构设计已定，实现未开始）
 - 相关：[0001](0001-git-cli.md)、[0005](0005-read-only-conflicts.md)、[0020](0020-repositories-changelists.md)

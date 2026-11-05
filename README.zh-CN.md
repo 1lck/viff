@@ -56,10 +56,13 @@ Viff 将工作区、代码差异和提交历史放进一个原生桌面窗口。
 | 整理提交   | 按文件、块或选中行暂存，取消暂存、回滚、Amend、Sign-off、提交并推送       |
 | 管理工作区 | 多仓库、各仓库独立提交草稿、目录分组、命名 ChangeList                     |
 | 阅读历史   | 提交图、分支 / 作者 / 路径筛选、多提交文件汇总、Blame、Reflog、历史仓库树 |
+| 浏览文件   | Project 面板（目录折叠、状态着色）、Quick Open、只读查看、Blame 与文件历史 |
 | 操作分支   | Checkout、Merge、Rebase、Cherry-pick、Revert、Reset、借助 Stash 切换分支  |
 | 解决冲突   | Ours / Result / Theirs 三栏，逐块接受 Ours / Theirs / Both，显式标记解决  |
 | 多工作目录 | 从新分支或已有分支创建 Worktree，管理子模块，保护未提交改动               |
 | 同步协作   | Fetch、Pull、Push、force-with-lease、远端、补丁、签名与凭据设置           |
+
+**界面默认英文，可在 设置 → General → Language 切到简体中文。**
 
 **ChangeList 是文件分组，不是独立的 Git 索引。** 即使开启清单筛选，提交仍包含
 **全部已暂存文件**；筛选后的批量暂存只处理可见文件。

@@ -6,6 +6,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 )
 
 // CheckoutBlocked describes a checkout Git refused because local changes or
@@ -54,7 +55,7 @@ func (w *Workspace) checkoutBlocked(b CheckoutBlocked) bool {
 	if w.ConfirmCheckout != nil && w.ConfirmCheckout(b) {
 		return true
 	}
-	w.Notify(NoticeError, "Checkout failed", ErrorText(b.Err)+"\n\nCommit, stash or roll back your changes first.")
+	w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutBlockedBody, ErrorText(b.Err)))
 	return true
 }
 
@@ -116,14 +117,14 @@ func (w *Workspace) checkoutStashing(ctx context.Context, repo domain.Repo, b Ch
 func (w *Workspace) reportStashCheckout(label string, res stashCheckoutResult, err error) {
 	switch {
 	case res == stashNotCreated:
-		w.Notify(NoticeError, "Checkout failed", ErrorText(err)+"\n\nNothing was stashed.")
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutStashNotCreatedBody, ErrorText(err)))
 	case res == stashKept && err != nil:
-		w.Notify(NoticeError, "Checkout failed", ErrorText(err)+"\n\nRestoring the changes failed too; they are still in the stash and the branch did not change.")
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoreFailedBody, ErrorText(err)))
 	case res == stashKept:
-		w.Notify(NoticeWarning, "Checked out "+label, "Your local changes conflict with the target. They are still in the stash; apply them when ready.")
+		w.Notify(NoticeWarning, w.tr(i18n.AppNoticeCheckedOut, label), w.tr(i18n.AppNoticeCheckoutStashKeptBody))
 	case err != nil:
-		w.Notify(NoticeError, "Checkout failed", ErrorText(err)+"\n\nYour local changes were restored and the branch did not change.")
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoredBody, ErrorText(err)))
 	default:
-		w.Notify(NoticeSuccess, "Checked out "+label, "Local changes were stashed and restored.")
+		w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeCheckedOut, label), w.tr(i18n.AppNoticeCheckoutStashedBody))
 	}
 }

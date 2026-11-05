@@ -27,4 +27,6 @@
 | [0021](0021-observability.md) | 可观测性、崩溃记录与诊断导出 |
 | [0022](0022-child-process-console.md) | 子进程不弹控制台窗口 |
 | [0023](0023-app-update.md) | 应用内更新 |
-| [0024](0024-svn-support.md) | 增加 Subversion 日常客户端支持 |
+| [0024](0024-file-browser.md) | 只读文件浏览：Project 工具窗口与 Quick Open |
+| [0025](0025-svn-support.md) | 增加 Subversion 日常客户端支持 |
+| [0026](0026-i18n.md) | 界面语言与消息表 |

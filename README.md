@@ -60,10 +60,14 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Build a commit        | Stage files, hunks, or selected lines; unstage, roll back, amend, sign off, and commit/push                          |
 | Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, and named ChangeLists                       |
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing |
+| Browse files          | Project tool window with folders, status colours, Quick Open, read-only viewing, blame, and file history |
 | Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                     |
 | Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, and explicit mark-as-resolved                      |
 | Work across checkouts | Create worktrees from new or existing branches; manage submodules with dirty-work protection                         |
 | Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                               |
+
+**The interface is English by default; switch it to Simplified Chinese in
+Settings → General → Language.**
 
 **ChangeLists group files; they do not create separate Git indexes.** A commit
 includes **all staged files**, even when a list filter is active. Filtered bulk

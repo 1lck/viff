@@ -8,6 +8,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 )
 
 // submodule_manage.go holds the write use cases behind the Submodules dialog:
@@ -22,7 +23,7 @@ import (
 func (w *Workspace) AddSubmodule(url, path string, done func(error)) {
 	if w.Repo == nil {
 		if done != nil {
-			done(errors.New("no repository is open"))
+			done(errors.New(w.tr(i18n.AppErrorNoRepositoryOpen)))
 		}
 		return
 	}
@@ -39,7 +40,7 @@ func (w *Workspace) AddSubmodule(url, path string, done func(error)) {
 		}
 		return sm.AddSubmodule(ctx, repo, url, path, progress)
 	}, RunOptions{
-		Success:     "Submodule added",
+		Success:     w.tr(i18n.AppNoticeSubmoduleAdded),
 		SuccessBody: path,
 		// The dialog shows Git's message itself, next to the fields the user
 		// can correct, so the default balloon would only repeat it.
@@ -57,7 +58,7 @@ func (w *Workspace) AddSubmodule(url, path string, done func(error)) {
 // discard local changes is passed on instead of being overridden; the caller
 // must confirm that first and call again with force.
 func (w *Workspace) RemoveSubmodule(path string, force bool, done func(error)) {
-	w.submoduleWrite("Remove submodule", "Submodule removed", path, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
+	w.submoduleWrite("Remove submodule", w.tr(i18n.AppNoticeSubmoduleRemoved), path, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
 		sm, serr := w.submodules()
 		if serr != nil {
 			return serr
@@ -70,7 +71,7 @@ func (w *Workspace) RemoveSubmodule(path string, force bool, done func(error)) {
 // and .gitmodules entry so Update can check it out again. Like removal, local
 // changes are refused unless the caller confirmed force.
 func (w *Workspace) DeinitSubmodule(path string, force bool, done func(error)) {
-	w.submoduleWrite("Deinit submodule", "Submodule deinitialized", path, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
+	w.submoduleWrite("Deinit submodule", w.tr(i18n.AppNoticeSubmoduleDeinitialized), path, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
 		sm, serr := w.submodules()
 		if serr != nil {
 			return serr
@@ -85,7 +86,7 @@ func (w *Workspace) DeinitSubmodule(path string, force bool, done func(error)) {
 func (w *Workspace) submoduleWrite(title, success, path string, op Op, done func(error)) {
 	if w.Repo == nil {
 		if done != nil {
-			done(errors.New("no repository is open"))
+			done(errors.New(w.tr(i18n.AppErrorNoRepositoryOpen)))
 		}
 		return
 	}
@@ -109,7 +110,7 @@ func (w *Workspace) DirectSubmodules(done func(map[string]bool, error)) {
 	rs := w.Repo
 	if rs == nil {
 		if done != nil {
-			done(nil, errors.New("no repository is open"))
+			done(nil, errors.New(w.tr(i18n.AppErrorNoRepositoryOpen)))
 		}
 		return
 	}
@@ -141,7 +142,7 @@ func (w *Workspace) SubmoduleDirty(path string, done func(bool, error)) {
 	rs := w.Repo
 	if rs == nil {
 		if done != nil {
-			done(false, errors.New("no repository is open"))
+			done(false, errors.New(w.tr(i18n.AppErrorNoRepositoryOpen)))
 		}
 		return
 	}

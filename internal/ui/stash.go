@@ -7,6 +7,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -30,7 +31,7 @@ func (w *Window) paintStash(r ui.Rect) {
 	}
 	tb := splitTop(&r, 34)
 	x, y := tb.X+8, tb.Y+(tb.Height-actionSize)/2
-	if w.action(idCmStash, x, y, icons.Shelve, "Stash Changes…", actOpts{disabled: rs.Status.Clean()}) {
+	if w.action(idCmStash, x, y, icons.Shelve, w.t(i18n.WorkspaceStashChanges), actOpts{disabled: rs.Status.Clean()}) {
 		w.after(w.openStashDialog)
 	}
 	x += actionSize + 2
@@ -38,22 +39,22 @@ func (w *Window) paintStash(r ui.Rect) {
 	if v.sel >= 0 && v.sel < len(stashes) {
 		cur = &stashes[v.sel]
 	}
-	if w.action(scStashActions.At(0), x, y, icons.Unshelve, "Apply Stash", actOpts{disabled: cur == nil}) {
+	if w.action(scStashActions.At(0), x, y, icons.Unshelve, w.t(i18n.WorkspaceStashApply), actOpts{disabled: cur == nil}) {
 		s := *cur
 		w.after(func() { w.ws.StashApply(s, false, false) })
 	}
 	x += actionSize + 2
-	if w.action(scStashActions.At(1), x, y, icons.Download, "Pop Stash (apply and drop)", actOpts{disabled: cur == nil}) {
+	if w.action(scStashActions.At(1), x, y, icons.Download, w.t(i18n.WorkspaceStashPop), actOpts{disabled: cur == nil}) {
 		s := *cur
 		w.after(func() { w.ws.StashApply(s, true, false) })
 	}
 	x += actionSize + 2
-	if w.action(scStashActions.At(2), x, y, icons.Delete, "Drop Stash…", actOpts{disabled: cur == nil}) {
+	if w.action(scStashActions.At(2), x, y, icons.Delete, w.t(i18n.WorkspaceStashDrop), actOpts{disabled: cur == nil}) {
 		s := *cur
 		w.after(func() { w.confirmDropStash(s) })
 	}
 	x += actionSize + 2
-	if w.action(scStashActions.At(3), x, y, icons.Vcs, "Unstash as Branch…", actOpts{disabled: cur == nil}) {
+	if w.action(scStashActions.At(3), x, y, icons.Vcs, w.t(i18n.WorkspaceStashAsBranch), actOpts{disabled: cur == nil}) {
 		s := *cur
 		w.after(func() { w.openStashBranch(s) })
 	}
@@ -61,13 +62,13 @@ func (w *Window) paintStash(r ui.Rect) {
 	r.Y++
 	r.Height--
 	if len(stashes) == 0 {
-		w.p.textCenter("No stashes", rect(r.X, r.Y+r.Height*0.3, r.Width, 22), fontUI, regular, w.pal.TextSecond)
-		w.p.textCenter("Stash changes to set them aside and get back to them later", rect(r.X, r.Y+r.Height*0.3+22, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
+		w.p.textCenter(w.t(i18n.WorkspaceStashEmpty), rect(r.X, r.Y+r.Height*0.3, r.Width, 22), fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.WorkspaceStashEmptyHint), rect(r.X, r.Y+r.Height*0.3+22, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
 		return
 	}
 	listH := min(float32(len(stashes))*rowH+8, r.Height*0.5)
 	lr := splitTop(&r, listH)
-	w.list(idStashList, scStashRows, lr, "Stashes")
+	w.list(idStashList, scStashRows, lr, w.t(i18n.WorkspaceStashList))
 	focused := w.focused(idStashList)
 	content := float32(len(stashes))*rowH + 8
 	v.scroll.clamp(content, lr.Height)
@@ -120,13 +121,13 @@ func (w *Window) paintStash(r ui.Rect) {
 		w.onContext(id, func(x, y float32) {
 			v.sel = ii
 			w.openMenu(x, y, []item{
-				{title: "Apply Stash", icon: icons.Unshelve, run: func() { w.ws.StashApply(st, false, false) }},
-				{title: "Apply with Index", run: func() { w.ws.StashApply(st, false, true) }},
-				{title: "Pop Stash", icon: icons.Download, run: func() { w.ws.StashApply(st, true, false) }},
-				{title: "Unstash as Branch…", icon: icons.Vcs, run: func() { w.openStashBranch(st) }},
+				{title: w.t(i18n.WorkspaceStashApply), icon: icons.Unshelve, run: func() { w.ws.StashApply(st, false, false) }},
+				{title: w.t(i18n.WorkspaceStashApplyIndex), run: func() { w.ws.StashApply(st, false, true) }},
+				{title: w.t(i18n.WorkspaceStashPopMenu), icon: icons.Download, run: func() { w.ws.StashApply(st, true, false) }},
+				{title: w.t(i18n.WorkspaceStashAsBranch), icon: icons.Vcs, run: func() { w.openStashBranch(st) }},
 				sep(),
-				{title: "Copy Revision Number", icon: icons.Copy, run: func() { w.copyText(st.Hash) }},
-				{title: "Drop…", icon: icons.Delete, run: func() { w.confirmDropStash(st) }},
+				{title: w.t(i18n.WorkspaceStashCopyRev), icon: icons.Copy, run: func() { w.copyText(st.Hash) }},
+				{title: w.t(i18n.WorkspaceStashDropMenu), icon: icons.Delete, run: func() { w.confirmDropStash(st) }},
 			})
 		})
 	}
@@ -192,7 +193,7 @@ func (w *Window) paintStash(r ui.Rect) {
 }
 
 func (w *Window) confirmDropStash(s domain.Stash) {
-	w.confirm("Drop Stash", "Drop "+s.Ref+" \""+s.Message+"\"? You can still find its commit in the reflog for a while, but not in Viff.", "Drop", func() {
+	w.confirm(w.t(i18n.WorkspaceStashDropTitle), w.t(i18n.WorkspaceStashDropBody, s.Ref, s.Message), w.t(i18n.WorkspaceStashDropButton), func() {
 		w.ws.StashDrop(s)
 	})
 }
@@ -210,9 +211,9 @@ func (w *Window) openNewBranchFor(title string, fn func(string)) {
 			n := name.String()
 			p := validRefName(n)
 			if p == "" && w.branchExists(n) {
-				p = "Branch '" + n + "' already exists"
+				p = w.t(i18n.DialogBranchExists, n)
 			}
-			id := f.field("Branch name:", name, "", n != "" && p != "")
+			id := f.field(w.t(i18n.WorkspaceStashBranchName), name, "", n != "" && p != "")
 			f.w.dialog.focus = id
 			if n != "" && p != "" {
 				f.message(p, w.pal.Error)

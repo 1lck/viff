@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/vcs"
 )
 
@@ -217,7 +218,7 @@ func (w *Workspace) SelectCommit(hash string) {
 			rs.DetailLoading = false
 			if err != nil {
 				rs.Detail = nil
-				w.NotifyError("Cannot load commit", err)
+				w.NotifyError(w.tr(i18n.AppNoticeCannotLoadCommit), err)
 				return
 			}
 			rs.Detail = &d

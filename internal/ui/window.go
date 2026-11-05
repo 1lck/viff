@@ -14,6 +14,7 @@ import (
 
 	"viff/assets/branding"
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 	"viff/internal/platform"
 )
 
@@ -32,6 +33,8 @@ type Window struct {
 	c        *ui.Canvas
 	size     ui.Size
 	mono     ui.MonoFace
+	// tr speaks the language the settings chose.
+	tr *i18n.Translator
 	// native is the window the application opened; nil in headless runs.
 	native *app.Window
 	// quit closes the application from the status item's menu.
@@ -62,13 +65,15 @@ type Window struct {
 	dialog *dialog
 
 	// Panels.
-	commitOpen bool
-	gitOpen    bool
-	notifyOpen bool
-	commitTab  int // 0 = Commit, 1 = Stash
-	gitTab     int // 0 = Log, 1 = Console, 2 = Reflog
+	commitOpen  bool
+	projectOpen bool
+	gitOpen     bool
+	notifyOpen  bool
+	commitTab   int // 0 = Commit, 1 = Stash
+	gitTab      int // 0 = Log, 1 = Console, 2 = Reflog
 
 	cm  commitView
+	fm  filesView
 	ed  editorView
 	lg  logView
 	st  stashView
@@ -128,8 +133,10 @@ func New(ws *vapp.Workspace) *Window {
 	w := &Window{ws: ws, commitOpen: true, gitOpen: true}
 	ws.ConfirmCheckout = w.confirmStashCheckout
 	w.applyFont()
+	w.applyLanguage()
 	w.applyTheme()
 	w.cm.init()
+	w.fm.init()
 	w.lg.init()
 	w.wel.init()
 	w.st.sel = -1
@@ -192,6 +199,20 @@ func fixedPitch(name string) bool {
 		}
 	}
 	return false
+}
+
+// applyLanguage builds the translator for the language the settings chose. An
+// empty value means English, so an older settings file keeps its old text.
+func (w *Window) applyLanguage() {
+	w.tr = i18n.New(i18n.Parse(w.ws.Settings.Language))
+}
+
+// t translates key into the interface language.
+func (w *Window) t(key i18n.Key, args ...any) string {
+	if w.tr == nil {
+		return i18n.New(i18n.Default).T(key, args...)
+	}
+	return w.tr.T(key, args...)
 }
 
 // SetTray hands the window the native handle the application opened and how to
@@ -455,6 +476,7 @@ func (w *Window) syncRepo() {
 	w.lastRoot = rs.Repo.Root
 	w.cm.reset()
 	setText(w.cm.msg, w.commitDrafts[w.lastRoot])
+	w.fm.reset()
 	w.ed.reset()
 	w.lg.reset()
 	w.st.sel = -1

@@ -10,6 +10,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 )
 
 // submodule_manage.go holds the Add Submodule, Deinit and Remove dialogs of
@@ -53,7 +54,7 @@ func (w *Window) startSubmoduleAction(sm domain.Submodule, action submoduleActio
 	w.ws.SubmoduleDirty(sm.Path, func(dirty bool, err error) {
 		w.after(func() {
 			if err != nil {
-				w.ws.NotifyError("Cannot read submodule "+sm.Path, err)
+				w.ws.NotifyError(w.t(i18n.SubmoduleCannotReadOne, sm.Path), err)
 				return
 			}
 			w.confirmSubmoduleAction(sm, action, dirty, "")
@@ -80,17 +81,17 @@ func (w *Window) confirmSubmoduleAction(sm domain.Submodule, action submoduleAct
 		onCancel: func() { w.after(w.openSubmodules) },
 		body: func(f *form) {
 			if action == submoduleRemove {
-				f.text("Remove the submodule '" + sm.Path + "'?")
+				f.text(w.t(i18n.SubmoduleRemoveQuestion, sm.Path))
 				f.gap(4)
-				f.muted("Its working tree and its entry in .gitmodules are removed together, and the change is staged. Commits in the submodule's own repository are not deleted, so it can be added again.")
+				f.muted(w.t(i18n.SubmoduleRemoveHint))
 			} else {
-				f.text("Deinit the submodule '" + sm.Path + "'?")
+				f.text(w.t(i18n.SubmoduleDeinitQuestion, sm.Path))
 				f.gap(4)
-				f.muted("Its working tree is emptied, but its entry in .gitmodules and the recorded commit stay. Update checks it out again.")
+				f.muted(w.t(i18n.SubmoduleDeinitHint))
 			}
 			if force {
 				f.gap(8)
-				f.message("Git needs force here: local changes in the submodule, or a staged change to its recorded commit, are discarded. This cannot be undone.", w.pal.Warning)
+				f.message(w.t(i18n.SubmoduleForceHint), w.pal.Warning)
 				if reason != "" {
 					f.gap(4)
 					f.message(reason, w.pal.Warning)
@@ -160,7 +161,7 @@ func (w *Window) openSubmoduleAdd() {
 	}
 
 	d = &dialog{
-		title: "Add Submodule", ok: "Add", width: 640,
+		title: w.t(i18n.SubmoduleAddTitle), ok: w.t(i18n.DialogAdd), width: 640,
 		onCancel: func() { w.after(w.openSubmodules) },
 		body: func(f *form) {
 			f.labelW = 70
@@ -170,15 +171,15 @@ func (w *Window) openSubmoduleAdd() {
 				lastAuto = auto
 				w.after(func() { setText(path, auto) })
 			}
-			id := f.field("URL:", url, "https://github.com/user/repo.git", vapp.SubmoduleURLProblem(url.String()) != "")
+			id := f.field(w.t(i18n.DialogURL), url, "https://github.com/user/repo.git", vapp.SubmoduleURLProblem(url.String()) != "")
 			if !d.focused {
 				d.focus = id
 			}
-			f.field("Path:", path, "deps/lib", vapp.SubmodulePathProblem(strings.TrimSpace(path.String())) != "" && strings.TrimSpace(path.String()) != "")
+			f.field(w.t(i18n.WorktreePath), path, "deps/lib", vapp.SubmodulePathProblem(strings.TrimSpace(path.String())) != "" && strings.TrimSpace(path.String()) != "")
 			f.gap(2)
-			f.muted("Git writes .gitmodules and stages the submodule. Commit the change when you are ready.")
-			f.gap(2)
-			f.muted("A local path needs the file transport; configure that in Git if you intend to use one.")
+			f.muted(w.t(i18n.SubmoduleAddBody))
+			f.gap(4)
+			f.muted(w.t(i18n.SubmoduleLocalPathHint))
 			if p := problem(); p != "" && (strings.TrimSpace(url.String()) != "" || strings.TrimSpace(path.String()) != "") {
 				f.gap(4)
 				f.message(p, w.pal.Error)

@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
+	"viff/internal/i18n"
 	"viff/internal/observability"
 	"viff/internal/updater"
 	"viff/internal/version"
@@ -208,9 +208,9 @@ func (w *Workspace) CheckForUpdates(manual bool) {
 				// must not interrupt the user with a modal dialog. Its Update
 				// action opens the dialog through updatePrompt (set on the UI
 				// thread by PromptUpdate).
-				w.notify(NoticeInfo, "Update available",
-					fmt.Sprintf("Viff %s is available (you have %s).", u.Version, current), "",
-					NoticeAction{Title: "Update", Run: w.PromptUpdate})
+				w.notify(NoticeInfo, w.tr(i18n.AppNoticeUpdateAvailable),
+					w.tr(i18n.AppNoticeUpdateAvailableBody, u.Version, current), "",
+					NoticeAction{Title: w.tr(i18n.AppActionUpdate), Run: w.PromptUpdate})
 			}
 		})
 	}()

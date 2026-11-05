@@ -14,6 +14,7 @@
   - 暂存：悬停行上的 +/−，空格键，多选（Shift、⌘）后批量暂存，回滚，加入 .gitignore。
   - 提交：Amend，Sign-off，跳过钩子，⌘↩ 提交，“Commit and Push…”。
   - 正在进行 merge、rebase 等操作时显示横幅，带 Continue / Abort。
+- **Project 面板（只读）**：左侧 stripe 的文件夹图标或 ⌘1 打开，与 Commit 面板共用停靠区。顶部是仓库根节点（名称 + 路径）、工具条（Refresh、Collapse All、Expand All、Open File、Hide）和过滤框；下面是工作树的索引文件与未跟踪文件（ignored 除外），按目录折叠，按 Git 状态给文件名着色。单击文件在预览页签中只读打开，双击固定；右键可外部编辑、看 blame、看文件历史、复制路径或在 Finder 中显示。⇧⌘O 打开 Quick Open，输入路径片段后回车打开，见 [0024](decisions/0024-file-browser.md)。
 - **Stash 页签**：暂存（可包含未跟踪文件、保留索引）、应用、Pop、删除、转为分支，并可查看 stash 中的文件 diff。
 - **补丁**：变更列表右键“Create Patch…”把选中的改动保存为 `.patch`（二进制和 CRLF 原样保留，重命名仍是 rename）；Git 工具窗口菜单可以把补丁应用到工作树或只应用到索引，应用失败时文件不变并显示 Git 的原始错误。
 - **Diff**
@@ -24,20 +25,20 @@
   - 图片预览：PNG / JPEG / GIF（仅首帧）在 diff 中并排显示，等比缩放并标注格式、像素尺寸与文件大小；超过内容读取上限的图片仍按“文件过大”处理。
 - **冲突查看器**：Ours / Result / Theirs 三栏，在冲突块间跳转，可逐块接受 Ours / Theirs / Both；修改后先检查结果，再标记为已解决。支持在外部编辑器中自由编辑。
 - **文件查看**：只读打开某个提交里的文件（“Open Repository Version”），显示行数、换行符，以及二进制、超大文件和子模块的说明；可定位到当前行用外部编辑器打开。
-  - **Git blame 注解**：按提交新旧着色，显示作者与日期；点击注解在 Log 中定位该提交，右键可看该提交的 diff 或注解上一个版本。
-- **浏览提交的仓库树**（“Browse Repository at Revision…”）：在 Log 里右键一个提交，列出该提交里的全部文件（路径、大小，并标出可执行、符号链接和子模块），可按路径过滤，双击或回车以只读方式打开该版本。
+  - **Git blame 注解**：按提交新旧着色，显示作者与日期；点击注解在日志中定位该提交，右键可看该提交的 diff 或注解上一个版本。
+- **浏览提交的仓库树**（“Browse Repository at Revision…”）：在日志里右键一个提交，列出该提交里的全部文件（路径、大小，并标出可执行、符号链接和子模块），可按路径过滤，双击或回车以只读方式打开该版本。
 - **子模块**：Git 工具窗口的 ⋯ 菜单列出子模块的状态（未初始化 / 已修改 / 冲突）、当前提交和 describe，可 Update、Sync 或打开子模块；变更列表里子模块条目的右键菜单也有 Update Submodule 与 Open Submodule。递归子模块一并列出；可以添加子模块，或确认后移除、停用（deinit）当前仓库的直接子模块，脏内容需要明确确认强制操作。
 - **Git 工具窗口**
-  - Log：分支树；提交图；引用标签；按文本或哈希、分支、作者、日期、路径过滤；懒加载。
+  - 日志：分支树；提交图；引用标签；按文本或哈希、分支、作者、日期、路径过滤；懒加载。
   - 提交详情：文件列表和可滚动的完整提交信息；多选提交显示受影响文件的去重并集，点击文件可查看来源提交的 diff。
   - 提交右键菜单：cherry-pick、revert、reset（Soft/Mixed/Hard/Keep）、撤销提交、检出、新建分支或标签、与工作树比较；选中两个提交可比较它们之间的文件。
   - 直接编辑历史：修改提交信息、把提交 squash 进父提交、删除提交（drop），冲突时自动 abort 并保持分支不变。
-  - Console 显示所有执行过的 Git 命令及其输出，支持长行横向滚动；Reflog 页签可以查看 reflog。
+  - 控制台显示所有执行过的 Git 命令及其输出，支持长行横向滚动；引用日志页签可以查看 reflog。
 - **分支弹窗**（⌥⇧`）：速搜、收藏、本地和远程分支的子菜单，可执行检出、新建、重命名、合并、rebase、比较、设置上游、推送、删除；“Show Changed Files”列出两个分支 tip 之间的文件，双击打开 diff。
 - **Smart Checkout**：工作区有未提交改动时切换分支或检出修订不再直接失败——Git 因改动会被覆盖而拒绝后弹出确认，选“Stash and Checkout”会连同未跟踪文件一起 stash，检出后自动恢复；恢复冲突时改动留在 stash 并提示，检出失败则恢复改动、当前分支不变。
 - **工作树（Worktrees）**：分支弹窗底部的“Worktrees…”列出仓库的所有工作树（分支、短 HEAD、路径，当前工作树有标记），可以新建（创建新分支或选择未被占用的已有本地分支，路径按分支名建议）、删除（可强制丢弃改动，分支保留）、打开为当前仓库、复制路径；已被其他工作树检出的分支在分支菜单里标注，检出会打开那个工作树。
 - **推送和更新**：推送对话框列出待推送的提交，可选推送标签和 force-with-lease；更新支持 merge 或 rebase 方式；也支持 Fetch、后台定时 Fetch 和管理远程仓库。
-- **推送变体**：Log 右键“Push Up to Commit…”把某个历史提交及其之前的提交推到远端分支；分支弹窗“Push to Another Remote…”把 HEAD 推到别的远端或分支名；标签菜单可以只删除远端标签（本地标签保留）。非 fast-forward 默认被 Git 拒绝并显示原文，强制推送需显式勾选 force-with-lease。
+- **推送变体**：日志右键“Push Up to Commit…”把某个历史提交及其之前的提交推到远端分支；分支弹窗“Push to Another Remote…”把 HEAD 推到别的远端或分支名；标签菜单可以只删除远端标签（本地标签保留）。非 fast-forward 默认被 Git 拒绝并显示原文，强制推送需显式勾选 force-with-lease。
 - **更新未检出的分支**：分支弹窗里非当前分支的本地分支有“Update from Remote”，快进到远端同名分支并说明前进了几个提交；分叉时拒绝且分支不变。浅克隆时 Git 工具窗口的 ⋯ 菜单会多出“Fetch Full History (Unshallow)”。
 - **Git 设置**：设置对话框的 Git 页可以指定 SSH 命令、GPG 程序、签名格式（Git 默认 / OpenPGP / SSH）、签名密钥、默认签名提交与 credential helper；保存后对下一次 Git 调用立即生效，不改写仓库或全局 Git 配置。
 - **通知**：右下角气泡（成功消息 10 秒后自动隐藏），以及通知工具窗口。
@@ -87,6 +88,7 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - 界面字体默认为系统字体（SF Pro），没有使用 Inter；设置里可分别选择「界面字体」（全部已安装族）与「diff 字体」（仅等宽族，用于 diff、控制台与哈希），见 [0002](decisions/0002-fonts.md)。
 - 冲突支持逐块接受两侧内容；自由文本编辑、二进制或不可靠冲突标记仍需要外部编辑器，见 [0019](decisions/0019-git-issue-gaps.md)。
 - 已有分支创建工作树见 [0018](decisions/0018-existing-branch-worktree.md)；prunable 工作树只能查看、不能删除。嵌套子模块的移除和 deinit 需要先打开其所属仓库，见 [0019](decisions/0019-git-issue-gaps.md)。
+- Project 面板与 Commit 共用左侧停靠区，不能同时显示；默认显示 Commit，按 ⌘1 打开 Project。ignored 文件默认不显示，折叠状态不持久化；Project 中打开的图片仍只显示二进制说明（diff 的图片预览不适用于单版本查看）；文本支持鼠标拖选、Shift+方向键与 ⌘A/⌘C 复制（制表符按显示展开为空格），但不支持编辑与拖选自动滚动。见 [0024](decisions/0024-file-browser.md)。
 - 应用内更新没有系统签名校验（macOS ad-hoc 签名、Windows 无 Authenticode），只做 HTTPS + SHA-256；宿主的系统安全提示仍可能出现。DEB 安装受权限限制只能提示手动安装；随包文档在 Windows/Linux 自替换后保持旧版本，见 [0023](decisions/0023-app-update.md)。旧版本（v0.1.0 及更早）没有更新器，升级到第一个带更新器的版本需要手动下载一次。
 - Subversion 支持见 [0024](decisions/0024-svn-support.md)，其限制与 Git 不同：
   - 历史查询需要访问仓库（网络或 `file://`），因此保留本地缓存；离线时显示缓存并显式标注为陈旧，此时看到的历史不是最新。

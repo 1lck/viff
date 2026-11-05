@@ -13,6 +13,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -57,16 +58,28 @@ const (
 
 var areaOrder = []domain.Area{domain.AreaConflicts, domain.AreaStaged, domain.AreaUnstaged, domain.AreaUntracked}
 
-func areaTitle(a domain.Area) string {
+// areaTitle names the change-tree group a file belongs to.
+func (w *Window) areaTitle(a domain.Area) string {
+	group := i18n.WorkspaceAreaConflicts
 	switch a {
 	case domain.AreaStaged:
-		return "Staged"
+		group = i18n.WorkspaceAreaStaged
 	case domain.AreaUnstaged:
-		return "Changes"
+		group = i18n.WorkspaceAreaChanges
 	case domain.AreaUntracked:
-		return "Unversioned Files"
+		group = i18n.WorkspaceAreaUntracked
 	}
-	return "Merge Conflicts"
+	return w.t(group)
+}
+
+// pluralT fills in n and picks the one or many message the way i18n.Plural
+// does; Chinese repeats its single form in both keys.
+func (w *Window) pluralT(n int, one, many i18n.Key, args ...any) string {
+	key := many
+	if n == 1 {
+		key = one
+	}
+	return w.t(key, append([]any{n}, args...)...)
 }
 
 func (v *commitView) init() {
@@ -147,13 +160,15 @@ func (w *Window) buildRows() {
 
 func (w *Window) paintCommitWindow(r ui.Rect) {
 	w.island(r)
-	// Subversion has no stash, so the tab is absent rather than empty.
-	tabs := []string{"Commit"}
+	// Subversion has no stash, so the tab is absent rather than empty. The
+	// second tab's index stays 1 whenever it exists, which is what commitTab
+	// and paintStash rely on.
+	tabs := []string{w.t(i18n.WorkspacePanelCommit)}
 	if w.ws.Caps.Stash != nil {
-		tabs = append(tabs, "Stash")
+		tabs = append(tabs, w.t(i18n.WorkspacePanelStash))
 	}
 	content, ax := w.toolHeader(r, idBanner, tabs, w.commitTab, func(i int) { w.commitTab = i })
-	if w.action(idHideCommit, ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, "Hide\t⇧⎋", actOpts{}) {
+	if w.action(idHideCommit, ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, w.t(i18n.WorkspaceActionHide)+"\t⇧⎋", actOpts{}) {
 		w.after(func() { w.commitOpen = false })
 	}
 	if w.commitTab == 1 {
@@ -168,16 +183,16 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	// Toolbar.
 	tb := splitTop(&content, 34)
 	x, y := tb.X+8, tb.Y+(tb.Height-actionSize)/2
-	if w.action(idCmRefresh, x, y, icons.Refresh, "Refresh", actOpts{}) {
+	if w.action(idCmRefresh, x, y, icons.Refresh, w.t(i18n.WorkspaceActionRefresh), actOpts{}) {
 		w.after(func() { w.ws.Refresh(true) })
 	}
 	x += actionSize + 2
 	sel := w.selectedEntries()
-	if w.action(idCmRollback, x, y, icons.Revert, "Rollback…\t⌥⌘Z", actOpts{disabled: len(w.rollbackTargets()) == 0}) {
+	if w.action(idCmRollback, x, y, icons.Revert, w.t(i18n.WorkspaceActionRollback)+"\t⌥⌘Z", actOpts{disabled: len(w.rollbackTargets()) == 0}) {
 		w.after(w.openRollback)
 	}
 	x += actionSize + 2
-	if w.action(idCmDiff, x, y, icons.Diff, "Show Diff\t⌘D", actOpts{disabled: len(sel) == 0}) {
+	if w.action(idCmDiff, x, y, icons.Diff, w.t(i18n.WorkspaceActionShowDiff)+"\t⌘D", actOpts{disabled: len(sel) == 0}) {
 		w.after(func() { w.openSelectedDiff(true) })
 	}
 	x += actionSize + 8
@@ -185,27 +200,27 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	staged, _, _, _ := rs.Status.Counts()
 	// Stage All follows the filter: with a list selected it stages only the
 	// files that list shows, never the hidden ones.
-	if w.action(idCmStage, x, y, icons.Add, "Stage All", actOpts{disabled: w.stageableCount() == 0}) {
+	if w.action(idCmStage, x, y, icons.Add, w.t(i18n.WorkspaceActionStageAll), actOpts{disabled: w.stageableCount() == 0}) {
 		w.after(w.stageAllVisible)
 	}
 	if w.cm.listID != "" {
-		w.tip(idCmStage, "Stage All in "+w.changeListFilterName())
+		w.tip(idCmStage, w.t(i18n.WorkspaceActionStageAllIn, w.changeListFilterName()))
 	}
 	x += actionSize + 2
-	if w.action(idCmUnstage, x, y, icons.Hide, "Unstage All", actOpts{disabled: staged == 0}) {
+	if w.action(idCmUnstage, x, y, icons.Hide, w.t(i18n.WorkspaceActionUnstageAll), actOpts{disabled: staged == 0}) {
 		w.after(func() { w.unstageAll() })
 	}
 	x += actionSize + 8
 	w.p.vline(x-4, y+5, actionSize-10, w.pal.Separator)
-	if w.action(idCmGroup, x, y, icons.ShowAsTree, "Group by Directory", actOpts{toggled: w.ws.Settings.CommitTree}) {
+	if w.action(idCmGroup, x, y, icons.ShowAsTree, w.t(i18n.WorkspaceActionGroupByDirectory), actOpts{toggled: w.ws.Settings.CommitTree}) {
 		w.after(func() { w.ws.Settings.CommitTree = !w.ws.Settings.CommitTree; w.saveSettings() })
 	}
 	x += actionSize + 2
-	if w.action(idCmExpand, x, y, icons.ExpandAll, "Expand All\t⌘+", actOpts{}) {
+	if w.action(idCmExpand, x, y, icons.ExpandAll, w.t(i18n.WorkspaceActionExpandAll)+"\t⌘+", actOpts{}) {
 		w.after(func() { clear(w.cm.collapsed) })
 	}
 	x += actionSize + 2
-	if w.action(idCmCollapse, x, y, icons.CollapseAll, "Collapse All\t⌘-", actOpts{}) {
+	if w.action(idCmCollapse, x, y, icons.CollapseAll, w.t(i18n.WorkspaceActionCollapseAll)+"\t⌘-", actOpts{}) {
 		w.after(func() {
 			for _, a := range areaOrder {
 				w.cm.collapsed[rowKey(a, "")] = true
@@ -214,7 +229,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	}
 	x += actionSize + 2
 	if w.ws.Caps.Stash != nil {
-		if w.action(idCmStash, x, y, icons.Shelve, "Stash Changes…", actOpts{disabled: rs.Status.Clean()}) {
+		if w.action(idCmStash, x, y, icons.Shelve, w.t(i18n.WorkspaceActionStashChanges), actOpts{disabled: rs.Status.Clean()}) {
 			w.after(w.openStashDialog)
 		}
 		x += actionSize + 2
@@ -245,25 +260,25 @@ func (w *Window) paintOperationBanner(r ui.Rect) ui.Rect {
 	rs := w.repo()
 	op := rs.Operation
 	conflicts := len(rs.Entries(domain.AreaConflicts))
-	title := op.Kind.Title() + " in progress"
+	title := w.t(i18n.WorkspaceBannerInProgress, op.Kind.Title())
 	detail := ""
 	switch op.Kind {
 	case domain.OpRebase:
 		if op.Onto != "" {
-			detail = "Rebasing " + op.HeadName + " onto " + domain.ShortHash(op.Onto)
+			detail = w.t(i18n.WorkspaceBannerRebasing, op.HeadName, domain.ShortHash(op.Onto))
 		}
 		if op.Total > 0 {
 			detail += " (" + itoa(op.Step) + "/" + itoa(op.Total) + ")"
 		}
 	case domain.OpMerge:
-		detail = "Merging into " + rs.HeadLabel()
+		detail = w.t(i18n.WorkspaceBannerMerging, rs.HeadLabel())
 	case domain.OpCherryPick, domain.OpRevert:
 		if op.Incoming != "" {
 			detail = domain.ShortHash(op.Incoming) + " " + op.IncomingSubject
 		}
 	}
 	if conflicts > 0 {
-		detail = strings.TrimSpace(detail + " · " + plural(conflicts, "conflict", "conflicts"))
+		detail = strings.TrimSpace(detail + " · " + w.pluralT(conflicts, i18n.WorkspaceCountConflictsOne, i18n.WorkspaceCountConflictsMany))
 	}
 	h := float32(78)
 	b := splitTop(&r, h+12)
@@ -282,28 +297,30 @@ func (w *Window) paintOperationBanner(r ui.Rect) ui.Rect {
 	w.p.text(detail, rect(br.X+32, br.Y+26, br.Width-40, 18), fontSmall, regular, w.pal.TextMuted)
 	bx, by := br.X+32, br.Y+h-34
 	if op.CanContinue() {
-		label := "Continue"
+		label := w.t(i18n.WorkspaceButtonContinue)
 		bw := w.buttonWidth(label)
 		if w.button(idCmContinue, rect(bx, by, bw, 26), label, btnDefault, conflicts > 0) {
 			w.after(func() { w.ws.OperationAction("continue") })
 		}
 		if conflicts > 0 {
-			w.tip(idCmContinue, "Resolve and stage all conflicts first")
+			w.tip(idCmContinue, w.t(i18n.WorkspaceTipResolveFirst))
 		}
 		bx += bw + 8
 	}
 	if op.CanSkip() {
-		bw := w.buttonWidth("Skip")
-		if w.button(idCmSkip, rect(bx, by, bw, 26), "Skip", btnNormal, false) {
+		label := w.t(i18n.WorkspaceButtonSkip)
+		bw := w.buttonWidth(label)
+		if w.button(idCmSkip, rect(bx, by, bw, 26), label, btnNormal, false) {
 			w.after(func() { w.ws.OperationAction("skip") })
 		}
 		bx += bw + 8
 	}
 	if op.CanAbort() {
-		bw := w.buttonWidth("Abort")
-		if w.button(idCmAbort, rect(bx, by, bw, 26), "Abort", btnNormal, false) {
+		label := w.t(i18n.WorkspaceButtonAbort)
+		bw := w.buttonWidth(label)
+		if w.button(idCmAbort, rect(bx, by, bw, 26), label, btnNormal, false) {
 			w.after(func() {
-				w.confirm("Abort "+op.Kind.Title(), "Abort the "+strings.ToLower(op.Kind.Title())+" and restore the state before it started? Changes made while resolving are lost.", "Abort", func() {
+				w.confirm(w.t(i18n.WorkspaceConfirmAbort, op.Kind.Title()), w.t(i18n.WorkspaceConfirmAbortBody, strings.ToLower(op.Kind.Title())), label, func() {
 					w.ws.OperationAction("abort")
 				})
 			})
@@ -316,7 +333,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 	v := &w.cm
 	rs := w.repo()
 	w.buildRows()
-	w.list(idChangesList, scChangeRows, r, "Changes")
+	w.list(idChangesList, scChangeRows, r, w.t(i18n.WorkspacePanelChanges))
 	content := float32(len(v.rows)) * rowH
 	v.scroll.clamp(content+8, r.Height)
 	w.onScrollIn(r, func(dx, dy float32) { v.scroll.Y += dy; v.scroll.clamp(content+8, r.Height) })
@@ -324,13 +341,13 @@ func (w *Window) paintChanges(r ui.Rect) {
 	w.onKeys(idChangesList, w.changesKey)
 
 	if !rs.StatusLoaded {
-		w.p.textCenter("Loading…", r, fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.WorkspaceStateLoading), r, fontUI, regular, w.pal.TextSecond)
 		return
 	}
 	if rs.Status.Clean() && len(v.rows) <= 1 {
 		ec := rect(r.X, r.Y+r.Height*0.3, r.Width, 22)
-		w.p.textCenter("No changes", ec, fontUI, regular, w.pal.TextSecond)
-		w.p.textCenter("Working tree is clean", rect(ec.X, ec.Y+22, ec.Width, 20), fontSmall, regular, w.pal.TextDisable)
+		w.p.textCenter(w.t(i18n.WorkspaceEmptyNoChanges), ec, fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.WorkspaceEmptyWorkingTreeClean), rect(ec.X, ec.Y+22, ec.Width, 20), fontSmall, regular, w.pal.TextDisable)
 		return
 	}
 	w.c.Clip(r)
@@ -362,7 +379,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 			}
 			w.p.iconIn(chev, rect(x, rr.Y, 16, rowH))
 			x += 20
-			title := areaTitle(row.area)
+			title := w.areaTitle(row.area)
 			if row.kind == rowDir {
 				w.p.iconIn(icons.Folder, rect(x, rr.Y, 16, rowH))
 				x += 22
@@ -370,7 +387,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 			}
 			tw := w.p.text(title, rect(x, rr.Y, r.Width-x-40, rowH), fontUI, regular, w.pal.Text)
 			if row.kind == rowGroup {
-				w.p.text(plural(row.count, "file", "files"), rect(x+tw+8, rr.Y, 120, rowH), fontUI, regular, w.pal.TextSecond)
+				w.p.text(w.pluralT(row.count, i18n.WorkspaceCountFilesOne, i18n.WorkspaceCountFilesMany), rect(x+tw+8, rr.Y, 120, rowH), fontUI, regular, w.pal.TextSecond)
 			} else {
 				w.p.text(itoa(row.count), rect(x+tw+8, rr.Y, 60, rowH), fontUI, regular, w.pal.TextSecond)
 			}
@@ -393,7 +410,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 				hint = "← " + e.OrigPath
 			}
 			if e.IsSubmodule() {
-				hint = strings.TrimSpace("submodule " + hint)
+				hint = strings.TrimSpace(w.t(i18n.WorkspaceLabelSubmodule) + " " + hint)
 			}
 			if hint != "" {
 				hx := x + tw + 8
@@ -423,7 +440,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 func (w *Window) rowLabel(row changeRow) string {
 	switch row.kind {
 	case rowGroup:
-		return areaTitle(row.area)
+		return w.areaTitle(row.area)
 	case rowDir:
 		return row.dir
 	}
@@ -440,14 +457,17 @@ func (w *Window) rowAction(i int, row changeRow, hl ui.Rect) {
 	var tip string
 	switch row.area {
 	case domain.AreaStaged:
-		pair, tip = icons.Hide, "Unstage"
+		pair, tip = icons.Hide, w.t(i18n.WorkspaceMenuUnstage)
 	case domain.AreaConflicts:
 		return
 	default:
-		pair, tip = icons.Add, "Stage"
+		pair, tip = icons.Add, w.t(i18n.WorkspaceMenuStage)
 	}
 	if row.kind == rowGroup {
-		tip += " All"
+		tip = w.t(i18n.WorkspaceActionUnstageAll)
+		if row.area != domain.AreaStaged {
+			tip = w.t(i18n.WorkspaceActionStageAll)
+		}
 	}
 	if w.action(id, right(hl)-24, hl.Y+1, pair, tip, actOpts{size: 22}) {
 		w.after(func() {
@@ -773,9 +793,9 @@ func (w *Window) openRollback() {
 	files := append(append(append([]string{}, staged...), tracked...), untracked...)
 	sort.Strings(files)
 	w.openDialog(&dialog{
-		title: "Rollback Changes", ok: "Rollback", width: 520,
+		title: w.t(i18n.WorkspaceDialogRollback), ok: w.t(i18n.WorkspaceButtonRollback), width: 520,
 		body: func(f *form) {
-			f.text("Discard local changes in " + plural(len(files), "file", "files") + "? This cannot be undone.")
+			f.text(w.t(i18n.WorkspaceConfirmRollbackBody, w.pluralT(len(files), i18n.WorkspaceCountFilesOne, i18n.WorkspaceCountFilesMany)))
 			n := min(len(files), 8)
 			f.custom(float32(n)*22+4, func(r ui.Rect) {
 				w.p.outline(r, 4, 1, w.pal.ControlBorder, w.pal.ControlBg)
@@ -786,14 +806,14 @@ func (w *Window) openRollback() {
 				}
 			})
 			if len(files) > n {
-				f.muted("and " + itoa(len(files)-n) + " more")
+				f.muted(w.t(i18n.WorkspaceLabelAndMore, len(files)-n))
 			}
 			f.gap(8)
 			if len(untracked) > 0 {
-				f.check("Delete "+plural(len(untracked), "unversioned file", "unversioned files")+" from disk", &deleteNew)
+				f.check(w.t(i18n.WorkspaceCheckDeleteUntracked, w.pluralT(len(untracked), i18n.WorkspaceCountUnversionedOne, i18n.WorkspaceCountUnversionedMany)), &deleteNew)
 			}
 			if len(staged) > 0 {
-				f.muted("Staged changes are reset to HEAD.")
+				f.muted(w.t(i18n.WorkspaceMutedStagedReset))
 			}
 		},
 		onOK: func() bool {
@@ -837,49 +857,49 @@ func (w *Window) changesMenu() []item {
 	root := w.repo().Repo.Root
 	full := path.Join(root, first.entry.Path)
 	items := []item{
-		{title: "Show Diff", icon: icons.Diff, shortcut: "⌘D", run: func() { w.showDiff(w.sourceFor(first), true) }},
+		{title: w.t(i18n.WorkspaceActionShowDiff), icon: icons.Diff, shortcut: "⌘D", run: func() { w.showDiff(w.sourceFor(first), true) }},
 	}
 	if len(sel) == 1 && first.entry.IsSubmodule() {
 		sub := first.entry.Path
 		items = append(items,
-			item{title: "Update Submodule", icon: icons.Download, run: func() { w.ws.UpdateSubmodule(sub, true, nil) }},
-			item{title: "Open Submodule", icon: icons.Folder, run: func() { w.openSubmodule(sub) }},
+			item{title: w.t(i18n.WorkspaceMenuUpdateSubmodule), icon: icons.Download, run: func() { w.ws.UpdateSubmodule(sub, true, nil) }},
+			item{title: w.t(i18n.WorkspaceMenuOpenSubmodule), icon: icons.Folder, run: func() { w.openSubmodule(sub) }},
 		)
 	}
 	if stage {
-		items = append(items, item{title: "Stage", icon: icons.Add, shortcut: "Space", run: w.toggleStageSelection})
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuStage), icon: icons.Add, shortcut: "Space", run: w.toggleStageSelection})
 	}
 	if unstage {
-		items = append(items, item{title: "Unstage", icon: icons.Hide, shortcut: "Space", run: w.toggleStageSelection})
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuUnstage), icon: icons.Hide, shortcut: "Space", run: w.toggleStageSelection})
 	}
 	if conflict {
-		items = append(items, item{title: "Mark Resolved", icon: icons.Checked, run: func() { w.markResolved(first.entry.Path) }})
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuMarkResolved), icon: icons.Checked, run: func() { w.markResolved(first.entry.Path) }})
 	}
 	if move := w.changeListMoveItems(sel); len(move) > 0 {
-		items = append(items, item{title: "Move to Change List", icon: icons.Changelist, sub: move})
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuMoveToChangeList), icon: icons.Changelist, sub: move})
 	}
-	items = append(items, item{title: "Rollback…", icon: icons.Revert, shortcut: "⌥⌘Z", disabled: len(w.rollbackTargets()) == 0, run: w.openRollback}, sep())
+	items = append(items, item{title: w.t(i18n.WorkspaceActionRollback), icon: icons.Revert, shortcut: "⌥⌘Z", disabled: len(w.rollbackTargets()) == 0, run: w.openRollback}, sep())
 	if untrackedOnly {
-		items = append(items, item{title: "Add to .gitignore", icon: icons.Gitignore, run: func() { w.addToGitignore(sel) }})
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuAddToGitignore), icon: icons.Gitignore, run: func() { w.addToGitignore(sel) }})
 	}
 	items = append(items,
-		item{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(first.entry.Path) }},
-		item{title: "Annotate with Git Blame", disabled: !canAnnotate(first, full), run: func() { w.openFileView(first.entry.Path, "", true) }},
-		item{title: "Open in External Editor", icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(first.entry.Path, 0) }},
-		item{title: "Show in Finder", icon: icons.Folder, run: func() { revealPath(full) }},
+		item{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(first.entry.Path) }},
+		item{title: w.t(i18n.WorkspaceMenuAnnotate), disabled: !canAnnotate(first, full), run: func() { w.openFileView(first.entry.Path, "", true) }},
+		item{title: w.t(i18n.WorkspaceMenuOpenInEditor), icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(first.entry.Path, 0) }},
+		item{title: w.t(i18n.WorkspaceMenuRevealInFinder), icon: icons.Folder, run: func() { revealPath(full) }},
 		sep(),
-		item{title: "Copy Path", icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
-		item{title: "Copy Relative Path", run: func() { w.copyText(first.entry.Path) }},
+		item{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
+		item{title: w.t(i18n.WorkspaceActionCopyRelativePath), run: func() { w.copyText(first.entry.Path) }},
 	)
 	patchPaths, patchStaged, canPatch := patchTargets(sel)
 	items = append(items, sep(),
-		item{title: "Create Patch…", icon: icons.Patch, disabled: !canPatch, run: func() { w.savePatch(patchPaths, patchStaged) }})
+		item{title: w.t(i18n.WorkspaceMenuCreatePatch), icon: icons.Patch, disabled: !canPatch, run: func() { w.savePatch(patchPaths, patchStaged) }})
 	return items
 }
 
 func (w *Window) copyText(s string) {
 	if err := app.SetClipboardText(s); err != nil {
-		w.ws.NotifyError("Cannot copy", err)
+		w.ws.NotifyError(w.t(i18n.WorkspaceErrorCannotCopy), err)
 	}
 }
 
@@ -890,10 +910,10 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	rs := w.repo()
 	// Amend + options row.
 	top := rect(r.X+10, r.Y+6, r.Width-20, 28)
-	if w.checkbox(idCmAmend, top.X, top.Y, top.Height, "Amend", v.amend, !rs.HasHead()) {
+	if w.checkbox(idCmAmend, top.X, top.Y, top.Height, w.t(i18n.WorkspaceCheckAmend), v.amend, !rs.HasHead()) {
 		w.after(w.toggleAmend)
 	}
-	if w.action(idCmOptions, right(top)-actionSize, top.Y+1, icons.Settings, "Commit Options", actOpts{}) {
+	if w.action(idCmOptions, right(top)-actionSize, top.Y+1, icons.Settings, w.t(i18n.WorkspaceTipCommitOptions), actOpts{}) {
 		w.after(func() { w.openMenuBelow(rect(right(top)-200, top.Y, 200, top.Height), w.commitOptionsMenu(), 220) })
 	}
 	mr := rect(r.X+10, bottom(top)+4, r.Width-20, msgH)
@@ -902,7 +922,7 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	caret := runeToByte(value, v.msg.Caret())
 	ss, se := runeToByte(value, min(sel.Start, sel.End)), runeToByte(value, max(sel.Start, sel.End))
 	components.PaintTextarea(w.c, w.theme, mr, components.TextareaSnapshot{
-		ID: idCmMessage, Label: "Commit message", Value: value, Placeholder: "Commit message",
+		ID: idCmMessage, Label: w.t(i18n.WorkspaceLabelCommitMessage), Value: value, Placeholder: w.t(i18n.WorkspaceLabelCommitMessage),
 		ShowCaret: true, HideEditorText: true, Layout: &v.layout,
 		Caret: caret, SelectionStart: ss, SelectionEnd: se,
 	})
@@ -928,9 +948,9 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	staged, _, _, conflicts := rs.Status.Counts()
 	empty := strings.TrimSpace(value) == ""
 	can := !empty && (staged > 0 || v.amend) && conflicts == 0
-	label := "Commit"
+	label := w.t(i18n.WorkspaceButtonCommit)
 	if v.amend {
-		label = "Amend Commit"
+		label = w.t(i18n.WorkspaceButtonAmendCommit)
 	}
 	bw := w.buttonWidth(label)
 	if w.button(idCmCommit, rect(r.X+10, by, bw, buttonH), label, btnDefault, !can) {
@@ -938,17 +958,17 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	}
 	switch {
 	case conflicts > 0:
-		w.tip(idCmCommit, "Resolve conflicts before committing")
+		w.tip(idCmCommit, w.t(i18n.WorkspaceTipResolveBeforeCommit))
 	case staged == 0 && !v.amend:
-		w.tip(idCmCommit, "Stage changes to commit")
+		w.tip(idCmCommit, w.t(i18n.WorkspaceTipStageToCommit))
 	case empty:
-		w.tip(idCmCommit, "Enter a commit message")
+		w.tip(idCmCommit, w.t(i18n.WorkspaceTipEnterMessage))
 	default:
 		w.tip(idCmCommit, label+"\t⌘⏎")
 	}
-	pl := "Commit and Push…"
+	pl := w.t(i18n.WorkspaceButtonCommitAndPush)
 	if v.amend {
-		pl = "Amend Commit and Push…"
+		pl = w.t(i18n.WorkspaceButtonAmendCommitAndPush)
 	}
 	pw := w.buttonWidth(pl)
 	if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
@@ -959,9 +979,9 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 func (w *Window) commitOptionsMenu() []item {
 	v := &w.cm
 	return []item{
-		header("Commit Checks"),
-		{title: "Run Git hooks", checked: !v.noVerify, run: func() { v.noVerify = !v.noVerify }},
-		{title: "Sign-off commit", checked: v.signOff, run: func() { v.signOff = !v.signOff }},
+		header(w.t(i18n.WorkspaceMenuCommitChecks)),
+		{title: w.t(i18n.WorkspaceCheckRunHooks), checked: !v.noVerify, run: func() { v.noVerify = !v.noVerify }},
+		{title: w.t(i18n.WorkspaceCheckSignOff), checked: v.signOff, run: func() { v.signOff = !v.signOff }},
 	}
 }
 
@@ -1009,6 +1029,7 @@ func (w *Window) doCommit(push bool) {
 // focusCommit shows the Commit tool window and focuses the message.
 func (w *Window) focusCommit() {
 	w.commitOpen = true
+	w.projectOpen = false
 	w.commitTab = 0
 	w.focusNext = idCmMessage
 }
