@@ -75,13 +75,28 @@ jobs:
           LD="-X viff/internal/version.Version=$VERSION -X viff/internal/version.Commit=$COMMIT -X viff/internal/version.BuildDate=$BUILD_DATE"
           if [ "$RUNNER_OS" = Windows ]; then
             go build -trimpath -ldflags="-s -w -H=windowsgui $LD" -o build/viff.exe ./cmd/viff
+            python scripts/package.py "$GITHUB_REF_NAME" --smoke
           elif [ "$RUNNER_OS" = macOS ]; then
-            CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" MACOSX_DEPLOYMENT_TARGET=13.0 go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
+            export CGO_CFLAGS="-mmacosx-version-min=13.0"
+            export CGO_LDFLAGS="-mmacosx-version-min=13.0"
+            export MACOSX_DEPLOYMENT_TARGET=13.0
+            go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
+            ./build/viff --version
+            python scripts/package.py "$GITHUB_REF_NAME" --smoke
+            # Intel Macs still run the supported macOS 13 floor. GitHub no
+            # longer provides an Intel macOS runner, so cross-compile the
+            # x86_64 slice on the Apple Silicon runner; package.py checks the
+            # Mach-O architecture before it builds the DMG.
+            GOARCH=amd64 CC="clang -arch x86_64" CGO_ENABLED=1 \
+              CGO_CFLAGS="-arch x86_64 -mmacosx-version-min=13.0" \
+              CGO_LDFLAGS="-arch x86_64 -mmacosx-version-min=13.0" \
+              go build -trimpath -ldflags="-s -w $LD" -o build/viff-amd64 ./cmd/viff
+            python scripts/package.py "$GITHUB_REF_NAME" --smoke --arch amd64 --binary build/viff-amd64
           else
             go build -trimpath -ldflags="-s -w $LD" -o build/viff ./cmd/viff
+            ./build/viff --version
+            python scripts/package.py "$GITHUB_REF_NAME" --smoke
           fi
-          if [ "$RUNNER_OS" != "Windows" ]; then ./build/viff --version; fi
-          python scripts/package.py "$GITHUB_REF_NAME" --smoke
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-${{ matrix.os }}

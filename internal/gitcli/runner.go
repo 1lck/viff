@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"viff/internal/process"
 )
 
 // stderrLimit bounds the stderr kept for an error message.
@@ -336,6 +338,9 @@ func (r *Runner) command(ctx context.Context, dir string, args []string) (*exec.
 	full = append(full, cfg.args()...)
 	full = append(full, args...)
 	cmd := exec.CommandContext(ctx, git, full...)
+	// A GUI build has no console; without this every Git command would open
+	// and flash its own console window on Windows.
+	process.HideConsoleWindow(cmd)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0", // a GUI has no terminal to prompt on

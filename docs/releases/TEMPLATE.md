@@ -4,7 +4,7 @@
 每条只写一个用户可感知的变化、一句话、一行 Markdown，不嵌套列表。
 按“新功能 → 改进 → 修复”排序，删除空分类，中英文保持一致。
 不要列内部类名、测试数量或原始日志；在底部集中感谢已核实身份的贡献者。
-本模板仅列 Viff 当前实际提供的四种安装包；不要加入其他项目的 Intel、Homebrew 或功能承诺。
+本模板仅列 Viff 当前实际提供的五种安装包；不要加入 Homebrew 或功能承诺。
 先提交说明，再创建标签；运行 python3 scripts/release_notes.py docs/releases/{{tag}}.md --tag {{tag}}。
 -->
 
@@ -16,6 +16,7 @@
 
 - [项目主页](https://github.com/1lck/viff)
 - [macOS Apple Silicon · DMG](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-darwin-arm64.dmg)
+- [macOS Intel · DMG](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-darwin-amd64.dmg)
 - [Windows x64 · 安装 EXE](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-windows-amd64-setup.exe)
 - [Linux x64 · DEB](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-linux-amd64.deb)
 - [Linux x64 · 便携包](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-linux-amd64.tar.gz)
@@ -40,7 +41,7 @@
 
 ### 升级说明
 
-- macOS：退出旧版后打开 DMG，将 Viff.app 拖入“应用程序”并替换旧版。
+- macOS：按机型选择 Apple Silicon 或 Intel 的 DMG，退出旧版后打开 DMG，将 Viff.app 拖入“应用程序”并替换旧版。
 - Windows：退出旧版后运行 x64 安装器。
 - Debian/Ubuntu：执行 `sudo apt install ./viff-{{tag}}-linux-amd64.deb`。
 - Linux 便携包：解压后进入新目录执行 `./viff`，并自行安装所需系统库。
@@ -65,6 +66,7 @@
 
 - [Project homepage](https://github.com/1lck/viff)
 - [macOS Apple Silicon · DMG](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-darwin-arm64.dmg)
+- [macOS Intel · DMG](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-darwin-amd64.dmg)
 - [Windows x64 · Setup EXE](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-windows-amd64-setup.exe)
 - [Linux x64 · DEB](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-linux-amd64.deb)
 - [Linux x64 · Portable archive](https://github.com/1lck/viff/releases/download/{{tag}}/viff-{{tag}}-linux-amd64.tar.gz)
@@ -89,7 +91,7 @@
 
 ### Upgrade instructions
 
-- macOS: quit the old version, open the DMG, and replace Viff.app in Applications.
+- macOS: choose the Apple Silicon or Intel DMG, quit the old version, open the DMG, and replace Viff.app in Applications.
 - Windows: quit the old version and run the x64 installer.
 - Debian/Ubuntu: run `sudo apt install ./viff-{{tag}}-linux-amd64.deb`.
 - Linux portable: extract the archive, enter its directory, and run `./viff` after installing the required system libraries.

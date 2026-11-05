@@ -1,7 +1,9 @@
 """Build native distribution packages from build/viff; never launch the app.
 
-Run on each target OS: python scripts/package.py v0.1.0-alpha.2 [--smoke]
+Run on each target OS: python scripts/package.py v0.1.0 [--smoke]
 --smoke additionally exercises install/uninstall on disposable CI runners only.
+--arch and --binary package a cross-compiled build, such as the macOS Intel DMG
+built on the Apple Silicon runner.
 """
 import argparse
 import os
@@ -44,7 +46,12 @@ def require_notices(directory):
         raise RuntimeError("Missing dependency licenses")
 
 
-def package_mac(binary, name, version, work, dest):
+def package_mac(binary, name, version, arch, work, dest):
+    # lipo reports Mach-O slice names, which differ from Go's GOARCH for Intel.
+    expected = {"amd64": "x86_64"}.get(arch, arch)
+    built = subprocess.check_output(["lipo", "-archs", str(binary)], text=True).split()
+    if built != [expected]:
+        raise RuntimeError(f"Binary architecture {built} does not match {expected}")
     stage = work / "volume"
     contents = stage / "Viff.app/Contents"
     (contents / "MacOS").mkdir(parents=True)
@@ -261,14 +268,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("version")
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--arch", help="target GOARCH; defaults to the host GOARCH")
+    parser.add_argument("--binary", type=Path,
+                        help="built binary; defaults to build/viff (or build/viff.exe)")
     args = parser.parse_args()
     if not re.fullmatch(r"v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?", args.version):
         parser.error("version must be a semantic version, optionally prefixed with v")
     if args.smoke and os.environ.get("GITHUB_ACTIONS") != "true":
         parser.error("--smoke requires a disposable GitHub Actions runner")
     goos = subprocess.check_output(["go", "env", "GOOS"], text=True).strip()
-    arch = subprocess.check_output(["go", "env", "GOARCH"], text=True).strip()
-    binary = ROOT / "build" / ("viff.exe" if goos == "windows" else "viff")
+    arch = args.arch or subprocess.check_output(["go", "env", "GOARCH"], text=True).strip()
+    if not re.fullmatch(r"[a-z0-9]+", arch):
+        parser.error(f"invalid architecture: {arch}")
+    binary = args.binary or ROOT / "build" / ("viff.exe" if goos == "windows" else "viff")
+    if not binary.is_absolute():
+        binary = ROOT / binary
     if not binary.is_file():
         raise SystemExit(f"Missing built binary: {binary}")
     dest = ROOT / "dist"
@@ -277,7 +291,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="viff-package-") as temporary:
         work = Path(temporary)
         if goos == "darwin":
-            outputs = package_mac(binary, name, args.version, work, dest)
+            outputs = package_mac(binary, name, args.version, arch, work, dest)
         elif goos == "windows":
             outputs = package_windows(binary, name, args.version, work, dest, args.smoke)
         elif goos == "linux":

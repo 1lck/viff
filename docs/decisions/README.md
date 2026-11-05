@@ -25,3 +25,4 @@
 | [0019](0019-git-issue-gaps.md) | Git issue 对照后的功能补齐 |
 | [0020](0020-repositories-changelists.md) | 多仓库工作区与 ChangeList |
 | [0021](0021-observability.md) | 可观测性、崩溃记录与诊断导出 |
+| [0022](0022-child-process-console.md) | 子进程不弹控制台窗口 |
