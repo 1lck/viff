@@ -588,6 +588,10 @@ func (w *Window) openAbout() {
 func (w *Window) openSettings() {
 	s := w.ws.Settings
 	theme := s.Theme
+	editorFont := s.EditorFont
+	// app.FontFamilies reads the system on every call and takes a moment, so it
+	// is collected once when the dialog opens rather than while painting.
+	fonts := app.FontFamilies()
 	font := text.NewEditor(strconv.Itoa(int(s.FontSize)))
 	gitPath := text.NewEditor(s.GitPath)
 	editor := text.NewEditor(s.ExternalEditor)
@@ -656,6 +660,23 @@ func (w *Window) openSettings() {
 			f.custom(22, func(r ui.Rect) {
 				w.p.text("Writes detailed events for troubleshooting. Logs stay on this computer.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
+			f.gap(6)
+			f.bold("Fonts")
+			current := "Default (system interface font)"
+			if editorFont != "" {
+				current = editorFont
+			}
+			f.combo("Interface font:", current, func() []item {
+				items := []item{{title: "Default (system interface font)", checked: editorFont == "", run: func() { editorFont = "" }}}
+				for _, name := range fonts {
+					name := name
+					items = append(items, item{title: name, checked: editorFont == name, run: func() { editorFont = name }})
+				}
+				return items
+			})
+			f.custom(22, func(r ui.Rect) {
+				w.p.text("Replaces the font of the whole interface. Diffs and the console keep a fixed-pitch face.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+			})
 		},
 		okDisabled: func() bool {
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
@@ -686,7 +707,10 @@ func (w *Window) openSettings() {
 				s.LogLevel = "debug"
 			}
 			w.ws.SetLogLevel(s.LogLevel)
+			s.EditorFont = editorFont
 			w.applyTheme()
+			w.applyFont()
+			w.Invalidate()
 			w.flushSettings()
 			w.startAutoFetch()
 			return true

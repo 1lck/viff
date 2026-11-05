@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/vivaui/viva/app"
@@ -121,14 +122,7 @@ const (
 func New(ws *vapp.Workspace) *Window {
 	w := &Window{ws: ws, commitOpen: true, gitOpen: true}
 	ws.ConfirmCheckout = w.confirmStashCheckout
-	// Only macOS currently registers the bundled face. Asking DirectWrite
-	// for an uninstalled family can select a proportional fallback, breaking
-	// the fixed-cell layout of diffs and the console. Use the platform's
-	// actual monospace default elsewhere (Consolas on Windows).
-	w.mono = ui.MonoSystem
-	if runtime.GOOS == "darwin" {
-		w.mono = ui.MonoFamily(platform.EditorFontFamily)
-	}
+	w.applyFont()
 	w.applyTheme()
 	w.cm.init()
 	w.lg.init()
@@ -154,6 +148,41 @@ func (w *Window) applyTheme() {
 		w.pal = LightPalette()
 	}
 	w.theme = w.pal.viewTheme()
+}
+
+// applyFont gives the chosen family to every window's interface text through
+// Viva's process-wide interface font and, when the system also lists that
+// family as fixed-pitch, to the diffs and the console. An empty EditorFont
+// hands both back to their defaults.
+//
+// SetInterfaceFontFamily only shapes text drawn after the call, so a caller
+// that changed the setting requests a repaint afterwards.
+func (w *Window) applyFont() {
+	name := strings.TrimSpace(w.ws.Settings.EditorFont)
+	app.SetInterfaceFontFamily(name)
+
+	// Only macOS currently registers the bundled face. Asking DirectWrite for
+	// an uninstalled family can select a proportional fallback, breaking the
+	// fixed-cell layout of diffs and the console. Use the platform's actual
+	// monospace default elsewhere (Consolas on Windows).
+	w.mono = ui.MonoSystem
+	if runtime.GOOS == "darwin" {
+		w.mono = ui.MonoFamily(platform.EditorFontFamily)
+	}
+	if name != "" && fixedPitch(name) {
+		w.mono = ui.MonoFamily(name)
+	}
+}
+
+// fixedPitch reports whether the system lists name among its fixed-pitch
+// families, which is what the cell grid of diffs and the console needs.
+func fixedPitch(name string) bool {
+	for _, f := range app.MonospaceFamilies() {
+		if f == name {
+			return true
+		}
+	}
+	return false
 }
 
 // Config is the Viva window configuration.
@@ -295,7 +324,19 @@ func (w *Window) Paint(c *ui.Canvas, size ui.Size) {
 	}
 	if len(w.popups) > 0 {
 		w.modalTop = len(w.scrolls)
+		// A dialog traps the focus scope, and the input router only lets a
+		// region of that scope take a press. A menu opened from the dialog's
+		// form is painted after the trap is popped, so its rows would carry no
+		// scope and every click would fall through to the dialog behind them.
+		// Paint the menu inside the trapped scope so its rows stay reachable.
+		scope := w.c.TrappedFocusScope()
+		if !scope.IsZero() {
+			w.c.PushFocusScope(scope)
+		}
 		w.paintPopups(full)
+		if !scope.IsZero() {
+			w.c.PopFocusScope()
+		}
 	}
 	w.paintTooltip(full)
 	if w.focusNext != (ui.ID{}) {
