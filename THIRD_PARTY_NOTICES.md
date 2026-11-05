@@ -7,7 +7,7 @@ Viff 原创代码采用 MIT。下列组件保留各自的许可证，不由根�
 
 | Component / 组件            | License / 许可                                    | Source / 来源                                                         |
 | --------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
-| Viva v0.2.3                 | [Apache-2.0](licenses/Viva-Apache-2.0.txt)        | [vivaui/viva](https://github.com/vivaui/viva)                         |
+| Viva v0.2.4                 | [Apache-2.0](licenses/Viva-Apache-2.0.txt)        | [vivaui/viva](https://github.com/vivaui/viva)                         |
 | purego v0.11.1              | [Apache-2.0](licenses/purego-Apache-2.0.txt)      | [ebitengine/purego](https://github.com/ebitengine/purego)             |
 | go-toml v2.4.3              | [MIT](licenses/go-toml-MIT.txt)                   | [pelletier/go-toml](https://github.com/pelletier/go-toml)             |
 | JetBrains Mono              | [SIL OFL 1.1](licenses/JetBrainsMono-OFL-1.1.txt) | [JetBrains/JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) |
