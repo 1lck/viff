@@ -120,6 +120,13 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		if len(w.rollbackTargets()) > 0 {
 			w.openRollback()
 		}
+	case ch == "z" && !shift:
+		// A focused text field keeps Command-Z for its own undo; only the
+		// window outside text editing reverses a repository operation.
+		if _, editing := w.editors[w.c.Focused()]; editing {
+			return false
+		}
+		w.ws.Undo()
 	case ch == "n" && alt:
 		if rs.HasHead() {
 			w.openNewBranch("", rs.HeadLabel())

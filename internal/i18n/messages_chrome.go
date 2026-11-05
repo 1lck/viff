@@ -137,6 +137,8 @@ const (
 	ChromeMenuRevert            = Key("chrome.menu.revert")
 	ChromeMenuInteractiveRebase = Key("chrome.menu.interactiveRebase")
 	ChromeMenuUndoCommit        = Key("chrome.menu.undoCommit")
+	ChromeMenuUndo              = Key("chrome.menu.undo")
+	ChromeMenuUndoOperation     = Key("chrome.menu.undoOperation")
 	ChromeMenuEditCommitMessage = Key("chrome.menu.editCommitMessage")
 	ChromeMenuSquashIntoParent  = Key("chrome.menu.squashIntoParent")
 	ChromeMenuDropCommit        = Key("chrome.menu.dropCommit")
@@ -299,6 +301,8 @@ func init() {
 		ChromeMenuRevert:            "Revert Commit",
 		ChromeMenuInteractiveRebase: "Interactively Rebase from Here…",
 		ChromeMenuUndoCommit:        "Undo Commit…",
+		ChromeMenuUndo:              "Undo",
+		ChromeMenuUndoOperation:     "Undo %s",
 		ChromeMenuEditCommitMessage: "Edit Commit Message…",
 		ChromeMenuSquashIntoParent:  "Squash into Parent…",
 		ChromeMenuDropCommit:        "Drop Commit…",
@@ -458,6 +462,8 @@ func init() {
 		ChromeMenuRevert:            "还原提交",
 		ChromeMenuInteractiveRebase: "从此处交互式变基…",
 		ChromeMenuUndoCommit:        "撤销提交…",
+		ChromeMenuUndo:              "撤销",
+		ChromeMenuUndoOperation:     "撤销%s",
 		ChromeMenuEditCommitMessage: "编辑提交信息…",
 		ChromeMenuSquashIntoParent:  "压缩进父提交…",
 		ChromeMenuDropCommit:        "删除提交…",
