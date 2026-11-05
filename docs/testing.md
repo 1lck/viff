@@ -66,12 +66,12 @@ current logs and screenshots as artifacts for 14 days.
 
 CI runs the Git and Viva headless UI suites on macOS, Windows Server 2022, and
 Ubuntu. It also checks native packages: macOS DMG application bundles, Windows
-NSIS installers, and Linux DEB and portable archives. These checks do not launch
+NSIS installers and portable ZIPs, and Linux DEB and portable archives. These checks do not launch
 application windows. Review the workflow results for the exact commit before
 claiming a release has passed.
 
 CI 在 macOS、Windows Server 2022 和 Ubuntu 运行 Git 与 Viva 无头 UI 测试，
-并检查 macOS DMG 应用包、Windows NSIS 安装器、Linux DEB 和便携包。
+并检查 macOS DMG 应用包、Windows NSIS 安装器与便携 ZIP、Linux DEB 和便携包。
 这些检查不打开应用窗口。声明某个版本通过验收前，须检查对应提交的工作流结果。
 
 Ubuntu headless results verify application behavior in the CI renderer. They do
@@ -84,8 +84,13 @@ Ubuntu 无头结果验证的是 CI 渲染环境下的应用行为，不代表覆
 
 ## What remains unverified / 尚未验证
 
+The updater has hermetic unit tests (release selection, download, checksum, helper scripts) and headless dialog tests, but the actual file replacement and relaunch on each desktop platform is not exercised in CI.
+
+更新器有隔离的单测（选版、下载、校验、helper 脚本）和无头对话框测试，但各桌面平台的
+真实文件替换与重启不在 CI 中执行。
+
 - Windows 10/11 desktop input, IME, and native window interaction / Windows 10/11 桌面输入、输入法及原生窗口交互。
-- Signed installers, notarization, and auto-update / 签名安装器、公证和自动更新。
+- Signed installers and notarization; real in-app update replacement and restart / 签名安装器与公证；应用内更新的真实替换与重启。
 - Public SSH/HTTPS credential prompts and external editor integrations / 公网 SSH/HTTPS 凭据弹窗及外部编辑器集成。
 - Linux desktop behavior / Linux 桌面行为。
 - Comparative memory or startup benchmarks / 内存和启动速度对比基准。

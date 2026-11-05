@@ -12,12 +12,17 @@ type dialog struct {
 	// textarea, when set, is a multi-line field where Enter types a newline.
 	textarea ui.ID
 	// shortcut, when set, gets Cmd/Ctrl chords while the dialog is open.
-	shortcut   func(e ui.KeyEvent) bool
-	title      string
-	width      float32
-	contentH   float32
-	body       func(f *form)
-	ok         string
+	shortcut func(e ui.KeyEvent) bool
+	title    string
+	width    float32
+	contentH float32
+	body     func(f *form)
+	ok       string
+	// okLabel, when set, replaces ok at paint time. Dialogs whose action
+	// depends on live state (the update dialog) change the label without
+	// being reopened. The value must never be empty; openDialog falls back to
+	// ok when it is.
+	okLabel    func() string
 	okDisabled func() bool
 	onOK       func() bool // false keeps the dialog open
 	cancel     string
@@ -134,9 +139,15 @@ func (w *Window) paintDialog(full ui.Rect) {
 
 	by := bottom(r) - dlgPad - buttonH
 	bx := right(r) - dlgPad
-	okW := w.buttonWidth(d.ok)
+	okLabel := d.ok
+	if d.okLabel != nil {
+		if label := d.okLabel(); label != "" {
+			okLabel = label
+		}
+	}
+	okW := w.buttonWidth(okLabel)
 	okDisabled := d.okDisabled != nil && d.okDisabled()
-	if w.button(idDialogOK, rect(bx-okW, by, okW, buttonH), d.ok, btnDefault, okDisabled) {
+	if w.button(idDialogOK, rect(bx-okW, by, okW, buttonH), okLabel, btnDefault, okDisabled) {
 		w.after(w.submitDialog)
 	}
 	bx -= okW + 12

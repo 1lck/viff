@@ -20,6 +20,7 @@ import (
 	"viff/internal/platform"
 	"viff/internal/storage"
 	viffui "viff/internal/ui"
+	"viff/internal/updater"
 	"viff/internal/version"
 )
 
@@ -160,6 +161,12 @@ func run() (code int) {
 	})
 	ws.SetRecorder(rec, incidents)
 	ws.SetLogLevel(settings.LogLevel)
+	// The updater owns downloads and self-replacement; the app only sees the
+	// narrow UpdateService interface. Cleanup removes leftovers from an
+	// interrupted install before the window opens.
+	updates := updater.NewClient(version.Version)
+	ws.SetUpdateService(updates)
+	updates.Cleanup()
 	ws.Watch = func(repo domain.Repo, changed func(meta bool)) (vapp.Watcher, error) {
 		return platform.Watch(repo, changed)
 	}

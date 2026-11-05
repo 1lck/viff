@@ -66,7 +66,7 @@ class PublishReleaseTests(unittest.TestCase):
                 Path('dist').mkdir()
                 for name in [f'viff-{TAG}-{suffix}' for suffix in (
                     'darwin-arm64.dmg', 'darwin-amd64.dmg', 'windows-amd64-setup.exe',
-                    'linux-amd64.deb', 'linux-amd64.tar.gz',
+                    'windows-amd64.zip', 'linux-amd64.deb', 'linux-amd64.tar.gz',
                 )] + ['SHA256SUMS']:
                     (Path('dist') / name).write_bytes(b'test asset')
                 with patch.dict(os.environ, GH_REPO='example/viff', GITHUB_REF_NAME=TAG), \
@@ -78,7 +78,7 @@ class PublishReleaseTests(unittest.TestCase):
         self.assertFalse(state['draft'])
         self.assertEqual(state['body'], 'Curated bilingual notes')
         self.assertEqual(state['name'], f'Viff {TAG}')
-        self.assertEqual(len(state['assets']), 6)
+        self.assertEqual(len(state['assets']), 7)
         self.assertEqual(sum(c[1:3] == ['release', 'create'] for c in calls), 0 if existing_draft else 1)
 
     def test_missing_notes_block_all_github_calls(self):

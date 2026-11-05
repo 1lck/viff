@@ -1,6 +1,7 @@
 package viffui
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -194,6 +195,12 @@ func (w *Window) Config() app.Config {
 
 func (w *Window) onWake() {
 	w.ws.Drain()
+	if w.ws.ConsumeUpdatePrompt() {
+		w.openUpdateDialog()
+	}
+	if w.ws.Update.ShouldQuit {
+		w.quitForUpdate()
+	}
 	w.runDeferred()
 	w.runDue()
 }
@@ -205,6 +212,9 @@ func (w *Window) Start(dir string) {
 		w.openRepo(dir)
 	}
 	w.startAutoFetch()
+	if w.ws.Settings.AutoUpdateCheck {
+		w.ws.CheckForUpdates(false)
+	}
 	if w.ws.Settings.Warning != "" {
 		w.ws.Notify(vapp.NoticeWarning, "Settings", w.ws.Settings.Warning)
 	}
@@ -232,6 +242,18 @@ func (w *Window) onClosed() {
 	w.flushSettings()
 	w.stopAutoFetch()
 	w.ws.Close()
+}
+
+// quitForUpdate exits the process after the detached update helper was
+// scheduled. Viva v0.2.3's RunCanvas has no programmatic window close, so this
+// repeats the onClosed teardown and lets the operating system reclaim the
+// window; the helper waits for this exit before replacing files.
+func (w *Window) quitForUpdate() {
+	w.lg.multi.stop()
+	w.flushSettings()
+	w.stopAutoFetch()
+	w.ws.Close()
+	os.Exit(0)
 }
 
 func (w *Window) onResize(size ui.Size) {

@@ -76,6 +76,9 @@ const (
 	EventPanic             = "panic"
 	EventFault             = "fault"
 	EventDiagnosticsExport = "diagnostics.export"
+	EventUpdateCheck       = "update.check"
+	EventUpdateDownload    = "update.download"
+	EventUpdateInstall     = "update.install"
 )
 
 // Event is one fact the application records. Callers fill the structured

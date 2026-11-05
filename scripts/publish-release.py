@@ -17,6 +17,7 @@ expected = {
     f'viff-{tag}-darwin-arm64.dmg',
     f'viff-{tag}-darwin-amd64.dmg',
     f'viff-{tag}-windows-amd64-setup.exe',
+    f'viff-{tag}-windows-amd64.zip',
     f'viff-{tag}-linux-amd64.deb',
     f'viff-{tag}-linux-amd64.tar.gz',
     'SHA256SUMS',

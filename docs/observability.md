@@ -116,6 +116,9 @@ flowchart LR
 | `perf.slow` | warn | 任务/刷新超过阈值 | `op`、`dur_ms`、`threshold_ms` |
 | `perf.mem` | debug | 每 60s 采样 | `alloc_mb`、`heap_mb`、`goroutines` |
 | `diagnostics.export` | info | 生成诊断包 | `incident`、`files`、`bytes`、`profile`、`truncated` |
+| `update.check` | info/warn | 启动时自动检查或手动检查更新 | `from`/`to`、`manual`、`result`（up-to-date/available/error）、`dur_ms` |
+| `update.download` | info/warn | 下载更新安装包 | `to`、`bytes`、`result`（downloaded/cancelled/error）、`dur_ms` |
+| `update.install` | info/warn | 应用更新（写 helper 并退出替换） | `to`、`result`（scheduled/manual/error）、`dur_ms` |
 | `panic` / `fault` | error | Go panic / Viva 回调边界 panic | `where`、`msg`、crash 文件路径 |
 
 ### 3.3 噪声控制

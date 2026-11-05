@@ -32,6 +32,11 @@ type Settings struct {
 	FetchPrune    bool   `json:"fetchPrune"`
 	PullMode      string `json:"pullMode"` // "merge", "rebase", "ff-only"
 
+	// AutoUpdateCheck asks GitHub Releases for a newer version at startup. It
+	// defaults to true: Decode keeps the default for an old settings file that
+	// has no field, while an explicit false is stored and respected.
+	AutoUpdateCheck bool `json:"autoUpdateCheck"`
+
 	// LogLevel is the file log level: "debug" keeps verbose diagnostics,
 	// empty or "info" keeps the default. It has no effect on behavior, so an
 	// old settings file without the field keeps working unchanged.
@@ -88,6 +93,7 @@ func Defaults() *Settings {
 	return &Settings{
 		Version: SchemaVersion, Theme: "dark", UIScale: 1, FontSize: 13,
 		AutoFetch: false, AutoFetchMins: 10, FetchPrune: true, PullMode: "merge",
+		AutoUpdateCheck:  true,
 		Window:           Window{Width: 1440, Height: 900},
 		CommitPanelWidth: 340, GitPanelHeight: 330, BranchesWidth: 220, DetailsWidth: 360,
 		DiffSyncScroll: true, DiffHighlightWords: true, CommitTree: false,

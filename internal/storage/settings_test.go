@@ -80,3 +80,23 @@ func TestSignFormatSanitized(t *testing.T) {
 		t.Fatalf("unknown signFormat = %q, want empty", got)
 	}
 }
+
+// An old settings file has no update field; the default must keep automatic
+// checks on, while an explicit false must survive a round trip.
+func TestAutoUpdateCheckDefaultsOnAndPersistsOff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"theme":"dark"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Load(path)
+	if !s.AutoUpdateCheck {
+		t.Fatal("old settings did not default autoUpdateCheck to true")
+	}
+	s.AutoUpdateCheck = false
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if back := Load(path); back.AutoUpdateCheck {
+		t.Fatal("explicit autoUpdateCheck=false was not persisted")
+	}
+}
