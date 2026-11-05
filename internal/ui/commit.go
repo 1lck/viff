@@ -48,6 +48,10 @@ type changeRow struct {
 	entry domain.StatusEntry
 	count int
 	depth int
+	// files are the selection keys a group or directory row covers. They are
+	// kept even while the row is collapsed, so its checkbox can still toggle
+	// files that have no row of their own.
+	files []string
 }
 
 const (
@@ -117,7 +121,7 @@ func (w *Window) buildRows() {
 			continue
 		}
 		gk := rowKey(a, "")
-		v.rows = append(v.rows, changeRow{key: gk, area: a, kind: rowGroup, count: len(entries)})
+		v.rows = append(v.rows, changeRow{key: gk, area: a, kind: rowGroup, count: len(entries), files: entryKeys(a, entries)})
 		if v.collapsed[gk] {
 			continue
 		}
@@ -138,7 +142,7 @@ func (w *Window) buildRows() {
 			depth := 1
 			if d != "" {
 				dk := rowKey(a, d+"/")
-				v.rows = append(v.rows, changeRow{key: dk, area: a, kind: rowDir, dir: d, count: len(files), depth: 1})
+				v.rows = append(v.rows, changeRow{key: dk, area: a, kind: rowDir, dir: d, count: len(files), depth: 1, files: entryKeys(a, files)})
 				if v.collapsed[dk] {
 					continue
 				}
@@ -407,7 +411,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 		// toggles the check instead of selecting the row.
 		checked := v.sel[row.key]
 		if row.kind != rowFile {
-			checked = w.changesGroupChecked(i)
+			checked = w.changesRowChecked(i)
 		}
 		if w.checkbox(scChangeChecks.At(i), cbX, rr.Y, rowH, "", checked, false) {
 			i := i
@@ -442,8 +446,20 @@ func (w *Window) rowLabel(row changeRow) string {
 	return row.entry.Path
 }
 
-// toggleRowCheck flips one row's checkbox: a file toggles itself, a group or a
-// directory takes every file below it, up to the next group.
+// entryKeys names the selection keys of the files a group or directory row
+// covers.
+func entryKeys(a domain.Area, entries []domain.StatusEntry) []string {
+	keys := make([]string, 0, len(entries))
+	for _, e := range entries {
+		keys = append(keys, rowKey(a, e.Path))
+	}
+	return keys
+}
+
+// toggleRowCheck flips one row's checkbox: a file toggles itself, a group takes
+// every file in its area, and a directory takes only its own files. The set
+// comes from the row, not from the rows below it, so a collapsed row toggles
+// files that are not painted.
 func (w *Window) toggleRowCheck(i int) {
 	v := &w.cm
 	if i < 0 || i >= len(v.rows) {
@@ -458,40 +474,43 @@ func (w *Window) toggleRowCheck(i int) {
 		}
 		return
 	}
-	on := !w.changesGroupChecked(i)
-	for k := i + 1; k < len(v.rows); k++ {
-		if v.rows[k].kind == rowGroup {
-			break
-		}
-		if v.rows[k].kind != rowFile {
-			continue
-		}
+	on := !w.changesRowChecked(i)
+	// A row key covers its files through selectedEntries; once the box drives
+	// the choice, the file keys are the precise statement and the row key goes.
+	delete(v.sel, row.key)
+	for _, key := range row.files {
 		if on {
-			v.sel[v.rows[k].key] = true
+			v.sel[key] = true
 		} else {
-			delete(v.sel, v.rows[k].key)
+			delete(v.sel, key)
 		}
 	}
 }
 
-// changesGroupChecked reports whether every file under row i is selected, which
-// is what fills the group's checkbox.
-func (w *Window) changesGroupChecked(i int) bool {
-	v := &w.cm
-	found := false
-	for k := i + 1; k < len(v.rows); k++ {
-		if v.rows[k].kind == rowGroup {
-			break
-		}
-		if v.rows[k].kind != rowFile {
-			continue
-		}
-		found = true
-		if !v.sel[v.rows[k].key] {
+// changesRowChecked reports whether every file a row covers is selected, which
+// is what fills a group's or directory's checkbox.
+func (w *Window) changesRowChecked(i int) bool {
+	if i < 0 || i >= len(w.cm.rows) {
+		return false
+	}
+	row := w.cm.rows[i]
+	if row.kind == rowFile {
+		return w.cm.sel[row.key]
+	}
+	// A selected group or directory row already covers its files, the way a
+	// row click selects them; the box must show that state too.
+	if w.cm.sel[row.key] {
+		return true
+	}
+	if len(row.files) == 0 {
+		return false
+	}
+	for _, key := range row.files {
+		if !w.cm.sel[key] {
 			return false
 		}
 	}
-	return found
+	return true
 }
 
 // rowAction paints the hover +/- action at the right of a row.
