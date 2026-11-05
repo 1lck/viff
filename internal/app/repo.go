@@ -159,6 +159,9 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 		w.Repo.Log.close()
 	}
 	w.closeWatcher(oldRoot)
+	// The undo history describes one checkout's HEAD and branches; a switch
+	// makes every record describe a state that is no longer current.
+	w.clearUndo()
 	w.nextGen++
 	w.Repo = &RepoState{Repo: repo, Gen: w.nextGen, rootKey: root}
 	if w.Settings != nil {
@@ -240,6 +243,7 @@ func (w *Workspace) Close() {
 		w.Repo.Log.close()
 	}
 	w.closeWatcher(root)
+	w.clearUndo()
 	w.Repo = nil
 }
 

@@ -626,3 +626,24 @@ func TestReadBinaryAndMissing(t *testing.T) {
 		t.Fatalf("missing worktree = %+v %v", c, err)
 	}
 }
+
+func TestHeadState(t *testing.T) {
+	tr := newTestRepo(t)
+	// An unborn branch has no commit yet but still names the branch.
+	hs, err := tr.r.Head(ctx, tr.repo)
+	if err != nil || hs.Head != "" || hs.Branch != "main" {
+		t.Fatalf("unborn head = %+v %v", hs, err)
+	}
+	tr.write("a", "1\n")
+	tr.commitAll("one")
+	head := tr.git("rev-parse", "HEAD")
+	hs, err = tr.r.Head(ctx, tr.repo)
+	if err != nil || hs.Head != strings.TrimSpace(head) || hs.Branch != "main" {
+		t.Fatalf("head = %+v %v", hs, err)
+	}
+	tr.git("checkout", "-q", "--detach", "HEAD")
+	hs, err = tr.r.Head(ctx, tr.repo)
+	if err != nil || hs.Head != strings.TrimSpace(head) || hs.Branch != "" {
+		t.Fatalf("detached head = %+v %v", hs, err)
+	}
+}
