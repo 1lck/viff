@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"viff/internal/ai"
 	"viff/internal/domain"
@@ -15,25 +16,49 @@ const (
 	maxDiffChars  = 4000
 	maxDiffFiles  = 8
 	recentCommits = 5
+	// aiTimeout bounds one model request together with the Git call that
+	// assembles its prompt, so a stalled endpoint cannot keep the task alive
+	// forever.
+	aiTimeout = time.Minute
 )
+
+// commitSnapshot is the Git context of one prompt, copied on the UI thread.
+// The request runs in the background, where reading the live RepoState would
+// race a refresh that replaces it.
+type commitSnapshot struct {
+	repo   domain.Repo
+	staged bool
+	branch string
+	files  []domain.StatusEntry
+	paths  []string
+	recent []string
+}
 
 // GenerateCommitMessage collects the Git context, asks the configured endpoint
 // for a message and reports it on the workspace goroutine. previous carries the
 // last message so a second run asks for a different wording.
 func (w *Workspace) GenerateCommitMessage(ctx context.Context, cfg ai.Config, previous string, done func(string, error)) {
+	snap, rs, err := w.snapshotCommit()
+	if err != nil {
+		w.post(func() { done("", err) })
+		return
+	}
 	go func() {
-		user, err := w.commitContext(ctx)
-		if err == nil && strings.TrimSpace(previous) != "" {
-			user = "IMPORTANT: Generate a COMPLETELY DIFFERENT commit message from the previous one.\n" +
-				"The previous message was: " + strconv.Quote(previous) + "\n" +
-				"Use a different type, scope or description approach.\n\n" + user
-		}
+		ctx, cancel := context.WithTimeout(ctx, aiTimeout)
+		defer cancel()
 		var message string
+		user, err := w.commitPrompt(ctx, snap, previous)
 		if err == nil {
-			client := &ai.Client{}
-			message, err = client.CommitMessage(ctx, cfg, user)
+			message, err = (&ai.Client{}).CommitMessage(ctx, cfg, user)
 		}
-		w.post(func() { done(message, err) })
+		w.post(func() {
+			// A result for a repository that closed or changed in the meantime
+			// would fill the wrong commit box.
+			if w.Repo != rs {
+				return
+			}
+			done(message, err)
+		})
 	}()
 }
 
@@ -41,77 +66,94 @@ func (w *Workspace) GenerateCommitMessage(ctx context.Context, cfg ai.Config, pr
 // reports them on the workspace goroutine.
 func (w *Workspace) ListAIModels(ctx context.Context, cfg ai.Config, done func([]string, error)) {
 	go func() {
+		ctx, cancel := context.WithTimeout(ctx, aiTimeout)
+		defer cancel()
 		names, err := (&ai.Client{}).ListModels(ctx, cfg)
 		w.post(func() { done(names, err) })
 	}()
 }
 
-// commitContext renders the branch, the recent commits, the changed files and
-// their diffs as one user message. Staged changes are preferred; the working
-// tree is used when nothing is staged.
-func (w *Workspace) commitContext(ctx context.Context) (string, error) {
+// snapshotCommit copies the branch, the recent commits and the changed files
+// from the workspace. Staged changes are preferred; the working tree is used
+// when nothing is staged. It returns the RepoState it read so the caller can
+// drop a result for a repository that is no longer open.
+func (w *Workspace) snapshotCommit() (*commitSnapshot, *RepoState, error) {
 	rs := w.Repo
 	if rs == nil {
-		return "", fmt.Errorf("no repository is open")
+		return nil, nil, fmt.Errorf("no repository is open")
 	}
-	repo := rs.Repo
 	staged, _, _, conflicts := rs.Status.Counts()
 	if conflicts > 0 {
-		return "", fmt.Errorf("resolve the conflicting files first")
+		return nil, rs, fmt.Errorf("resolve the conflicting files first")
 	}
 	useStaged := staged > 0
 
-	var files []domain.StatusEntry
+	snap := &commitSnapshot{repo: rs.Repo, staged: useStaged}
 	for _, entry := range rs.Status.Entries {
-		if entry.Ignored() {
+		if entry.Ignored() || isLockFile(entry.Path) {
 			continue
 		}
-		if useStaged && !entry.Staged() {
+		if entry.Staged() != useStaged {
 			continue
 		}
-		if !useStaged && entry.Staged() {
-			continue
-		}
-		if isLockFile(entry.Path) {
-			continue
-		}
-		files = append(files, entry)
+		snap.files = append(snap.files, entry)
+		snap.paths = append(snap.paths, entry.Path)
 	}
-	if len(files) == 0 {
-		return "", fmt.Errorf("there are no %s changes to describe", map[bool]string{true: "staged", false: "working-tree"}[useStaged])
+	if len(snap.files) == 0 {
+		return nil, rs, fmt.Errorf("there are no %s changes to describe", map[bool]string{true: "staged", false: "working-tree"}[useStaged])
 	}
 
-	branch := rs.Status.Branch.Branch
-	if branch == "" {
-		branch = "HEAD (detached)"
+	snap.branch = rs.Status.Branch.Branch
+	if snap.branch == "" {
+		snap.branch = "HEAD (detached)"
 	}
-	var b strings.Builder
-	b.WriteString("Generate a commit message for the following changes:\n\n")
-	fmt.Fprintf(&b, "Branch: %s\n", branch)
-	b.WriteString("Recent commits:\n")
-	recent := 0
 	for _, commit := range rs.Log.Commits {
-		if recent >= recentCommits {
+		if len(snap.recent) >= recentCommits {
 			break
 		}
-		fmt.Fprintf(&b, "%s %s\n", domain.ShortHash(commit.Hash), commit.Subject)
-		recent++
+		snap.recent = append(snap.recent, domain.ShortHash(commit.Hash)+" "+commit.Subject)
 	}
-	if recent == 0 {
-		b.WriteString("(no commits yet)\n")
-	}
-	b.WriteString("Changed files:\n")
-	for _, entry := range files {
-		fmt.Fprintf(&b, "%s %s\n", statusText(entry, useStaged), entry.Path)
-	}
+	return snap, rs, nil
+}
 
-	patch, err := w.Git.CreatePatch(ctx, repo, nil, useStaged)
+// commitPrompt renders the snapshot and its patch as one user message. Only the
+// files in the snapshot are diffed, so a lock file kept out of the list cannot
+// slip into the request through the patch.
+func (w *Workspace) commitPrompt(ctx context.Context, snap *commitSnapshot, previous string) (string, error) {
+	patch, err := w.Git.CreatePatch(ctx, snap.repo, snap.paths, snap.staged)
 	if err != nil {
 		return "", err
 	}
+	return buildCommitPrompt(snap, string(patch), previous), nil
+}
+
+// buildCommitPrompt is the pure half of commitPrompt, so the wording can be
+// tested without a repository or a network.
+func buildCommitPrompt(snap *commitSnapshot, patch, previous string) string {
+	var b strings.Builder
+	b.WriteString("Generate a commit message for the following changes:\n\n")
+	fmt.Fprintf(&b, "Branch: %s\n", snap.branch)
+	b.WriteString("Recent commits:\n")
+	if len(snap.recent) == 0 {
+		b.WriteString("(no commits yet)\n")
+	}
+	for _, line := range snap.recent {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	b.WriteString("Changed files:\n")
+	for _, entry := range snap.files {
+		fmt.Fprintf(&b, "%s %s\n", statusText(entry, snap.staged), entry.Path)
+	}
 	b.WriteString("\nDiffs:\n")
-	b.WriteString(trimmedDiff(string(patch)))
-	return b.String(), nil
+	b.WriteString(trimmedDiff(patch))
+	user := b.String()
+	if strings.TrimSpace(previous) != "" {
+		user = "IMPORTANT: Generate a COMPLETELY DIFFERENT commit message from the previous one.\n" +
+			"The previous message was: " + strconv.Quote(previous) + "\n" +
+			"Use a different type, scope or description approach.\n\n" + user
+	}
+	return user
 }
 
 // statusText names a status entry the way a person reads it.
