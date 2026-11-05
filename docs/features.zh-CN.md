@@ -12,7 +12,10 @@
   - 分组：Merge Conflicts / Staged / Changes / Unversioned Files，可按目录分组。
   - ChangeList：创建、重命名、删除清单，右键分配文件并按清单筛选。筛选仅影响未暂存和未跟踪文件；始终显示全部已暂存文件，提交仍包含全部暂存内容。筛选后的批量暂存只作用于可见文件。
   - 暂存：悬停行上的 +/−，空格键，多选（Shift、⌘）后批量暂存，回滚，加入 .gitignore。
+  - 复选框：每行前的复选框可勾选单个文件、目录或整组，暂存、取消暂存、回滚、查看 diff 等批量操作作用于勾选的文件；点框只切换勾选，不触发行本身的单击行为。
   - 提交：Amend，Sign-off，跳过钩子，⌘↩ 提交，“Commit and Push…”。
+  - 折叠说明：说明输入区左侧的箭头可把输入框、拖拽条与两个提交按钮一起收起，把空间让给变更树；折叠状态在会话内保留。
+  - AI 生成说明：Amend 行右侧的 AI 按钮按 Conventional Commits 生成一条提交说明并填入输入框，不自动提交；端点、密钥与模型在设置的 AI 页配置，默认关闭，见 [0027](decisions/0027-ai-commit-message.md)。
   - 正在进行 merge、rebase 等操作时显示横幅，带 Continue / Abort。
 - **Project 面板（只读）**：左侧 stripe 的文件夹图标或 ⌘1 打开，与 Commit 面板共用停靠区。顶部是仓库根节点（名称 + 路径）、工具条（Refresh、Collapse All、Expand All、Open File、Hide）和过滤框；下面是工作树的索引文件与未跟踪文件（ignored 除外），按目录折叠，按 Git 状态给文件名着色。单击文件在预览页签中只读打开，双击固定；右键可外部编辑、看 blame、看文件历史、复制路径或在 Finder 中显示。⇧⌘O 打开 Quick Open，输入路径片段后回车打开，见 [0024](decisions/0024-file-browser.md)。
 - **Stash 页签**：暂存（可包含未跟踪文件、保留索引）、应用、Pop、删除、转为分支，并可查看 stash 中的文件 diff。
@@ -43,6 +46,7 @@
 - **Git 设置**：设置对话框的 Git 页可以指定 SSH 命令、GPG 程序、签名格式（Git 默认 / OpenPGP / SSH）、签名密钥、默认签名提交与 credential helper；保存后对下一次 Git 调用立即生效，不改写仓库或全局 Git 配置。
 - **通知**：右下角气泡（成功消息 10 秒后自动隐藏），以及通知工具窗口。
 - **应用内更新**：`Help → Check for Updates…` 或启动时自动检查；发现新版本后应用内下载、用 `SHA256SUMS` 校验，点“Restart to Update”自动替换并重启，不需要打开浏览器。Windows 使用便携 ZIP，Linux 便携包使用 tar.gz；DEB 安装需要 `sudo apt install` 完成。
+- **界面语言**：默认英文，设置 → General → Language 可切到简体中文；菜单、对话框、工具窗口与通知随语言切换，Git 命令与输出、路径与哈希、快捷键与日志字段保持英文。
 - **主题**：Islands Dark、Islands Light，或跟随系统。
 
 ## 构建与运行
@@ -67,6 +71,8 @@ go build -o viff ./cmd/viff
 | F7 / ⇧F7      | 下一个 / 上一个差异              |
 | ⌘F            | 在 diff 中搜索，或聚焦日志搜索   |
 | ⌘0 / ⌘9       | 显示或隐藏 Commit / Git 工具窗口 |
+| ⌘1            | 打开 Project 面板（与 Commit 共用停靠区） |
+| ⇧⌘O           | Quick Open                       |
 | ⌥⌘Z           | 回滚                             |
 | ⌘W、⇧⌘[ / ⇧⌘] | 关闭或切换编辑器页签             |
 | ⌘R            | 刷新                             |
@@ -89,4 +95,6 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - 冲突支持逐块接受两侧内容；自由文本编辑、二进制或不可靠冲突标记仍需要外部编辑器，见 [0019](decisions/0019-git-issue-gaps.md)。
 - 已有分支创建工作树见 [0018](decisions/0018-existing-branch-worktree.md)；prunable 工作树只能查看、不能删除。嵌套子模块的移除和 deinit 需要先打开其所属仓库，见 [0019](decisions/0019-git-issue-gaps.md)。
 - Project 面板与 Commit 共用左侧停靠区，不能同时显示；默认显示 Commit，按 ⌘1 打开 Project。ignored 文件默认不显示，折叠状态不持久化；Project 中打开的图片仍只显示二进制说明（diff 的图片预览不适用于单版本查看）；文本支持鼠标拖选、Shift+方向键与 ⌘A/⌘C 复制（制表符按显示展开为空格），但不支持编辑与拖选自动滚动。见 [0024](decisions/0024-file-browser.md)。
+- 界面语言覆盖主要窗口；少量相对时间提示（如“Moments ago”“Today 14:30”）与诊断 issue 模板仍是英文。
+- AI 生成提交说明默认关闭；启用后会把当前改动的分支名、最近五条提交、变更文件与 diff 发到你自己配置的端点，范围与隐私边界见 [privacy.md](privacy.md)。
 - 应用内更新没有系统签名校验（macOS ad-hoc 签名、Windows 无 Authenticode），只做 HTTPS + SHA-256；宿主的系统安全提示仍可能出现。DEB 安装受权限限制只能提示手动安装；随包文档在 Windows/Linux 自替换后保持旧版本，见 [0023](decisions/0023-app-update.md)。旧版本（v0.1.0 及更早）没有更新器，升级到第一个带更新器的版本需要手动下载一次。
