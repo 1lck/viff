@@ -588,6 +588,13 @@ func (w *Window) openAbout() {
 func (w *Window) openSettings() {
 	s := w.ws.Settings
 	theme := s.Theme
+	editorFont := s.EditorFont
+	diffFont := s.DiffFont
+	// app.FontFamilies and app.MonospaceFamilies read the system on every call
+	// and take a moment, so they are collected once when the dialog opens rather
+	// than while painting.
+	fonts := app.FontFamilies()
+	monoFonts := app.MonospaceFamilies()
 	font := text.NewEditor(strconv.Itoa(int(s.FontSize)))
 	gitPath := text.NewEditor(s.GitPath)
 	editor := text.NewEditor(s.ExternalEditor)
@@ -660,6 +667,38 @@ func (w *Window) openSettings() {
 			f.gap(6)
 			f.bold("Updates")
 			f.check("Check for updates at startup", &autoUpdate)
+			f.gap(6)
+			f.bold("Fonts")
+			current := "Default (system interface font)"
+			if editorFont != "" {
+				current = editorFont
+			}
+			f.combo("Interface font:", current, func() []item {
+				items := []item{{title: "Default (system interface font)", checked: editorFont == "", run: func() { editorFont = "" }}}
+				for _, name := range fonts {
+					name := name
+					items = append(items, item{title: name, checked: editorFont == name, run: func() { editorFont = name }})
+				}
+				return items
+			})
+			f.custom(22, func(r ui.Rect) {
+				w.p.text("Replaces the font of the whole interface. Diffs and the console keep a fixed-pitch face.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+			})
+			diffCurrent := "Default (bundled or system fixed-pitch)"
+			if diffFont != "" {
+				diffCurrent = diffFont
+			}
+			f.combo("Diff font:", diffCurrent, func() []item {
+				items := []item{{title: "Default (bundled or system fixed-pitch)", checked: diffFont == "", run: func() { diffFont = "" }}}
+				for _, name := range monoFonts {
+					name := name
+					items = append(items, item{title: name, checked: diffFont == name, run: func() { diffFont = name }})
+				}
+				return items
+			})
+			f.custom(22, func(r ui.Rect) {
+				w.p.text("Only fixed-pitch families: diffs, console and hashes lay their text out on a character grid.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+			})
 		},
 		okDisabled: func() bool {
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
@@ -691,7 +730,11 @@ func (w *Window) openSettings() {
 				s.LogLevel = "debug"
 			}
 			w.ws.SetLogLevel(s.LogLevel)
+			s.EditorFont = editorFont
+			s.DiffFont = diffFont
 			w.applyTheme()
+			w.applyFont()
+			w.Invalidate()
 			w.flushSettings()
 			w.startAutoFetch()
 			if autoUpdate && !autoUpdateWas {

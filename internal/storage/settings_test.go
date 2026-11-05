@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -98,5 +99,41 @@ func TestAutoUpdateCheckDefaultsOnAndPersistsOff(t *testing.T) {
 	}
 	if back := Load(path); back.AutoUpdateCheck {
 		t.Fatal("explicit autoUpdateCheck=false was not persisted")
+	}
+}
+
+// EditorFont and DiffFont are family names the settings page picks from the
+// system's lists. A value that could not name a family must not survive a load,
+// and a usable one is kept without its surrounding spaces.
+func TestFontFamiliesSanitized(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	load := func(field, value string) *Settings {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{"version": 1, field: value})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+	family := func(s *Settings, field string) string {
+		if field == "diffFont" {
+			return s.DiffFont
+		}
+		return s.EditorFont
+	}
+
+	for _, field := range []string{"editorFont", "diffFont"} {
+		if got := family(load(field, "   "), field); got != "" {
+			t.Errorf("blank %s = %q, want empty", field, got)
+		}
+		if got := family(load(field, strings.Repeat("x", 97)), field); got != "" {
+			t.Errorf("over-long %s kept: %q", field, got)
+		}
+		if got := family(load(field, "  Cascadia Mono  "), field); got != "Cascadia Mono" {
+			t.Errorf("%s = %q, want the trimmed name", field, got)
+		}
 	}
 }

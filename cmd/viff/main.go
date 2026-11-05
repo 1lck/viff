@@ -13,6 +13,7 @@ import (
 	"github.com/vivaui/viva/app"
 	"github.com/vivaui/viva/ui"
 
+	"viff/assets/branding"
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/gitcli"
@@ -199,9 +200,31 @@ func run() (code int) {
 		win.ShowCrashNotice(crash)
 	}
 
-	// RunCanvas, not Run: Run opens a plain native window and ignores Paint
-	// and the event handlers.
-	if err := app.RunCanvas(win.Config(), &ui.Canvas{}); err != nil {
+	// RunApplication, not RunCanvas: the application owns the window, which is
+	// what lets Viff keep an icon in the status area. RunCanvas has no handle to
+	// add one to.
+	if err := app.RunApplication(func(application *app.Application) error {
+		native, err := application.OpenWindow(win.Config(), &ui.Canvas{})
+		if err != nil {
+			return err
+		}
+		win.SetTray(native, application.Quit)
+		// A desktop with no status area (a Linux session without a
+		// StatusNotifier host) still runs; only the icon is missing then.
+		if _, err := application.AddStatusItem(app.StatusItemConfig{
+			Tooltip: "Viff",
+			Icon:    branding.Icon.StatusIcon(32),
+			OnClick: func(app.StatusClick) { win.ShowFromTray() },
+			Menu:    win.TrayMenu,
+		}); err != nil {
+			rec.Event(observability.Event{
+				Event:  observability.EventAppStart,
+				Level:  observability.LevelWarn,
+				Fields: map[string]any{"status_item": err.Error()},
+			})
+		}
+		return nil
+	}); err != nil {
 		rec.Event(observability.Event{
 			Event:  observability.EventAppFatal,
 			Level:  observability.LevelError,

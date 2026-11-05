@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,6 +26,9 @@ type Settings struct {
 	UIScale    float32 `json:"uiScale"`  // 1 = 100%
 	FontSize   float32 `json:"fontSize"` // editor font size
 	EditorFont string  `json:"editorFont"`
+	// DiffFont is the fixed-pitch family for diffs and the console. Empty keeps
+	// the bundled face on macOS and the platform's monospace default elsewhere.
+	DiffFont string `json:"diffFont,omitempty"`
 
 	GitPath       string `json:"gitPath"`
 	AutoFetch     bool   `json:"autoFetch"`
@@ -167,6 +171,12 @@ func (s *Settings) sanitize() {
 	if s.FontSize < 9 || s.FontSize > 28 {
 		s.FontSize = d.FontSize
 	}
+	// Family names come from the settings page's two lists: every installed
+	// family for the interface, the fixed-pitch ones for diffs. Trim them, and
+	// refuse an implausible name instead of handing the renderer something it
+	// cannot resolve.
+	s.EditorFont = sanitizeFamily(s.EditorFont)
+	s.DiffFont = sanitizeFamily(s.DiffFont)
 	if s.Theme != "dark" && s.Theme != "light" && s.Theme != "system" {
 		s.Theme = d.Theme
 	}
@@ -212,6 +222,16 @@ func (s *Settings) sanitize() {
 	if len(s.Recent) > 20 {
 		s.Recent = s.Recent[:20]
 	}
+}
+
+// sanitizeFamily keeps a family name the renderer can use, or "" for the
+// default. Real names are a few words long; anything longer cannot name one.
+func sanitizeFamily(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) > 96 {
+		return ""
+	}
+	return name
 }
 
 // AddRecent moves path to the top of the recent list.

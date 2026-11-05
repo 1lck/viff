@@ -22,6 +22,7 @@
   - 部分暂存：块按钮（→ ← + ⟲）可暂存、取消暂存或回滚单个块，也可以在行号栏选中几行后只暂存这些行。
   - F7 / ⇧F7 在差异之间跳转，⌘F 搜索，可忽略空白差异，F4 用外部编辑器打开。
   - 预览页签跟随选中的文件；双击或 ⌘D 固定页签。
+  - 图片预览：PNG / JPEG / GIF（仅首帧）在 diff 中并排显示，等比缩放并标注格式、像素尺寸与文件大小；超过内容读取上限的图片仍按“文件过大”处理。
 - **冲突查看器**：Ours / Result / Theirs 三栏，在冲突块间跳转，可逐块接受 Ours / Theirs / Both；修改后先检查结果，再标记为已解决。支持在外部编辑器中自由编辑。
 - **文件查看**：只读打开某个提交里的文件（“Open Repository Version”），显示行数、换行符，以及二进制、超大文件和子模块的说明；可定位到当前行用外部编辑器打开。
   - **Git blame 注解**：按提交新旧着色，显示作者与日期；点击注解在 Log 中定位该提交，右键可看该提交的 diff 或注解上一个版本。
@@ -84,7 +85,7 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 
 - 多仓库写入操作只针对当前仓库；非活动仓库在打开总览或手动刷新时更新。ChangeList 是文件分组，不提供独立索引或跨仓库提交，见 [0020](decisions/0020-repositories-changelists.md)。
 - 已在 macOS，以及 Windows Server 2022 x64（Git 2.56.0.windows.4）上验证 Git 功能和 Viva 无头界面；Windows 10/11 的实际桌面交互、输入法及安装分发尚未验收。Linux 和 Windows 的文件监听仍是轮询，见 [0003](decisions/0003-file-watching.md)。
-- 界面字体使用系统字体（SF Pro），没有使用 Inter，见 [0002](decisions/0002-fonts.md)。
+- 界面字体默认为系统字体（SF Pro），没有使用 Inter；设置里可分别选择「界面字体」（全部已安装族）与「diff 字体」（仅等宽族，用于 diff、控制台与哈希），见 [0002](decisions/0002-fonts.md)。
 - 冲突支持逐块接受两侧内容；自由文本编辑、二进制或不可靠冲突标记仍需要外部编辑器，见 [0019](decisions/0019-git-issue-gaps.md)。
 - 已有分支创建工作树见 [0018](decisions/0018-existing-branch-worktree.md)；prunable 工作树只能查看、不能删除。嵌套子模块的移除和 deinit 需要先打开其所属仓库，见 [0019](decisions/0019-git-issue-gaps.md)。
 - Project 面板与 Commit 共用左侧停靠区，不能同时显示；默认显示 Commit，按 ⌘1 打开 Project。ignored 文件默认不显示，折叠状态不持久化；图片仍只显示二进制说明；文本支持鼠标拖选、Shift+方向键与 ⌘A/⌘C 复制（制表符按显示展开为空格），但不支持编辑与拖选自动滚动。见 [0024](decisions/0024-file-browser.md)。
