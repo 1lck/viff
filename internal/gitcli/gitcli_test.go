@@ -40,8 +40,8 @@ func newTestRepo(t *testing.T) *testRepo {
 }
 
 // isolatedEnv keeps the user's global configuration out of tests.
-func isolatedEnv(t *testing.T) []string {
-	home := t.TempDir()
+func isolatedEnv(tb testing.TB) []string {
+	home := tb.TempDir()
 	return []string{"HOME=" + home, "XDG_CONFIG_HOME=" + home, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + filepath.Join(home, "gitconfig")}
 }
 

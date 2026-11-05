@@ -71,6 +71,10 @@ type RepoState struct {
 	DetailHash     string
 	DetailLoading  bool
 	DetailBranches []string
+	// detailSeq stamps each detail load so a late result for the same commit
+	// cannot replace a newer one; detailCancel stops its queries.
+	detailSeq    uint64
+	detailCancel context.CancelFunc
 
 	statusSeq   uint64 // increments for each status query
 	refreshing  bool
@@ -173,6 +177,7 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 	if w.Repo != nil {
 		oldRoot = w.Repo.Repo.Root
 		w.Repo.Log.close()
+		w.Repo.cancelDetail()
 	}
 	w.closeWatcher(oldRoot)
 	// The undo history describes one checkout's HEAD and branches; a switch
@@ -257,6 +262,7 @@ func (w *Workspace) Close() {
 			},
 		})
 		w.Repo.Log.close()
+		w.Repo.cancelDetail()
 	}
 	w.closeWatcher(root)
 	w.clearUndo()
