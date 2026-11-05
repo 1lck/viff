@@ -196,8 +196,8 @@ func linuxManagedInstall() bool {
 
 // underSystemPrefix reports whether path lives under /usr, where the release
 // DEB installs viff.
-func underSystemPrefix(path string) bool {
-	clean := path.Clean(path)
+func underSystemPrefix(exe string) bool {
+	clean := path.Clean(exe)
 	return clean == "/usr" || strings.HasPrefix(clean, "/usr/")
 }
 
