@@ -29,6 +29,9 @@ type Settings struct {
 	// DiffFont is the fixed-pitch family for diffs and the console. Empty keeps
 	// the bundled face on macOS and the platform's monospace default elsewhere.
 	DiffFont string `json:"diffFont,omitempty"`
+	// Language names the interface language: "en" or "zh-CN". Empty means the
+	// default, English, so an older settings file keeps working.
+	Language string `json:"language,omitempty"`
 
 	GitPath       string `json:"gitPath"`
 	AutoFetch     bool   `json:"autoFetch"`
@@ -177,6 +180,12 @@ func (s *Settings) sanitize() {
 	// cannot resolve.
 	s.EditorFont = sanitizeFamily(s.EditorFont)
 	s.DiffFont = sanitizeFamily(s.DiffFont)
+	// An unknown or missing language keeps the default, English.
+	switch s.Language = strings.TrimSpace(s.Language); s.Language {
+	case "en", "zh-CN":
+	default:
+		s.Language = ""
+	}
 	if s.Theme != "dark" && s.Theme != "light" && s.Theme != "system" {
 		s.Theme = d.Theme
 	}
