@@ -6,6 +6,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -56,7 +57,7 @@ func (w *Window) conflictPanes(t *diffTab) []conflictPane {
 	}
 	ours := mk(cv.OursLabel, cv.Ours.Lines, base)
 	theirs := mk(cv.TheirsLabel, cv.Theirs.Lines, base)
-	cur := mk("Result (working tree)", cv.Current.Lines, nil)
+	cur := mk(w.t(i18n.ConflictLabelResult), cv.Current.Lines, nil)
 	for _, b := range cv.Markers.Blocks {
 		for k := b.Begin; k <= min(b.Finish, len(cur.mark)-1); k++ {
 			cur.mark[k] = 2
@@ -98,22 +99,30 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	}
 	w.p.outline(inner, 8, 1, border, bg)
 	icon := icons.Warning
-	title := "Merge conflict: " + cv.Conflict.Kind.Description()
-	sub := "Resolve it in your editor; Viff shows both sides and the file on disk as it changes."
+	title := w.t(i18n.ConflictTitleMerge, cv.Conflict.Kind.Description())
+	sub := w.t(i18n.ConflictSubResolve)
 	if resolved {
 		icon = icons.Success
-		title = "No conflict markers left in the file on disk"
-		sub = "Review the result, then mark the file as resolved to stage it."
+		title = w.t(i18n.ConflictTitleResolved)
+		sub = w.t(i18n.ConflictSubResolved)
 	} else if n := len(cv.Markers.Blocks); n > 0 {
-		sub = plural(n, "conflict", "conflicts") + " in the file on disk. Edit it in your editor; this view updates when it is saved."
+		if n == 1 {
+			sub = w.t(i18n.ConflictSubFoundOne, n)
+		} else {
+			sub = w.t(i18n.ConflictSubFoundMany, n)
+		}
 		if resolvable {
-			sub = plural(n, "conflict", "conflicts") + " in the file on disk. Accept a side below, or edit it in your editor."
+			if n == 1 {
+				sub = w.t(i18n.ConflictSubAcceptOne, n)
+			} else {
+				sub = w.t(i18n.ConflictSubAcceptMany, n)
+			}
 		}
 		if !cv.Markers.Reliable {
-			sub = "The conflict markers look unusual; check the file in your editor."
+			sub = w.t(i18n.ConflictSubUnreliable)
 		}
 	} else if !cv.Conflict.Kind.Textual() {
-		sub = "There is no text to merge. Keep or delete the file on disk, then mark it as resolved."
+		sub = w.t(i18n.ConflictSubNoText)
 	}
 	w.p.iconIn(icon, rect(inner.X+10, inner.Y+8, 18, 22))
 	tw := w.p.text(title, rect(inner.X+34, inner.Y+8, inner.Width-46, 22), fontUI, semibold, w.pal.Text)
@@ -121,18 +130,18 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		w.p.text(sub, rect(sx, inner.Y+8, right(inner)-sx-12, 22), fontUI, regular, w.pal.TextMuted)
 	}
 	bx, by := inner.X+34, inner.Y+38
-	label := "Mark as Resolved"
+	label := w.t(i18n.ConflictActionMarkAsResolved)
 	bw := w.buttonWidth(label)
 	if w.button(idConflictStage, rect(bx, by, bw, 26), label, btnDefault, !resolved && cv.Conflict.Kind.Textual()) {
 		p := t.src.Path
 		w.after(func() { w.markResolved(p) })
 	}
 	if !resolved && cv.Conflict.Kind.Textual() {
-		w.tip(idConflictStage, "Remove all conflict markers first")
+		w.tip(idConflictStage, w.t(i18n.ConflictTipMarkAsResolved))
 	}
 	bx += bw + 8
-	ow := w.buttonWidth("Open in Editor")
-	if w.button(idConflictOpen, rect(bx, by, ow, 26), "Open in Editor", btnNormal, !cv.Current.Content.Exists) {
+	ow := w.buttonWidth(w.t(i18n.ConflictActionOpenEditor))
+	if w.button(idConflictOpen, rect(bx, by, ow, 26), w.t(i18n.ConflictActionOpenEditor), btnNormal, !cv.Current.Content.Exists) {
 		p := t.src.Path
 		line := 0
 		if t.conflictBlock < len(cv.Markers.Blocks) && len(cv.Markers.Blocks) > 0 {
@@ -141,8 +150,8 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		w.after(func() { w.openExternal(p, line) })
 	}
 	bx += ow + 8
-	cw := w.buttonWidth("Copy Path")
-	if w.button(idConflictCopy, rect(bx, by, cw, 26), "Copy Path", btnBorderless, false) {
+	cw := w.buttonWidth(w.t(i18n.ConflictActionCopyPath))
+	if w.button(idConflictCopy, rect(bx, by, cw, 26), w.t(i18n.ConflictActionCopyPath), btnBorderless, false) {
 		full := path.Join(rs.Repo.Root, t.src.Path)
 		w.after(func() { w.copyText(full) })
 	}
@@ -151,21 +160,21 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	if n > 0 {
 		t.conflictBlock = min(t.conflictBlock, n-1)
 		nx := right(inner) - 8 - actionSize
-		if w.action(scConflictNav.At(1), nx, by, icons.Down, "Next Conflict", actOpts{disabled: t.conflictBlock >= n-1}) {
+		if w.action(scConflictNav.At(1), nx, by, icons.Down, w.t(i18n.ConflictActionNext), actOpts{disabled: t.conflictBlock >= n-1}) {
 			w.after(func() { t.conflictBlock++; w.scrollToConflict(t) })
 		}
 		nx -= actionSize + 2
-		if w.action(scConflictNav.At(0), nx, by, icons.Up, "Previous Conflict", actOpts{disabled: t.conflictBlock == 0}) {
+		if w.action(scConflictNav.At(0), nx, by, icons.Up, w.t(i18n.ConflictActionPrevious), actOpts{disabled: t.conflictBlock == 0}) {
 			w.after(func() { t.conflictBlock--; w.scrollToConflict(t) })
 		}
-		s := "Conflict " + itoa(t.conflictBlock+1) + " of " + itoa(n)
+		s := w.t(i18n.ConflictCount, itoa(t.conflictBlock+1), itoa(n))
 		sw := w.p.width(s, fontUI, regular)
 		w.p.text(s, rect(nx-sw-10, by, sw+2, 26), fontUI, regular, w.pal.TextMuted)
 	}
 	// Per-block resolution: accepting a side rewrites only that block on disk.
 	if resolvable {
 		rx := inner.X + 34
-		label := "Conflict " + itoa(t.conflictBlock+1) + " of " + itoa(n) + ": accept"
+		label := w.t(i18n.ConflictAcceptTitle, itoa(t.conflictBlock+1), itoa(n))
 		w.p.text(label, rect(rx, inner.Y+72, 230, 26), fontUI, regular, w.pal.TextMuted)
 		rx += 240
 		disabled := t.busy || t.loading
@@ -175,9 +184,9 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 			tip    string
 			choice domain.ResolveChoice
 		}{
-			{idResolveOurs, "Accept Ours", "Keep " + cv.OursLabel + " for this block", domain.ResolveOurs},
-			{idResolveTheirs, "Accept Theirs", "Keep " + cv.TheirsLabel + " for this block", domain.ResolveTheirs},
-			{idResolveBoth, "Accept Both", "Keep " + cv.OursLabel + " and then " + cv.TheirsLabel + " for this block", domain.ResolveBoth},
+			{idResolveOurs, w.t(i18n.ConflictAcceptOurs), w.t(i18n.ConflictTipKeepSide, cv.OursLabel), domain.ResolveOurs},
+			{idResolveTheirs, w.t(i18n.ConflictAcceptTheirs), w.t(i18n.ConflictTipKeepSide, cv.TheirsLabel), domain.ResolveTheirs},
+			{idResolveBoth, w.t(i18n.ConflictAcceptBoth), w.t(i18n.ConflictTipKeepBoth, cv.OursLabel, cv.TheirsLabel), domain.ResolveBoth},
 		}
 		for _, c := range choices {
 			cw := w.buttonWidth(c.label)
@@ -226,16 +235,17 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 
 // conflictPanesCached keeps the panes with the tab between paints.
 func (w *Window) conflictPanesCached(t *diffTab) []conflictPane {
-	if c, ok := conflictCache[t]; ok && c.res == t.res {
+	if c, ok := conflictCache[t]; ok && c.res == t.res && c.tr == w.tr {
 		return c.panes
 	}
 	panes := w.conflictPanes(t)
-	conflictCache[t] = conflictEntry{res: t.res, panes: panes}
+	conflictCache[t] = conflictEntry{res: t.res, tr: w.tr, panes: panes}
 	return panes
 }
 
 type conflictEntry struct {
 	res   any
+	tr    *i18n.Translator
 	panes []conflictPane
 }
 

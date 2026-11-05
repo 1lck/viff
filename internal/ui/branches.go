@@ -9,6 +9,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -20,28 +21,28 @@ func (w *Window) openBranchPopup(anchor ui.Rect) {
 	if op.Active() {
 		t := op.Kind.Title()
 		if op.CanContinue() {
-			items = append(items, item{title: "Continue " + t, icon: icons.Success, run: func() { w.ws.OperationAction("continue") }})
+			items = append(items, item{title: w.t(i18n.ChromeBranchContinue, t), icon: icons.Success, run: func() { w.ws.OperationAction("continue") }})
 		}
 		if op.CanSkip() {
-			items = append(items, item{title: "Skip Commit", run: func() { w.ws.OperationAction("skip") }})
+			items = append(items, item{title: w.t(i18n.ChromeBranchSkip), run: func() { w.ws.OperationAction("skip") }})
 		}
 		if op.CanAbort() {
-			items = append(items, item{title: "Abort " + t, icon: icons.Abort, run: func() { w.ws.OperationAction("abort") }})
+			items = append(items, item{title: w.t(i18n.ChromeBranchAbort, t), icon: icons.Abort, run: func() { w.ws.OperationAction("abort") }})
 		}
 		items = append(items, sep())
 	}
 	hasRemote := len(rs.Remotes) > 0
 	items = append(items,
-		item{title: "Update Project…", icon: icons.Update, shortcut: "⌘T", disabled: !hasRemote, run: w.openUpdate},
-		item{title: "Commit…", icon: icons.Commit, shortcut: "⌘K", run: w.focusCommit},
-		item{title: "Push…", icon: icons.Push, shortcut: "⇧⌘K", disabled: !rs.HasHead(), run: w.openPush},
+		item{title: w.t(i18n.ChromeTbUpdate), icon: icons.Update, shortcut: "⌘T", disabled: !hasRemote, run: w.openUpdate},
+		item{title: w.t(i18n.ChromeTbCommit), icon: icons.Commit, shortcut: "⌘K", run: w.focusCommit},
+		item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, shortcut: "⇧⌘K", disabled: !rs.HasHead(), run: w.openPush},
 		sep(),
-		item{title: "New Branch…", icon: icons.Add, shortcut: "⌥⌘N", disabled: !rs.HasHead(), run: func() { w.openNewBranch("", rs.HeadLabel()) }},
-		item{title: "Checkout Tag or Revision…", run: w.openCheckoutRevision},
+		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, shortcut: "⌥⌘N", disabled: !rs.HasHead(), run: func() { w.openNewBranch("", rs.HeadLabel()) }},
+		item{title: w.t(i18n.ChromeMenuCheckoutTagRev), run: w.openCheckoutRevision},
 	)
 	locals := rs.RefsOf(domain.RefLocal)
 	if len(locals) > 0 {
-		items = append(items, sep(), header("Local"))
+		items = append(items, sep(), header(w.t(i18n.ChromeRefsLocal)))
 		// Current first, then favourites, then the rest (IntelliJ order).
 		ordered := make([]domain.Ref, 0, len(locals))
 		for _, r := range locals {
@@ -65,13 +66,13 @@ func (w *Window) openBranchPopup(anchor ui.Rect) {
 	}
 	remotes := rs.RefsOf(domain.RefRemote)
 	if len(remotes) > 0 {
-		items = append(items, sep(), header("Remote"))
+		items = append(items, sep(), header(w.t(i18n.ChromeRefsRemote)))
 		for _, r := range remotes {
 			items = append(items, w.branchItem(r))
 		}
 	}
-	items = append(items, sep(), item{title: "Worktrees…", icon: icons.Folder, run: w.openWorktrees})
-	p := &popup{x: anchor.X, y: bottom(anchor) + 4, items: items, sel: -1, minWidth: 340, title: "Git Branches", search: text.NewEditor("")}
+	items = append(items, sep(), item{title: w.t(i18n.ChromeMenuWorktrees), icon: icons.Folder, run: w.openWorktrees})
+	p := &popup{x: anchor.X, y: bottom(anchor) + 4, items: items, sel: -1, minWidth: 340, title: w.t(i18n.ChromePopupGitBranch), search: text.NewEditor("")}
 	if anchor.Height == 0 {
 		// Opened from the status bar: grow upwards.
 		p.y = anchor.Y
@@ -101,13 +102,13 @@ func (w *Window) branchItem(r domain.Ref) item {
 		}
 	}
 	if r.Gone {
-		it.hint = strings.TrimSpace(it.hint + " (gone)")
+		it.hint = strings.TrimSpace(it.hint + w.t(i18n.ChromeRefsGone))
 	}
 	// A branch can be checked out in one worktree only; say where it lives so
 	// the checkout action's behaviour is not a surprise.
 	if r.Kind == domain.RefLocal && !r.Current {
 		if wt, ok := w.repo().WorktreeElsewhere(r.Short); ok {
-			where := "in " + filepath.Base(wt.Path)
+			where := w.t(i18n.ChromeBranchInWorktree, filepath.Base(wt.Path))
 			it.hint = strings.TrimSpace(it.hint + " · " + where)
 		}
 	}
@@ -142,63 +143,63 @@ func (w *Window) refActions(r domain.Ref) []item {
 	var items []item
 	if r.Kind == domain.RefTag {
 		return []item{
-			{title: "Checkout", run: func() { w.ws.CheckoutRevision(r.Name) }},
-			{title: "New Branch from " + q + "…", icon: icons.Add, run: func() { w.openNewBranch(r.Name, name) }},
+			{title: w.t(i18n.ChromeActionCheckout), run: func() { w.ws.CheckoutRevision(r.Name) }},
+			{title: w.t(i18n.ChromeMenuNewBranchFrom, q), icon: icons.Add, run: func() { w.openNewBranch(r.Name, name) }},
 			sep(),
-			{title: "Merge " + q + " into " + curQ, icon: icons.Merge, disabled: cur == "" || busy, run: func() { w.ws.Merge(r.Name, false) }},
+			{title: w.t(i18n.ChromeMenuMergeInto, q, curQ), icon: icons.Merge, disabled: cur == "" || busy, run: func() { w.ws.Merge(r.Name, false) }},
 			sep(),
-			{title: "Push Tag to " + w.defaultRemote(), icon: icons.Push, disabled: len(rs.Remotes) == 0, run: func() { w.ws.PushTag(w.defaultRemote(), name) }},
-			{title: "Delete Tag", icon: icons.Delete, run: func() {
-				w.confirm("Delete Tag", "Delete tag "+q+" locally?", "Delete", func() { w.ws.DeleteTag(name) })
+			{title: w.t(i18n.ChromeMenuPushTagTo, w.defaultRemote()), icon: icons.Push, disabled: len(rs.Remotes) == 0, run: func() { w.ws.PushTag(w.defaultRemote(), name) }},
+			{title: w.t(i18n.ChromeMenuDeleteTag), icon: icons.Delete, run: func() {
+				w.confirm(w.t(i18n.ChromeMenuDeleteTag), w.t(i18n.ChromeDialogDeleteTag, q), w.t(i18n.ChromeActionDelete), func() { w.ws.DeleteTag(name) })
 			}},
-			{title: "Delete Remote Tag…", icon: icons.Delete, disabled: len(rs.Remotes) == 0, run: func() { w.openDeleteRemoteTag(name) }},
+			{title: w.t(i18n.ChromeMenuDeleteRemoteTag), icon: icons.Delete, disabled: len(rs.Remotes) == 0, run: func() { w.openDeleteRemoteTag(name) }},
 		}
 	}
 	if r.Current {
 		items = append(items,
-			item{title: "New Branch from " + q + "…", icon: icons.Add, run: func() { w.openNewBranch("", name) }},
-			item{title: "Update", icon: icons.Update, disabled: r.Upstream == "" || busy, run: func() { w.ws.Pull(w.pullMode()) }},
-			item{title: "Push…", icon: icons.Push, run: w.openPush},
-			item{title: "Push to Another Remote…", icon: icons.Push, run: func() { w.openPushAnother(r) }},
+			item{title: w.t(i18n.ChromeMenuNewBranchFrom, q), icon: icons.Add, run: func() { w.openNewBranch("", name) }},
+			item{title: w.t(i18n.ChromeMenuUpdate), icon: icons.Update, disabled: r.Upstream == "" || busy, run: func() { w.ws.Pull(w.pullMode()) }},
+			item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, run: w.openPush},
+			item{title: w.t(i18n.ChromeMenuPushAnother), icon: icons.Push, run: func() { w.openPushAnother(r) }},
 			sep(),
-			item{title: "Rename…", icon: icons.Edit, run: func() { w.openRename(r) }},
+			item{title: w.t(i18n.ChromeMenuRename), icon: icons.Edit, run: func() { w.openRename(r) }},
 		)
 		if r.Upstream == "" && len(rs.Remotes) > 0 {
-			items = append(items, item{title: "Set Upstream…", run: func() { w.openSetUpstream(r) }})
+			items = append(items, item{title: w.t(i18n.ChromeMenuSetUpstream), run: func() { w.openSetUpstream(r) }})
 		}
 		return items
 	}
 	items = append(items,
-		item{title: "Checkout", disabled: busy, run: func() { w.checkoutBranch(r) }},
-		item{title: "New Branch from " + q + "…", icon: icons.Add, run: func() { w.openNewBranch(r.Name, name) }},
+		item{title: w.t(i18n.ChromeActionCheckout), disabled: busy, run: func() { w.checkoutBranch(r) }},
+		item{title: w.t(i18n.ChromeMenuNewBranchFrom, q), icon: icons.Add, run: func() { w.openNewBranch(r.Name, name) }},
 	)
 	if cur != "" {
-		items = append(items, item{title: "Checkout and Rebase onto " + curQ, disabled: busy || r.Kind != domain.RefLocal, run: func() {
+		items = append(items, item{title: w.t(i18n.ChromeMenuCheckoutRebase, curQ), disabled: busy || r.Kind != domain.RefLocal, run: func() {
 			w.ws.Checkout(r)
 			w.pendingRebase = cur
 		}})
 	}
 	items = append(items, sep(),
-		item{title: "Compare with " + curQ, icon: icons.Diff, disabled: cur == "", run: func() { w.compareBranches(cur, name) }},
-		item{title: "Show Changed Files", icon: icons.Diff, disabled: cur == "" || r.Target == "", run: func() { w.compareBranchFiles(r) }},
-		item{title: "Show Diff with Working Tree", icon: icons.Diff, run: func() { w.compareWithWorking(r.Name) }},
+		item{title: w.t(i18n.ChromeMenuCompareWith, curQ), icon: icons.Diff, disabled: cur == "", run: func() { w.compareBranches(cur, name) }},
+		item{title: w.t(i18n.ChromeMenuShowChanged), icon: icons.Diff, disabled: cur == "" || r.Target == "", run: func() { w.compareBranchFiles(r) }},
+		item{title: w.t(i18n.ChromeMenuShowDiffWorking), icon: icons.Diff, run: func() { w.compareWithWorking(r.Name) }},
 		sep(),
-		item{title: "Rebase " + curQ + " onto " + q, disabled: cur == "" || busy, run: func() { w.ws.Rebase(r.Name) }},
-		item{title: "Merge " + q + " into " + curQ, icon: icons.Merge, disabled: cur == "" || busy, run: func() { w.ws.Merge(r.Name, false) }},
+		item{title: w.t(i18n.ChromeMenuRebaseOnto, curQ, q), disabled: cur == "" || busy, run: func() { w.ws.Rebase(r.Name) }},
+		item{title: w.t(i18n.ChromeMenuMergeInto, q, curQ), icon: icons.Merge, disabled: cur == "" || busy, run: func() { w.ws.Merge(r.Name, false) }},
 		sep(),
 	)
 	if r.Kind == domain.RefLocal {
 		items = append(items,
-			item{title: "Push…", icon: icons.Push, disabled: len(rs.Remotes) == 0, run: func() { w.openPushFor(r) }},
-			item{title: "Rename…", icon: icons.Edit, run: func() { w.openRename(r) }},
-			item{title: "Delete", icon: icons.Delete, run: func() { w.ws.DeleteBranch(r, false) }},
+			item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, disabled: len(rs.Remotes) == 0, run: func() { w.openPushFor(r) }},
+			item{title: w.t(i18n.ChromeMenuRename), icon: icons.Edit, run: func() { w.openRename(r) }},
+			item{title: w.t(i18n.ChromeActionDelete), icon: icons.Delete, run: func() { w.ws.DeleteBranch(r, false) }},
 		)
 		if len(rs.Remotes) > 0 {
-			items = append(items, item{title: "Update from Remote", icon: icons.Update, disabled: busy, run: func() { w.updateBranchFromRemote(r) }})
+			items = append(items, item{title: w.t(i18n.ChromeMenuUpdateFromRemote), icon: icons.Update, disabled: busy, run: func() { w.updateBranchFromRemote(r) }})
 		}
 	} else {
-		items = append(items, item{title: "Delete", icon: icons.Delete, run: func() {
-			w.confirm("Delete Remote Branch", "Delete "+q+" on "+r.Remote()+"? Everyone who fetches will lose this branch.", "Delete", func() {
+		items = append(items, item{title: w.t(i18n.ChromeActionDelete), icon: icons.Delete, run: func() {
+			w.confirm(w.t(i18n.ChromeDialogDeleteRemoteBranch), w.t(i18n.ChromeDialogDeleteRemoteBranchMsg, q, r.Remote()), w.t(i18n.ChromeActionDelete), func() {
 				w.ws.DeleteBranch(r, false)
 			})
 		}})
@@ -223,7 +224,7 @@ func (w *Window) compareBranches(base, other string) {
 	w.gitOpen = true
 	w.gitTab = 0
 	w.setFilter(func(f *vapp.LogFilter) { f.Branch = base + ".." + other })
-	w.ws.Notify(vapp.NoticeInfo, "Comparing branches", "The log shows commits in '"+other+"' that are not in '"+base+"'. Clear the Branch filter to return.")
+	w.ws.Notify(vapp.NoticeInfo, w.t(i18n.ChromeNotifyComparingBranches), w.t(i18n.ChromeNotifyComparingBranchesMessage, other, base))
 }
 
 func (w *Window) defaultRemote() string {

@@ -11,6 +11,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 	"viff/internal/observability"
 )
 
@@ -311,7 +312,7 @@ func (w *Workspace) Refresh(meta bool) {
 			if err != nil {
 				w.markRepositoryError(rs.rootKey, err)
 				if gitcli.KindOf(err) == gitcli.ErrNotRepository {
-					w.Notify(NoticeError, "Repository is gone", repo.Root)
+					w.Notify(NoticeError, w.tr(i18n.AppNoticeRepositoryGone), repo.Root)
 					// Keep the row (with its error) but there is nothing to be
 					// active any more.
 					w.Close()
@@ -321,7 +322,7 @@ func (w *Workspace) Refresh(meta bool) {
 					}
 					return
 				}
-				w.NotifyError("Cannot read status", err)
+				w.NotifyError(w.tr(i18n.AppNoticeCannotReadStatus), err)
 			} else {
 				rs.Status = st
 				rs.StatusLoaded = true

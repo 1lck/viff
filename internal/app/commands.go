@@ -12,6 +12,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 )
 
 // Op is a write command's body. progress reports Git's progress lines.
@@ -65,7 +66,7 @@ func (w *Workspace) Run(title string, op Op, o RunOptions) {
 			}
 			if err != nil {
 				if o.OnError == nil || !o.OnError(err) {
-					w.NotifyError(title+" failed", err)
+					w.NotifyError(w.tr(i18n.AppNoticeFailed, title), err)
 				}
 			} else {
 				if o.Success != "" {
@@ -202,7 +203,7 @@ func (w *Workspace) ApplyBlock(d *DiffResult, block int, action BlockAction, sel
 			done(err)
 		}
 		if err == ErrStale {
-			w.Notify(NoticeWarning, "File changed", ErrStale.Error())
+			w.Notify(NoticeWarning, w.tr(i18n.AppNoticeFileChanged), w.tr(i18n.AppNoticeFileChangedBody))
 			return true
 		}
 		return false
@@ -236,21 +237,14 @@ type CommitRequest struct {
 func (w *Workspace) Commit(req CommitRequest, after func()) {
 	staged, _, _, _ := w.Repo.Status.Counts()
 	subject := strings.SplitN(strings.TrimSpace(req.Message), "\n", 2)[0]
-	body := fmt.Sprintf("%d file%s committed: %s", staged, plural(staged), subject)
+	body := w.trPlural(staged, i18n.AppNoticeCommittedBody, i18n.AppNoticeCommittedBodyMany, staged, subject)
 	if req.Amend {
-		body = "Amended: " + subject
+		body = w.tr(i18n.AppNoticeAmendedBody, subject)
 	}
 	w.Run("Commit", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.Commit(ctx, repo, gitcli.CommitOptions{Message: req.Message, Amend: req.Amend, SignOff: req.SignOff, NoVerify: req.NoVerify})
 		return err
-	}, RunOptions{Success: "Committed", SuccessBody: body, After: after})
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
+	}, RunOptions{Success: w.tr(i18n.AppNoticeCommitted), SuccessBody: body, After: after})
 }
 
 // LastMessage loads HEAD's message for amend.
@@ -280,7 +274,7 @@ func (w *Workspace) Checkout(ref domain.Ref) {
 		}
 		return false
 	}, Success: "", After: func() {
-		w.Notify(NoticeInfo, "Checked out "+ref.Short, "")
+		w.Notify(NoticeInfo, w.tr(i18n.AppNoticeCheckedOut, ref.Short), "")
 	}})
 }
 
@@ -290,21 +284,21 @@ func (w *Workspace) CheckoutRevision(rev string) {
 		return w.Git.CheckoutRevision(ctx, repo, rev)
 	}, RunOptions{OnError: func(err error) bool {
 		return w.checkoutBlocked(CheckoutBlocked{Rev: rev, Err: err})
-	}, Success: "Checked out " + domain.ShortHash(rev), SuccessBody: "HEAD is detached. Create a branch to keep new commits."})
+	}, Success: w.tr(i18n.AppNoticeCheckedOut, domain.ShortHash(rev)), SuccessBody: w.tr(i18n.AppNoticeHeadDetachedBody)})
 }
 
 // NewBranch creates a branch.
 func (w *Workspace) NewBranch(name, start string, checkout, overwrite bool) {
 	w.Run("Create branch "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.CreateBranch(ctx, repo, name, start, checkout, overwrite)
-	}, RunOptions{Success: "Created branch " + name})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeCreatedBranch, name)})
 }
 
 // RenameBranch renames a local branch.
 func (w *Workspace) RenameBranch(old, name string) {
 	w.Run("Rename branch", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.RenameBranch(ctx, repo, old, name)
-	}, RunOptions{Success: "Renamed " + old + " to " + name})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeRenamedBranch, old, name)})
 }
 
 // DeleteBranch deletes a branch. An unmerged branch is not deleted; the
@@ -313,7 +307,7 @@ func (w *Workspace) DeleteBranch(ref domain.Ref, force bool) {
 	if ref.Kind == domain.RefRemote {
 		w.Run("Delete "+ref.Short, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
 			return w.Git.DeleteRemoteBranch(ctx, repo, ref.Remote(), ref.BranchName(), progress)
-		}, RunOptions{Success: "Deleted remote branch " + ref.Short})
+		}, RunOptions{Success: w.tr(i18n.AppNoticeDeletedRemoteBranch, ref.Short)})
 		return
 	}
 	target := ref.Target
@@ -322,16 +316,16 @@ func (w *Workspace) DeleteBranch(ref domain.Ref, force bool) {
 	}, RunOptions{
 		OnError: func(err error) bool {
 			if gitcli.KindOf(err) == gitcli.ErrNotMerged {
-				w.Notify(NoticeWarning, "Branch "+ref.Short+" is not fully merged",
-					"Its commits are not on the current branch. Deleting it anyway leaves them reachable only through the reflog.",
-					NoticeAction{Title: "Delete anyway", Run: func() { w.DeleteBranch(ref, true) }})
+				w.Notify(NoticeWarning, w.tr(i18n.AppNoticeBranchNotMerged, ref.Short),
+					w.tr(i18n.AppNoticeBranchNotMergedBody),
+					NoticeAction{Title: w.tr(i18n.AppActionDeleteAnyway), Run: func() { w.DeleteBranch(ref, true) }})
 				return true
 			}
 			return false
 		},
 		After: func() {
-			w.Notify(NoticeSuccess, "Deleted branch "+ref.Short, "It pointed at "+domain.ShortHash(target)+".",
-				NoticeAction{Title: "Restore", Run: func() { w.NewBranch(ref.Short, target, false, false) }})
+			w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeDeletedBranch, ref.Short), w.tr(i18n.AppNoticeDeletedBranchBody, domain.ShortHash(target)),
+				NoticeAction{Title: w.tr(i18n.AppActionRestore), Run: func() { w.NewBranch(ref.Short, target, false, false) }})
 		},
 	})
 }
@@ -340,48 +334,48 @@ func (w *Workspace) DeleteBranch(ref domain.Ref, force bool) {
 func (w *Workspace) CreateTag(name, rev, message string) {
 	w.Run("Create tag "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.CreateTag(ctx, repo, name, rev, message)
-	}, RunOptions{Success: "Created tag " + name})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeCreatedTag, name)})
 }
 
 // DeleteTag deletes a local tag.
 func (w *Workspace) DeleteTag(name string) {
 	w.Run("Delete tag "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.DeleteTag(ctx, repo, name)
-	}, RunOptions{Success: "Deleted tag " + name})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeDeletedTag, name)})
 }
 
 // PushTag pushes a tag.
 func (w *Workspace) PushTag(remote, name string) {
 	w.Run("Push tag "+name, func(ctx context.Context, repo domain.Repo, p func(string)) error {
 		return w.Git.PushTag(ctx, repo, remote, name, p)
-	}, RunOptions{Success: "Pushed tag " + name + " to " + remote})
+	}, RunOptions{Success: w.tr(i18n.AppNoticePushedTag, name, remote)})
 }
 
 // DeleteRemoteTag deletes a tag on the remote. The local tag stays.
 func (w *Workspace) DeleteRemoteTag(remote, name string) {
 	w.Run("Delete remote tag "+name, func(ctx context.Context, repo domain.Repo, p func(string)) error {
 		return w.Git.DeleteRemoteTag(ctx, repo, remote, name, p)
-	}, RunOptions{Success: "Deleted tag " + name + " on " + remote})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeDeletedRemoteTag, name, remote)})
 }
 
 // SetUpstream sets a branch's upstream.
 func (w *Workspace) SetUpstream(branch, upstream string) {
 	w.Run("Set upstream", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.SetUpstream(ctx, repo, branch, upstream)
-	}, RunOptions{Success: "Tracking " + upstream})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeTrackingUpstream, upstream)})
 }
 
 // Fetch fetches all remotes with prune.
 func (w *Workspace) Fetch(quiet bool) {
 	if w.Repo == nil || len(w.Repo.Remotes) == 0 {
 		if !quiet {
-			w.Notify(NoticeInfo, "Nothing to fetch", "This repository has no remotes.")
+			w.Notify(NoticeInfo, w.tr(i18n.AppNoticeNothingToFetch), w.tr(i18n.AppNoticeNothingToFetchBody))
 		}
 		return
 	}
 	o := RunOptions{}
 	if !quiet {
-		o.Success = "Fetch successful"
+		o.Success = w.tr(i18n.AppNoticeFetchSuccessful)
 	} else {
 		o.OnError = func(error) bool { return true } // background fetch stays silent
 	}
@@ -397,7 +391,7 @@ func (w *Workspace) Pull(mode gitcli.PullMode) {
 		return
 	}
 	if rs.Status.Branch.Upstream == "" {
-		w.Notify(NoticeWarning, "Cannot update", "The current branch has no upstream branch. Push it with an upstream or set one in the branches popup.")
+		w.Notify(NoticeWarning, w.tr(i18n.AppNoticeCannotUpdate), w.tr(i18n.AppNoticeCannotUpdateBody))
 		return
 	}
 	before := rs.Status.Branch.Head
@@ -407,7 +401,7 @@ func (w *Workspace) Pull(mode gitcli.PullMode) {
 	}, RunOptions{
 		OnError: func(err error) bool {
 			if gitcli.KindOf(err) == gitcli.ErrConflict {
-				w.Notify(NoticeWarning, "Update has conflicts", "Resolve them with your tool; Viff shows the conflicts and follows the repository state.")
+				w.Notify(NoticeWarning, w.tr(i18n.AppNoticeUpdateConflicts), w.tr(i18n.AppNoticeUpdateConflictsBody))
 				return true
 			}
 			return false
@@ -417,9 +411,9 @@ func (w *Workspace) Pull(mode gitcli.PullMode) {
 				return
 			}
 			if w.Repo.Status.Branch.Head == before {
-				w.Notify(NoticeSuccess, "All files are up-to-date", "")
+				w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeAllUpToDate), "")
 			} else {
-				w.Notify(NoticeSuccess, "Project updated", "Updated to "+domain.ShortHash(w.Repo.Status.Branch.Head))
+				w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeProjectUpdated), w.tr(i18n.AppNoticeProjectUpdatedBody, domain.ShortHash(w.Repo.Status.Branch.Head)))
 			}
 		},
 	})
@@ -437,11 +431,11 @@ func (w *Workspace) UpdateBranch(remote, branch string) {
 	}, RunOptions{
 		OnError: func(err error) bool {
 			if errors.Is(err, gitcli.ErrBranchCheckedOut) {
-				w.Notify(NoticeWarning, "Cannot update "+branch, "The branch is checked out in a worktree. Update it there, where its files are.")
+				w.Notify(NoticeWarning, w.tr(i18n.AppNoticeCannotUpdateBranch, branch), w.tr(i18n.AppNoticeBranchCheckedOutBody))
 				return true
 			}
 			if errors.Is(err, gitcli.ErrBranchDiverged) {
-				w.Notify(NoticeWarning, "Cannot fast-forward "+branch, "It has commits the remote does not. Merge or rebase it in a worktree first; Viff leaves the branch unchanged.")
+				w.Notify(NoticeWarning, w.tr(i18n.AppNoticeCannotFastForward, branch), w.tr(i18n.AppNoticeBranchDivergedBody))
 				return true
 			}
 			return false
@@ -449,9 +443,9 @@ func (w *Workspace) UpdateBranch(remote, branch string) {
 		After: func() {
 			switch {
 			case res.UpToDate:
-				w.Notify(NoticeSuccess, branch+" is up to date", "No new commits on "+remote+"/"+branch+".")
+				w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeBranchUpToDate, branch), w.tr(i18n.AppNoticeBranchUpToDateBody, remote, branch))
 			case res.New != "":
-				w.Notify(NoticeSuccess, "Updated "+branch, fmt.Sprintf("%s → %s, %d new commits", domain.ShortHash(res.Old), domain.ShortHash(res.New), res.Commits))
+				w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeUpdatedBranch, branch), w.tr(i18n.AppNoticeUpdatedBranchBody, domain.ShortHash(res.Old), domain.ShortHash(res.New), res.Commits))
 			}
 		},
 	})
@@ -464,14 +458,14 @@ func (w *Workspace) UnshallowRepository() {
 		return
 	}
 	if !rs.Shallow {
-		w.Notify(NoticeInfo, "History is complete", "This repository is not a shallow clone.")
+		w.Notify(NoticeInfo, w.tr(i18n.AppNoticeHistoryComplete), w.tr(i18n.AppNoticeHistoryCompleteBody))
 		return
 	}
 	w.Run("Fetching full history", func(ctx context.Context, repo domain.Repo, p func(string)) error {
 		return w.Git.Unshallow(ctx, repo, p)
 	}, RunOptions{
-		Success:     "Full history fetched",
-		SuccessBody: "The repository is no longer a shallow clone.",
+		Success:     w.tr(i18n.AppNoticeFullHistoryFetched),
+		SuccessBody: w.tr(i18n.AppNoticeFullHistoryFetchedBody),
 	})
 }
 
@@ -488,7 +482,7 @@ func (w *Workspace) Push(o gitcli.PushOptions, after func()) {
 			if dst == "" {
 				dst = o.Branch
 			}
-			w.Notify(NoticeSuccess, "Pushed "+o.Branch+" to "+o.Remote+"/"+dst, "")
+			w.Notify(NoticeSuccess, w.tr(i18n.AppNoticePushedTo, o.Branch, o.Remote, dst), "")
 			if after != nil {
 				after()
 			}
@@ -503,12 +497,12 @@ func (w *Workspace) pushError(force bool) func(error) bool {
 		if gitcli.KindOf(err) != gitcli.ErrRejected {
 			return false
 		}
-		msg := "The remote has commits you do not have. Update first, then push again."
+		msg := w.tr(i18n.AppNoticePushRejectedBody)
 		if force {
-			msg = "The remote branch changed since your last fetch, so the force push was refused to protect that work. Fetch and review before trying again."
+			msg = w.tr(i18n.AppNoticePushRejectedStaleBody)
 		}
-		w.Notify(NoticeError, "Push rejected", msg+"\n\n"+ErrorText(err),
-			NoticeAction{Title: "Update", Run: func() { w.Pull(gitcli.PullMerge) }})
+		w.Notify(NoticeError, w.tr(i18n.AppNoticePushRejected), msg+"\n\n"+ErrorText(err),
+			NoticeAction{Title: w.tr(i18n.AppActionUpdate), Run: func() { w.Pull(gitcli.PullMerge) }})
 		return true
 	}
 }
@@ -529,7 +523,7 @@ func (w *Workspace) pushRef(title, remote, branch, src string, forceWithLease bo
 	w.Run(title, func(ctx context.Context, repo domain.Repo, p func(string)) error {
 		return w.Git.PushRef(ctx, repo, remote, src, branch, forceWithLease, p)
 	}, RunOptions{
-		Success: "Pushed " + pushSource(src) + " to " + remote + "/" + branch,
+		Success: w.tr(i18n.AppNoticePushedTo, pushSource(src), remote, branch),
 		OnError: w.pushError(forceWithLease),
 	})
 }
@@ -576,8 +570,8 @@ func (w *Workspace) Outgoing(branch, upstream string, done func([]domain.Commit,
 func (w *Workspace) operationError(title string) func(error) bool {
 	return func(err error) bool {
 		if gitcli.KindOf(err) == gitcli.ErrConflict {
-			w.Notify(NoticeWarning, title+" stopped with conflicts",
-				"Resolve the conflicts with your external tool. Viff shows them read-only, refreshes when files change, and offers Continue or Abort once Git is ready.")
+			w.Notify(NoticeWarning, w.tr(i18n.AppNoticeStoppedWithConflicts, title),
+				w.tr(i18n.AppNoticeStoppedWithConflictsBody))
 			return true
 		}
 		return false
@@ -589,7 +583,7 @@ func (w *Workspace) Merge(rev string, noFF bool) {
 	w.Run("Merge "+rev, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.Merge(ctx, repo, rev, noFF, false)
 		return err
-	}, RunOptions{OnError: w.operationError("Merge"), Success: "Merged " + rev})
+	}, RunOptions{OnError: w.operationError("Merge"), Success: w.tr(i18n.AppNoticeMerged, rev)})
 }
 
 // Rebase rebases the current branch onto rev.
@@ -597,7 +591,7 @@ func (w *Workspace) Rebase(onto string) {
 	w.Run("Rebase onto "+onto, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.Rebase(ctx, repo, onto)
 		return err
-	}, RunOptions{OnError: w.operationError("Rebase"), Success: "Rebased onto " + onto})
+	}, RunOptions{OnError: w.operationError("Rebase"), Success: w.tr(i18n.AppNoticeRebasedOnto, onto)})
 }
 
 // CherryPick applies commits onto HEAD.
@@ -605,7 +599,7 @@ func (w *Workspace) CherryPick(hashes []string) {
 	w.Run("Cherry-pick", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.CherryPick(ctx, repo, hashes)
 		return err
-	}, RunOptions{OnError: w.operationError("Cherry-pick"), Success: fmt.Sprintf("Cherry-picked %d commit%s", len(hashes), plural(len(hashes)))})
+	}, RunOptions{OnError: w.operationError("Cherry-pick"), Success: w.trPlural(len(hashes), i18n.AppNoticeCherryPicked, i18n.AppNoticeCherryPickedMany, len(hashes))})
 }
 
 // RevertCommits reverts commits with new commits.
@@ -613,7 +607,7 @@ func (w *Workspace) RevertCommits(hashes []string) {
 	w.Run("Revert commits", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.RevertCommits(ctx, repo, hashes)
 		return err
-	}, RunOptions{OnError: w.operationError("Revert"), Success: fmt.Sprintf("Reverted %d commit%s", len(hashes), plural(len(hashes)))})
+	}, RunOptions{OnError: w.operationError("Revert"), Success: w.trPlural(len(hashes), i18n.AppNoticeReverted, i18n.AppNoticeRevertedMany, len(hashes))})
 }
 
 // Reset moves the current branch.
@@ -625,8 +619,8 @@ func (w *Workspace) Reset(mode gitcli.ResetMode, rev string) {
 	w.Run("Reset", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.Reset(ctx, repo, mode, rev)
 	}, RunOptions{After: func() {
-		w.Notify(NoticeSuccess, "Reset to "+domain.ShortHash(rev), "The branch pointed at "+domain.ShortHash(before)+" before; it stays in the reflog.",
-			NoticeAction{Title: "Create branch at old position", Run: func() {
+		w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeResetTo, domain.ShortHash(rev)), w.tr(i18n.AppNoticeResetBody, domain.ShortHash(before)),
+			NoticeAction{Title: w.tr(i18n.AppActionCreateBranchAtOldPosition), Run: func() {
 				w.NewBranch("backup-"+domain.ShortHash(before), before, false, false)
 			}})
 	}})
@@ -650,7 +644,7 @@ func (w *Workspace) OperationAction(action string) {
 func (w *Workspace) StashPush(message string, untracked, keepIndex bool) {
 	w.Run("Stash", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.StashPush(ctx, repo, message, untracked, keepIndex)
-	}, RunOptions{Success: "Changes stashed"})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeChangesStashed)})
 }
 
 // StashApply applies or pops a stash.
@@ -662,7 +656,7 @@ func (w *Workspace) StashApply(s domain.Stash, pop, index bool) {
 	w.Run(verb+" "+s.Ref, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.StashApply(ctx, repo, s.Ref, pop, index)
 		return err
-	}, RunOptions{OnError: w.operationError("Unstash"), Success: verb + " " + s.Ref + " succeeded"})
+	}, RunOptions{OnError: w.operationError("Unstash"), Success: w.tr(i18n.AppNoticeStashSucceeded, verb+" "+s.Ref)})
 }
 
 // StashDrop drops a stash.
@@ -670,35 +664,35 @@ func (w *Workspace) StashDrop(s domain.Stash) {
 	hash := s.Hash
 	w.Run("Drop "+s.Ref, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.StashDrop(ctx, repo, s.Ref)
-	}, RunOptions{Success: "Dropped " + s.Ref, SuccessBody: "It was commit " + hash + "; git stash store can restore it while the object exists."})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeStashDropped, s.Ref), SuccessBody: w.tr(i18n.AppNoticeStashDroppedBody, hash)})
 }
 
 // StashBranch creates a branch from a stash.
 func (w *Workspace) StashBranch(s domain.Stash, branch string) {
 	w.Run("Branch from stash", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.StashBranch(ctx, repo, branch, s.Ref)
-	}, RunOptions{Success: "Created branch " + branch + " from " + s.Ref})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeCreatedBranchFromStash, branch, s.Ref)})
 }
 
 // AddRemote adds a remote.
 func (w *Workspace) AddRemote(name, url string) {
 	w.Run("Add remote", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.AddRemote(ctx, repo, name, url)
-	}, RunOptions{Success: "Added remote " + name})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeAddedRemote, name)})
 }
 
 // RemoveRemote removes a remote.
 func (w *Workspace) RemoveRemote(name string) {
 	w.Run("Remove remote", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.RemoveRemote(ctx, repo, name)
-	}, RunOptions{Success: "Removed remote " + name})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeRemovedRemote, name)})
 }
 
 // SetRemoteURL edits a remote.
 func (w *Workspace) SetRemoteURL(name, url string) {
 	w.Run("Edit remote", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.SetRemoteURL(ctx, repo, name, url)
-	}, RunOptions{Success: "Updated remote " + name})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeUpdatedRemote, name)})
 }
 
 // Reflog loads HEAD's reflog.
@@ -764,7 +758,7 @@ func (w *Workspace) CreatePatch(paths []string, staged bool, done func([]byte, e
 func (w *Workspace) ApplyPatchFile(path string, cached bool, done func(error)) {
 	body := filepath.Base(path)
 	if cached {
-		body += ", applied to the index only"
+		body += w.tr(i18n.AppNoticePatchAppliedToIndex)
 	}
 	w.Run("Apply Patch", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		patch, err := os.ReadFile(path)
@@ -773,10 +767,10 @@ func (w *Workspace) ApplyPatchFile(path string, cached bool, done func(error)) {
 		}
 		return w.Git.ApplyPatch(ctx, repo, patch, cached, false)
 	}, RunOptions{
-		Success:     "Patch applied",
+		Success:     w.tr(i18n.AppNoticePatchApplied),
 		SuccessBody: body,
 		OnError: func(err error) bool {
-			w.Notify(NoticeError, "Cannot apply patch", ErrorText(err))
+			w.Notify(NoticeError, w.tr(i18n.AppNoticeCannotApplyPatch), ErrorText(err))
 			if done != nil {
 				done(err)
 			}
@@ -831,9 +825,9 @@ func (w *Workspace) AddWorktree(path, branch, start string, done func(error)) {
 			finish()
 			if w.Repo == rs {
 				if err != nil {
-					w.NotifyError("Cannot create worktree", err)
+					w.NotifyError(w.tr(i18n.AppNoticeCannotCreateWorktree), err)
 				} else {
-					w.Notify(NoticeSuccess, "Worktree created", path)
+					w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeWorktreeCreated), path)
 					w.Refresh(true)
 				}
 			}
@@ -864,9 +858,9 @@ func (w *Workspace) AddWorktreeExisting(path, branch string, done func(error)) {
 			finish()
 			if w.Repo == rs {
 				if err != nil {
-					w.NotifyError("Cannot create worktree", err)
+					w.NotifyError(w.tr(i18n.AppNoticeCannotCreateWorktree), err)
 				} else {
-					w.Notify(NoticeSuccess, "Worktree created", path)
+					w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeWorktreeCreated), path)
 					w.Refresh(true)
 				}
 			}
@@ -895,9 +889,9 @@ func (w *Workspace) RemoveWorktree(path string, force bool, done func(error)) {
 			finish()
 			if w.Repo == rs {
 				if err != nil {
-					w.NotifyError("Cannot delete worktree", err)
+					w.NotifyError(w.tr(i18n.AppNoticeCannotDeleteWorktree), err)
 				} else {
-					w.Notify(NoticeSuccess, "Worktree deleted", path)
+					w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeWorktreeDeleted), path)
 					w.Refresh(true)
 				}
 			}
@@ -928,7 +922,7 @@ func (w *Workspace) Submodules(done func([]domain.Submodule, error)) {
 // UpdateSubmodule checks out the commit recorded in the index, initializing
 // the submodule when init is set. An empty path updates every submodule.
 func (w *Workspace) UpdateSubmodule(path string, init bool, done func(error)) {
-	name := "all submodules"
+	name := w.tr(i18n.AppNoticeAllSubmodules)
 	if path != "" {
 		name = path
 	}
@@ -936,7 +930,7 @@ func (w *Workspace) UpdateSubmodule(path string, init bool, done func(error)) {
 	w.Run("Update "+name, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
 		return w.Git.UpdateSubmodule(ctx, repo, path, init, progress)
 	}, RunOptions{
-		Success: "Updated " + name,
+		Success: w.tr(i18n.AppNoticeUpdatedSubmodule, name),
 		OnError: func(err error) bool { runErr = err; return false },
 		Always: func() {
 			if done != nil {
@@ -948,7 +942,7 @@ func (w *Workspace) UpdateSubmodule(path string, init bool, done func(error)) {
 
 // SyncSubmodules copies the URLs from .gitmodules into .git/config.
 func (w *Workspace) SyncSubmodules(path string, done func(error)) {
-	name := "all submodules"
+	name := w.tr(i18n.AppNoticeAllSubmodules)
 	if path != "" {
 		name = path
 	}
@@ -956,7 +950,7 @@ func (w *Workspace) SyncSubmodules(path string, done func(error)) {
 	w.Run("Sync "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		return w.Git.SyncSubmodules(ctx, repo, path)
 	}, RunOptions{
-		Success: "Synced " + name,
+		Success: w.tr(i18n.AppNoticeSyncedSubmodule, name),
 		OnError: func(err error) bool { runErr = err; return false },
 		Always: func() {
 			if done != nil {
@@ -977,7 +971,7 @@ func (w *Workspace) Clone(url, parent, dir string, done func(error)) {
 		w.post(func() {
 			finish()
 			if err != nil {
-				w.NotifyError("Clone failed", err)
+				w.NotifyError(w.tr(i18n.AppNoticeCloneFailed), err)
 			} else {
 				w.Open(filepath.Join(parent, dir), nil)
 			}
@@ -999,7 +993,7 @@ func (w *Workspace) Init(dir string, done func(error)) {
 		w.post(func() {
 			finish()
 			if err != nil {
-				w.NotifyError("Init failed", err)
+				w.NotifyError(w.tr(i18n.AppNoticeInitFailed), err)
 			} else {
 				w.Open(dir, nil)
 			}
@@ -1096,7 +1090,7 @@ func (w *Workspace) InteractiveRebase(base string, steps []gitcli.RebaseStep) {
 	w.Run("Interactive rebase", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.InteractiveRebase(ctx, repo, base, steps)
 		return err
-	}, RunOptions{OnError: w.operationError("Rebase"), Success: "Rebase finished"})
+	}, RunOptions{OnError: w.operationError("Rebase"), Success: w.tr(i18n.AppNoticeRebaseFinished)})
 }
 
 // CommitMessage loads one commit's full message for the edit dialog.
@@ -1125,8 +1119,8 @@ func (w *Workspace) RewordCommit(hash, message string) {
 	w.Run("Edit commit message", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.RewordCommit(ctx, repo, hash, message)
 		return err
-	}, RunOptions{OnError: w.rewriteError("Edit commit message"), Success: "Message of " + short + " updated",
-		SuccessBody: "The commits after it were replayed on top."})
+	}, RunOptions{OnError: w.rewriteError("Edit commit message"), Success: w.tr(i18n.AppNoticeMessageUpdated, short),
+		SuccessBody: w.tr(i18n.AppNoticeMessageUpdatedBody)})
 }
 
 // SquashCommit folds one commit into its parent with a combined message.
@@ -1135,8 +1129,8 @@ func (w *Workspace) SquashCommit(hash, message string) {
 	w.Run("Squash commit", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.SquashCommit(ctx, repo, hash, message)
 		return err
-	}, RunOptions{OnError: w.rewriteError("Squash commit"), Success: "Squashed " + short + " into its parent",
-		SuccessBody: "The combined commit keeps both changes."})
+	}, RunOptions{OnError: w.rewriteError("Squash commit"), Success: w.tr(i18n.AppNoticeSquashedIntoParent, short),
+		SuccessBody: w.tr(i18n.AppNoticeSquashedBody)})
 }
 
 // DropCommit removes one commit from the branch; its changes disappear.
@@ -1145,8 +1139,8 @@ func (w *Workspace) DropCommit(hash string) {
 	w.Run("Drop commit", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
 		_, err := w.Git.DropCommit(ctx, repo, hash)
 		return err
-	}, RunOptions{OnError: w.rewriteError("Drop commit"), Success: "Dropped " + short,
-		SuccessBody: "The commits after it were replayed without it."})
+	}, RunOptions{OnError: w.rewriteError("Drop commit"), Success: w.tr(i18n.AppNoticeDroppedCommit, short),
+		SuccessBody: w.tr(i18n.AppNoticeDroppedCommitBody)})
 }
 
 // rewriteError explains a refused or aborted history edit. The Git command
@@ -1155,10 +1149,10 @@ func (w *Workspace) rewriteError(title string) func(error) bool {
 	return func(err error) bool {
 		switch {
 		case errors.Is(err, gitcli.ErrRewriteAbortLeft):
-			w.Notify(NoticeError, title+" failed", "The rebase is still in progress. Run `git rebase --abort` in a terminal before doing anything else.\n\n"+ErrorText(err))
+			w.Notify(NoticeError, w.tr(i18n.AppNoticeFailed, title), w.tr(i18n.AppNoticeRewriteAbortLeftBody, ErrorText(err)))
 			return true
 		case gitcli.KindOf(err) == gitcli.ErrConflict:
-			w.Notify(NoticeWarning, title+" was aborted", "The edit hit a conflict. Viff aborted the rebase and left the branch as it was.")
+			w.Notify(NoticeWarning, w.tr(i18n.AppNoticeWasAborted, title), w.tr(i18n.AppNoticeEditHitConflictBody))
 			return true
 		case errors.Is(err, gitcli.ErrRewriteOperation),
 			errors.Is(err, gitcli.ErrRewriteRoot),

@@ -14,6 +14,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 	"viff/internal/version"
 )
@@ -557,7 +558,7 @@ func (w *Window) settingsMenu() []item {
 			sep(),
 		)
 	}
-	items = append(items, item{title: "About Viff", icon: icons.Info, run: w.openAbout})
+	items = append(items, item{title: w.t(i18n.AboutTitle), icon: icons.Info, run: w.openAbout})
 	return items
 }
 
@@ -571,16 +572,16 @@ func (w *Window) openAbout() {
 		detail += " · Git " + git
 	}
 	w.openDialog(&dialog{
-		title: "About Viff", ok: "Close", width: 480, noCancel: true,
+		title: w.t(i18n.AboutTitle), ok: w.t(i18n.CommonClose), width: 480, noCancel: true,
 		body: func(f *form) {
 			f.custom(56, func(r ui.Rect) {
 				w.c.DrawBitmap(branding.Bitmap, rect(r.X, r.Y+4, 44, 44))
 				w.p.text("Viff", rect(r.X+58, r.Y+4, 200, 24), 18, semibold, w.pal.Text)
-				w.p.text("A Git client in the style of IntelliJ IDEA", rect(r.X+58, r.Y+28, r.Width-58, 20), fontUI, regular, w.pal.TextMuted)
+				w.p.text(w.t(i18n.AboutTagline), rect(r.X+58, r.Y+28, r.Width-58, 20), fontUI, regular, w.pal.TextMuted)
 			})
 			f.text("Viff " + version.String())
 			f.muted(detail)
-			f.muted("Icons: IntelliJ Platform (Apache 2.0). Editor font: JetBrains Mono (OFL).")
+			f.muted(w.t(i18n.AboutCredits))
 		},
 	})
 }
@@ -590,6 +591,7 @@ func (w *Window) openSettings() {
 	theme := s.Theme
 	editorFont := s.EditorFont
 	diffFont := s.DiffFont
+	language := s.Language
 	// app.FontFamilies and app.MonospaceFamilies read the system on every call
 	// and take a moment, so they are collected once when the dialog opens rather
 	// than while painting.
@@ -605,19 +607,27 @@ func (w *Window) openSettings() {
 	pull := s.PullMode
 	gitDraft := newGitSettingsDraft(s)
 	page := 0
-	themeTitle := map[string]string{"dark": "Islands Dark", "light": "Islands Light", "system": "Sync with OS"}
-	pullTitle := map[string]string{"merge": "Merge", "rebase": "Rebase", "ff-only": "Fast-forward only"}
+	themeTitle := map[string]string{
+		"dark":   w.t(i18n.SettingsThemeDark),
+		"light":  w.t(i18n.SettingsThemeLight),
+		"system": w.t(i18n.SettingsThemeSystem),
+	}
+	pullTitle := map[string]string{
+		"merge":   w.t(i18n.SettingsPullMerge),
+		"rebase":  w.t(i18n.SettingsPullRebase),
+		"ff-only": w.t(i18n.SettingsPullFFOnly),
+	}
 	w.openDialog(&dialog{
-		title: "Settings", ok: "OK", width: 600,
+		title: w.t(i18n.SettingsTitle), ok: w.t(i18n.CommonOK), cancel: w.t(i18n.CommonCancel), width: 600,
 		body: func(f *form) {
 			f.labelW = 170
-			settingsTabs(f, &page, []string{"General", "Git"})
+			settingsTabs(f, &page, []string{w.t(i18n.SettingsTabGeneral), w.t(i18n.SettingsTabGit)})
 			if page == 1 {
-				f.bold("Commands and signing")
+				f.bold(w.t(i18n.SettingsGroupCommands))
 				gitDraft.form(f)
 				f.gap(6)
-				f.bold("Remote")
-				f.combo("Update method:", pullTitle[pull], func() []item {
+				f.bold(w.t(i18n.SettingsGroupRemote))
+				f.combo(w.t(i18n.SettingsLabelUpdateMode), pullTitle[pull], func() []item {
 					var items []item
 					for _, k := range []string{"merge", "rebase", "ff-only"} {
 						k := k
@@ -625,16 +635,26 @@ func (w *Window) openSettings() {
 					}
 					return items
 				})
-				f.check("Prune remote branches on fetch", &prune)
-				f.check("Fetch in the background", &autoFetch)
+				f.check(w.t(i18n.SettingsCheckPrune), &prune)
+				f.check(w.t(i18n.SettingsCheckAutoFetch), &autoFetch)
 				if autoFetch {
 					m, err := strconv.Atoi(strings.TrimSpace(mins.String()))
-					f.field("Every (minutes):", mins, "10", err != nil || m < 1)
+					f.field(w.t(i18n.SettingsLabelFetchMins), mins, "10", err != nil || m < 1)
 				}
 				return
 			}
-			f.bold("Appearance")
-			f.combo("Theme:", themeTitle[theme], func() []item {
+			f.bold(w.t(i18n.SettingsGroupAppearance))
+			langCurrent := w.t(i18n.SettingsLangEnglish)
+			if language == "zh-CN" {
+				langCurrent = w.t(i18n.SettingsLangChinese)
+			}
+			f.combo(w.t(i18n.SettingsLabelLanguage), langCurrent, func() []item {
+				return []item{
+					{title: w.t(i18n.SettingsLangEnglish), checked: language != "zh-CN", run: func() { language = "en" }},
+					{title: w.t(i18n.SettingsLangChinese), checked: language == "zh-CN", run: func() { language = "zh-CN" }},
+				}
+			})
+			f.combo(w.t(i18n.SettingsLabelTheme), themeTitle[theme], func() []item {
 				var items []item
 				for _, k := range []string{"dark", "light", "system"} {
 					k := k
@@ -643,38 +663,39 @@ func (w *Window) openSettings() {
 				return items
 			})
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
-			f.field("Editor font size:", font, "13", err != nil || n < 8 || n > 32)
+			f.field(w.t(i18n.SettingsLabelFontSize), font, "13", err != nil || n < 8 || n > 32)
 			f.gap(6)
-			f.bold("Git executable")
-			f.field("Path to Git:", gitPath, "Detected automatically", false)
+			f.bold(w.t(i18n.SettingsGroupGitExec))
+			f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.t(i18n.SettingsPlaceholderAuto), false)
 			f.gap(6)
-			f.bold("Tools")
-			f.field("External editor command:", editor, "code -g {file}:{line}", false)
+			f.bold(w.t(i18n.SettingsGroupTools))
+			f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)
 			f.y -= 8
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Empty: system default. {file} and {line} are filled in.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.SettingsHintEditor), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
 			f.gap(4)
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Settings file: "+shortenHome(s.Path()), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
+				w.p.text(w.t(i18n.SettingsLabelSettingsFile, shortenHome(s.Path())), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
 			})
 			f.gap(6)
-			f.bold("Diagnostics")
-			f.check("Debug logging", &debugLog)
+			f.bold(w.t(i18n.SettingsGroupDiagnostics))
+			f.check(w.t(i18n.SettingsCheckDebugLog), &debugLog)
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Writes detailed events for troubleshooting. Logs stay on this computer.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.SettingsHintDebugLog), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
 			f.gap(6)
-			f.bold("Updates")
-			f.check("Check for updates at startup", &autoUpdate)
+			f.bold(w.t(i18n.SettingsGroupUpdates))
+			f.check(w.t(i18n.SettingsCheckAutoUpdate), &autoUpdate)
 			f.gap(6)
-			f.bold("Fonts")
-			current := "Default (system interface font)"
+			f.bold(w.t(i18n.SettingsGroupFonts))
+			interfaceDefault := w.t(i18n.SettingsFontDefaultInterface)
+			current := interfaceDefault
 			if editorFont != "" {
 				current = editorFont
 			}
-			f.combo("Interface font:", current, func() []item {
-				items := []item{{title: "Default (system interface font)", checked: editorFont == "", run: func() { editorFont = "" }}}
+			f.combo(w.t(i18n.SettingsLabelInterface), current, func() []item {
+				items := []item{{title: interfaceDefault, checked: editorFont == "", run: func() { editorFont = "" }}}
 				for _, name := range fonts {
 					name := name
 					items = append(items, item{title: name, checked: editorFont == name, run: func() { editorFont = name }})
@@ -682,14 +703,15 @@ func (w *Window) openSettings() {
 				return items
 			})
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Replaces the font of the whole interface. Diffs and the console keep a fixed-pitch face.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.SettingsHintInterface), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
-			diffCurrent := "Default (bundled or system fixed-pitch)"
+			diffDefault := w.t(i18n.SettingsFontDefaultDiff)
+			diffCurrent := diffDefault
 			if diffFont != "" {
 				diffCurrent = diffFont
 			}
-			f.combo("Diff font:", diffCurrent, func() []item {
-				items := []item{{title: "Default (bundled or system fixed-pitch)", checked: diffFont == "", run: func() { diffFont = "" }}}
+			f.combo(w.t(i18n.SettingsLabelDiffFont), diffCurrent, func() []item {
+				items := []item{{title: diffDefault, checked: diffFont == "", run: func() { diffFont = "" }}}
 				for _, name := range monoFonts {
 					name := name
 					items = append(items, item{title: name, checked: diffFont == name, run: func() { diffFont = name }})
@@ -697,7 +719,7 @@ func (w *Window) openSettings() {
 				return items
 			})
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Only fixed-pitch families: diffs, console and hashes lay their text out on a character grid.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.SettingsHintDiffFont), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
 		},
 		okDisabled: func() bool {
@@ -732,8 +754,10 @@ func (w *Window) openSettings() {
 			w.ws.SetLogLevel(s.LogLevel)
 			s.EditorFont = editorFont
 			s.DiffFont = diffFont
+			s.Language = language
 			w.applyTheme()
 			w.applyFont()
+			w.applyLanguage()
 			w.Invalidate()
 			w.flushSettings()
 			w.startAutoFetch()

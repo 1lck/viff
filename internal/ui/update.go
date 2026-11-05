@@ -1,10 +1,10 @@
 package viffui
 
 import (
-	"fmt"
 	"strings"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 	"viff/internal/platform"
 )
 
@@ -21,10 +21,10 @@ func (w *Window) checkForUpdates() {
 // progress appear without reopening the dialog.
 func (w *Window) openUpdateDialog() {
 	w.openDialog(&dialog{
-		title:      "Update Viff",
+		title:      w.t(i18n.UpdateTitle),
 		width:      560,
-		ok:         "Close",
-		cancel:     "Close",
+		ok:         w.t(i18n.UpdateButtonClose),
+		cancel:     w.t(i18n.UpdateButtonClose),
 		okLabel:    w.updateActionLabel,
 		okDisabled: w.updateActionDisabled,
 		onOK:       w.submitUpdateAction,
@@ -37,27 +37,27 @@ func (w *Window) openUpdateDialog() {
 func (w *Window) updateActionLabel() string {
 	switch w.ws.Update.Phase {
 	case vapp.UpdateAvailable:
-		return "Update"
+		return w.t(i18n.UpdateActionUpdate)
 	case vapp.UpdateDownloading:
-		return "Downloading…"
+		return w.t(i18n.UpdateActionDownloading)
 	case vapp.UpdateReady:
-		return "Restart to Update"
+		return w.t(i18n.UpdateActionRestart)
 	case vapp.UpdateInstalling:
-		return "Installing…"
+		return w.t(i18n.UpdateActionInstalling)
 	case vapp.UpdateManual:
-		return "Show Download"
+		return w.t(i18n.UpdateActionShowDownload)
 	case vapp.UpdateError:
 		if w.ws.HasDownloadedUpdate() {
-			return "Retry Install"
+			return w.t(i18n.UpdateActionRetryInstall)
 		}
 		if w.ws.HasUpdate() {
-			return "Retry Download"
+			return w.t(i18n.UpdateActionRetryDownload)
 		}
-		return "Check Again"
+		return w.t(i18n.UpdateActionCheckAgain)
 	case vapp.UpdateChecking:
-		return "Checking…"
+		return w.t(i18n.UpdateActionChecking)
 	}
-	return "Close"
+	return w.t(i18n.UpdateButtonClose)
 }
 
 // updateActionDisabled reports whether the primary button is a no-op spinner.
@@ -112,50 +112,50 @@ func (w *Window) paintUpdate(f *form) {
 	state := w.ws.Update
 	switch state.Phase {
 	case vapp.UpdateChecking:
-		f.bold("Checking for updates…")
+		f.bold(w.t(i18n.UpdateNoticeChecking))
 		f.muted("Viff " + state.Current)
 	case vapp.UpdateUpToDate:
-		f.bold("Viff is up to date.")
-		f.muted("Version " + state.Current + " is the newest release.")
+		f.bold(w.t(i18n.UpdateNoticeUpToDate))
+		f.muted(w.t(i18n.UpdateNoticeNewest, state.Current))
 	case vapp.UpdateAvailable:
-		f.bold("Viff " + state.Version + " is available.")
-		f.muted("You have " + state.Current + ".")
+		f.bold(w.t(i18n.UpdateNoticeAvailable, state.Version))
+		f.muted(w.t(i18n.UpdateNoticeYouHave, state.Current))
 		if notes := updateNotes(state.Notes); notes != "" {
 			f.gap(6)
-			f.muted("Release notes")
+			f.muted(w.t(i18n.UpdateLabelReleaseNotes))
 			f.text(notes)
 		}
 	case vapp.UpdateDownloading:
-		f.bold("Downloading Viff " + state.Version + "…")
+		f.bold(w.t(i18n.UpdateNoticeDownloading, state.Version))
 		if state.Total > 0 {
 			percent := state.Progress * 100 / state.Total
-			f.muted(fmt.Sprintf("%d%% · %s of %s", percent, humanBytes(state.Progress), humanBytes(state.Total)))
+			f.muted(w.t(i18n.UpdateNoticeProgress, percent, humanBytes(state.Progress), humanBytes(state.Total)))
 		} else {
-			f.muted(humanBytes(state.Progress) + " downloaded")
+			f.muted(w.t(i18n.UpdateNoticeDownloaded, humanBytes(state.Progress)))
 		}
 	case vapp.UpdateReady:
-		f.bold("Viff " + state.Version + " has been downloaded.")
-		f.muted("Restart Viff to finish the update. Your repositories and settings are kept.")
+		f.bold(w.t(i18n.UpdateNoticeReady, state.Version))
+		f.muted(w.t(i18n.UpdateNoticeRestartHint))
 	case vapp.UpdateInstalling:
-		f.bold("Installing update…")
-		f.muted("Viff will close and start the new version automatically.")
+		f.bold(w.t(i18n.UpdateNoticeInstalling))
+		f.muted(w.t(i18n.UpdateNoticeInstallHint))
 	case vapp.UpdateManual:
-		f.bold("Viff " + state.Version + " was downloaded.")
+		f.bold(w.t(i18n.UpdateNoticeManualDownload, state.Version))
 		if state.Message != "" {
 			f.text(state.Message)
 		}
 		if state.ManualPath != "" {
-			f.muted("Package: " + state.ManualPath)
+			f.muted(w.t(i18n.UpdateLabelPackage, state.ManualPath))
 		}
-		f.muted("Install it with your package manager, then start Viff again.")
+		f.muted(w.t(i18n.UpdateNoticeManualHint))
 	case vapp.UpdateError:
-		f.bold("Update failed.")
+		f.bold(w.t(i18n.UpdateNoticeFailed))
 		if state.Message != "" {
 			f.text(state.Message)
 		}
-		f.muted("You can retry, or download the release from the project page.")
+		f.muted(w.t(i18n.UpdateNoticeFailedHint))
 	default:
-		f.bold("Check for updates")
+		f.bold(w.t(i18n.UpdateNoticeDefault))
 		f.muted("Viff " + state.Current)
 	}
 }

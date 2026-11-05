@@ -8,6 +8,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -66,11 +67,11 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 		return
 	}
 	if res.ModeChange != "" || res.Identical() {
-		msg := "Contents are identical"
+		msg := w.t(i18n.DiffNoticeIdentical)
 		if res.ModeChange != "" {
-			msg = "File mode changed: " + res.ModeChange
+			msg = w.t(i18n.DiffNoticeModeChanged, res.ModeChange)
 			if !res.Identical() {
-				msg += " (content changed too)"
+				msg = w.t(i18n.DiffNoticeModeChangedContent, res.ModeChange)
 			}
 		}
 		br := splitTop(&r, 30)
@@ -312,7 +313,7 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 			gid = scDiffLineSel.At(1)
 		}
 		w.c.HitWithOptions(gid, gr, "Select lines", ui.HitOptions{SkipFocus: true, Cursor: ui.PointerCursorHand})
-		w.tip(gid, "Click changed lines to select them for a partial stage or revert")
+		w.tip(gid, w.t(i18n.DiffTipSelectLines))
 		w.onDrag(gid, func(e dragEvent) {
 			if e.Phase != dragBegin {
 				return
@@ -398,11 +399,36 @@ func (w *Window) paintDivider(t *diffTab, div ui.Rect, oldY, newY, lineH float32
 	}
 }
 
+// applyTip is the tooltip of a block action button; verb names the action.
 func (w *Window) applyTip(t *diffTab, bi int, verb string) string {
-	if n := t.selectedIn(bi); n > 0 {
-		return verb + " " + plural(n, "Selected Line", "Selected Lines")
+	n := t.selectedIn(bi)
+	switch verb {
+	case "Stage":
+		switch {
+		case n == 1:
+			return w.t(i18n.DiffTipStageSelectedOne, n)
+		case n > 1:
+			return w.t(i18n.DiffTipStageSelectedMany, n)
+		}
+		return w.t(i18n.DiffTipStageChange)
+	case "Revert":
+		switch {
+		case n == 1:
+			return w.t(i18n.DiffTipRevertSelectedOne, n)
+		case n > 1:
+			return w.t(i18n.DiffTipRevertSelectedMany, n)
+		}
+		return w.t(i18n.DiffTipRevertChange)
+	case "Unstage":
+		switch {
+		case n == 1:
+			return w.t(i18n.DiffTipUnstageSelectedOne, n)
+		case n > 1:
+			return w.t(i18n.DiffTipUnstageSelectedMany, n)
+		}
+		return w.t(i18n.DiffTipUnstageChange)
 	}
-	return verb + " Change"
+	return verb
 }
 
 func (t *diffTab) selectedIn(bi int) int {
@@ -580,26 +606,26 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	s := w.ws.Settings
 	x, y := r.X+8, r.Y+(r.Height-actionSize)/2
 	nb := len(res.Blocks)
-	if w.action(idDiffPrev, x, y, icons.Up, "Previous Difference\t⇧F7", actOpts{disabled: nb == 0}) {
+	if w.action(idDiffPrev, x, y, icons.Up, w.t(i18n.DiffActionPrevDifference), actOpts{disabled: nb == 0}) {
 		w.after(func() { w.jumpBlock(t, false) })
 	}
 	x += actionSize + 2
-	if w.action(idDiffNext, x, y, icons.Down, "Next Difference\tF7", actOpts{disabled: nb == 0}) {
+	if w.action(idDiffNext, x, y, icons.Down, w.t(i18n.DiffActionNextDifference), actOpts{disabled: nb == 0}) {
 		w.after(func() { w.jumpBlock(t, true) })
 	}
 	x += actionSize + 8
 	w.p.vline(x-4, y+5, actionSize-10, w.pal.Separator)
-	mode := "Side-by-side viewer"
+	mode := w.t(i18n.DiffViewSideBySide)
 	if s.DiffUnified {
-		mode = "Unified viewer"
+		mode = w.t(i18n.DiffViewUnified)
 	}
 	clicked, cw := w.filterChip(idDiffMode, x, y, actionSize, mode, "")
 	if clicked {
 		ar := rect(x, y, cw, actionSize)
 		w.after(func() {
 			w.openMenuBelow(ar, []item{
-				{title: "Side-by-side viewer", icon: icons.SideBySide, checked: !s.DiffUnified, run: func() { s.DiffUnified = false; w.saveSettings() }},
-				{title: "Unified viewer", icon: icons.Unified, checked: s.DiffUnified, run: func() { s.DiffUnified = true; w.saveSettings() }},
+				{title: w.t(i18n.DiffViewSideBySide), icon: icons.SideBySide, checked: !s.DiffUnified, run: func() { s.DiffUnified = false; w.saveSettings() }},
+				{title: w.t(i18n.DiffViewUnified), icon: icons.Unified, checked: s.DiffUnified, run: func() { s.DiffUnified = true; w.saveSettings() }},
 			}, 200)
 		})
 	}
@@ -624,11 +650,11 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 		})
 	}
 	x += cw + 6
-	if w.action(idDiffWords, x, y, icons.Highlighting, "Highlight Words", actOpts{toggled: s.DiffHighlightWords}) {
+	if w.action(idDiffWords, x, y, icons.Highlighting, w.t(i18n.DiffActionHighlightWords), actOpts{toggled: s.DiffHighlightWords}) {
 		w.after(func() { s.DiffHighlightWords = !s.DiffHighlightWords; w.saveSettings() })
 	}
 	x += actionSize + 2
-	if w.action(idDiffSync, x, y, icons.SynchronizeScrolling, "Synchronize Scrolling", actOpts{toggled: s.DiffSyncScroll, disabled: s.DiffUnified}) {
+	if w.action(idDiffSync, x, y, icons.SynchronizeScrolling, w.t(i18n.DiffActionSyncScrolling), actOpts{toggled: s.DiffSyncScroll, disabled: s.DiffUnified}) {
 		w.after(func() { s.DiffSyncScroll = !s.DiffSyncScroll; w.saveSettings() })
 	}
 	x += actionSize + 2
@@ -636,14 +662,14 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	// Right side: counts and file actions.
 	rx := right(r) - 8
 	if t.src.Working && t.src.Area != domain.AreaConflicts {
-		if w.action(idDiffOpen, rx-actionSize, y, icons.Edit, "Open in External Editor\tF4", actOpts{}) {
+		if w.action(idDiffOpen, rx-actionSize, y, icons.Edit, w.t(i18n.DiffActionOpenEditor), actOpts{}) {
 			p := t.src.Path
 			w.after(func() { w.openExternal(p, w.currentLine(t)) })
 		}
 		rx -= actionSize + 6
-		label := "Stage File"
+		label := w.t(i18n.DiffActionStageFile)
 		if t.src.Area == domain.AreaStaged {
-			label = "Unstage File"
+			label = w.t(i18n.DiffActionUnstageFile)
 		}
 		bw := w.p.width(label, fontUI, regular) + 20
 		if w.button(idDiffStageFile, rect(rx-bw, r.Y+(r.Height-26)/2, bw, 26), label, btnBorderless, t.busy) {
@@ -662,14 +688,13 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 		}
 		rx -= bw + 10
 	}
-	count := "No differences"
+	count := w.t(i18n.DiffCountNone)
 	if nb > 0 {
-		count = plural(nb, "difference", "differences")
-		if t.cur >= 0 && t.cur < nb {
-			count = itoa(t.cur+1) + " of " + itoa(nb) + " differences"
-			if nb == 1 {
-				count = "1 difference"
-			}
+		count = w.t(i18n.DiffCountMany, nb)
+		if nb == 1 {
+			count = w.t(i18n.DiffCountOne, nb)
+		} else if t.cur >= 0 && t.cur < nb {
+			count = w.t(i18n.DiffCountOfTotal, itoa(t.cur+1), itoa(nb))
 		}
 	}
 	if res.Notice != "" || res.Image != nil {
@@ -742,7 +767,7 @@ func (w *Window) openDiffSearch() {
 func (w *Window) paintSearchBar(t *diffTab, r ui.Rect) {
 	w.p.fill(r, w.pal.IslandAlt)
 	fr := rect(r.X+8, r.Y+4, min(360, r.Width-200), 28)
-	if w.field(idDiffSearch, t.search, fr, fieldOpts{icon: icons.Search, placeholder: "Search in the new version"}) {
+	if w.field(idDiffSearch, t.search, fr, fieldOpts{icon: icons.Search, placeholder: w.t(i18n.DiffSearchPlaceholder)}) {
 		w.after(func() { w.nextHit(t, true) })
 	}
 	w.onKeys(idDiffSearch, func(e ui.KeyEvent) bool {
@@ -787,11 +812,13 @@ func (w *Window) paintSearchBar(t *diffTab, r ui.Rect) {
 	switch {
 	case q == "":
 	case len(t.hits) == 0:
-		status = "0 results"
+		status = w.t(i18n.DiffSearchNoResults)
 	case t.hitIdx >= 0:
 		status = itoa(t.hitIdx+1) + "/" + itoa(len(t.hits))
+	case len(t.hits) == 1:
+		status = w.t(i18n.DiffSearchResultOne, len(t.hits))
 	default:
-		status = plural(len(t.hits), "result", "results")
+		status = w.t(i18n.DiffSearchResultMany, len(t.hits))
 	}
 	c := w.pal.TextSecond
 	if q != "" && len(t.hits) == 0 {
@@ -800,14 +827,14 @@ func (w *Window) paintSearchBar(t *diffTab, r ui.Rect) {
 	sw := w.p.text(status, rect(x, r.Y, 120, r.Height), fontUI, regular, c)
 	x += sw + 10
 	ay := r.Y + (r.Height-actionSize)/2
-	if w.action(idDiffSearchPrev, x, ay, icons.Up, "Previous Occurrence\t⇧⏎", actOpts{disabled: len(t.hits) == 0}) {
+	if w.action(idDiffSearchPrev, x, ay, icons.Up, w.t(i18n.DiffSearchPrev), actOpts{disabled: len(t.hits) == 0}) {
 		w.after(func() { w.nextHit(t, false) })
 	}
 	x += actionSize + 2
-	if w.action(idDiffSearchNext, x, ay, icons.Down, "Next Occurrence\t⏎", actOpts{disabled: len(t.hits) == 0}) {
+	if w.action(idDiffSearchNext, x, ay, icons.Down, w.t(i18n.DiffSearchNext), actOpts{disabled: len(t.hits) == 0}) {
 		w.after(func() { w.nextHit(t, true) })
 	}
-	if w.action(idDiffSearchClose, right(r)-8-actionSize, ay, icons.Close, "Close\t⎋", actOpts{}) {
+	if w.action(idDiffSearchClose, right(r)-8-actionSize, ay, icons.Close, w.t(i18n.DiffSearchClose), actOpts{}) {
 		w.after(func() { t.searchOpen = false })
 	}
 }

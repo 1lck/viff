@@ -1,0 +1,344 @@
+package i18n
+
+// Message keys of the workspace panels: the Commit tool window and its Stash
+// tab, and the editor's empty state. Later stages add their own file beside
+// this one; each file registers its own map from an init, so the files never
+// share a literal.
+const (
+	// Panel titles of the Commit tool window and the lists it shows.
+	WorkspacePanelCommit  = Key("workspace.panel.commit")
+	WorkspacePanelStash   = Key("workspace.panel.stash")
+	WorkspacePanelChanges = Key("workspace.panel.changes")
+
+	// Labels of the values a panel prints.
+	WorkspaceLabelCommitMessage = Key("workspace.label.commitMessage")
+	WorkspaceLabelSubmodule     = Key("workspace.label.submodule")
+	WorkspaceLabelAndMore       = Key("workspace.label.andMore")
+
+	WorkspaceStateLoading = Key("workspace.state.loading")
+
+	// Empty states.
+	WorkspaceEmptyNoChanges        = Key("workspace.empty.noChanges")
+	WorkspaceEmptyWorkingTreeClean = Key("workspace.empty.workingTreeClean")
+	WorkspaceEmptyEditorHint       = Key("workspace.empty.editorHint")
+	WorkspaceHintProject           = Key("workspace.hint.project")
+	WorkspaceHintOpenFile          = Key("workspace.hint.openFile")
+
+	// Toolbar actions and the menu items that repeat them.
+	WorkspaceActionRefresh  = Key("workspace.action.refresh")
+	WorkspaceActionHide     = Key("workspace.action.hide")
+	WorkspaceActionShowDiff = Key("workspace.action.showDiff")
+	WorkspaceActionRollback = Key("workspace.action.rollback")
+
+	WorkspaceActionStageAll   = Key("workspace.action.stageAll")
+	WorkspaceActionStageAllIn = Key("workspace.action.stageAllIn")
+	WorkspaceActionUnstageAll = Key("workspace.action.unstageAll")
+
+	WorkspaceActionGroupByDirectory = Key("workspace.action.groupByDirectory")
+	WorkspaceActionExpandAll        = Key("workspace.action.expandAll")
+	WorkspaceActionCollapseAll      = Key("workspace.action.collapseAll")
+
+	WorkspaceActionStashChanges = Key("workspace.action.stashChanges")
+
+	WorkspaceActionCopyPath         = Key("workspace.action.copyPath")
+	WorkspaceActionCopyRelativePath = Key("workspace.action.copyRelativePath")
+
+	// Tooltips, hints and the shortcut hints of the empty editor.
+	WorkspaceTipResolveFirst        = Key("workspace.tip.resolveFirst")
+	WorkspaceTipResolveBeforeCommit = Key("workspace.tip.resolveBeforeCommit")
+	WorkspaceTipStageToCommit       = Key("workspace.tip.stageToCommit")
+	WorkspaceTipEnterMessage        = Key("workspace.tip.enterMessage")
+	WorkspaceTipCommitOptions       = Key("workspace.tip.commitOptions")
+
+	WorkspaceHintPush          = Key("workspace.hint.push")
+	WorkspaceHintUpdateProject = Key("workspace.hint.updateProject")
+	WorkspaceHintBranches      = Key("workspace.hint.branches")
+	WorkspaceHintDiffSelection = Key("workspace.hint.diffSelection")
+
+	// The banner of a merge, rebase, cherry-pick or revert in progress.
+	WorkspaceBannerInProgress = Key("workspace.banner.inProgress")
+	WorkspaceBannerRebasing   = Key("workspace.banner.rebasing")
+	WorkspaceBannerMerging    = Key("workspace.banner.merging")
+
+	// Buttons.
+	WorkspaceButtonContinue = Key("workspace.button.continue")
+	WorkspaceButtonSkip     = Key("workspace.button.skip")
+	WorkspaceButtonAbort    = Key("workspace.button.abort")
+	WorkspaceButtonRollback = Key("workspace.button.rollback")
+
+	WorkspaceButtonCommit             = Key("workspace.button.commit")
+	WorkspaceButtonAmendCommit        = Key("workspace.button.amendCommit")
+	WorkspaceButtonCommitAndPush      = Key("workspace.button.commitAndPush")
+	WorkspaceButtonAmendCommitAndPush = Key("workspace.button.amendCommitAndPush")
+
+	WorkspaceButtonClose = Key("workspace.button.close")
+
+	// Context menu items.
+	WorkspaceMenuCloseOtherTabs = Key("workspace.menu.closeOtherTabs")
+	WorkspaceMenuCloseAllTabs   = Key("workspace.menu.closeAllTabs")
+	WorkspaceMenuKeepTabOpen    = Key("workspace.menu.keepTabOpen")
+
+	WorkspaceMenuUpdateSubmodule = Key("workspace.menu.updateSubmodule")
+	WorkspaceMenuOpenSubmodule   = Key("workspace.menu.openSubmodule")
+	WorkspaceMenuStage           = Key("workspace.menu.stage")
+	WorkspaceMenuUnstage         = Key("workspace.menu.unstage")
+
+	WorkspaceMenuMarkResolved     = Key("workspace.menu.markResolved")
+	WorkspaceMenuMoveToChangeList = Key("workspace.menu.moveToChangeList")
+	WorkspaceMenuAddToGitignore   = Key("workspace.menu.addToGitignore")
+
+	WorkspaceMenuShowHistory    = Key("workspace.menu.showHistory")
+	WorkspaceMenuAnnotate       = Key("workspace.menu.annotate")
+	WorkspaceMenuOpenInEditor   = Key("workspace.menu.openInEditor")
+	WorkspaceMenuRevealInFinder = Key("workspace.menu.revealInFinder")
+
+	WorkspaceMenuCreatePatch  = Key("workspace.menu.createPatch")
+	WorkspaceMenuCommitChecks = Key("workspace.menu.commitChecks")
+
+	// Checkboxes of the commit options.
+	WorkspaceCheckAmend           = Key("workspace.check.amend")
+	WorkspaceCheckRunHooks        = Key("workspace.check.runHooks")
+	WorkspaceCheckSignOff         = Key("workspace.check.signOff")
+	WorkspaceCheckDeleteUntracked = Key("workspace.check.deleteUntracked")
+
+	// Dialogs, confirmations and muted notes.
+	WorkspaceDialogRollback = Key("workspace.dialog.rollback")
+
+	WorkspaceConfirmAbort        = Key("workspace.confirm.abortTitle")
+	WorkspaceConfirmAbortBody    = Key("workspace.confirm.abortBody")
+	WorkspaceConfirmRollbackBody = Key("workspace.confirm.rollbackBody")
+
+	WorkspaceMutedStagedReset = Key("workspace.muted.stagedReset")
+
+	// Errors.
+	WorkspaceErrorCannotCopy     = Key("workspace.error.cannotCopy")
+	WorkspaceErrorCannotShowDiff = Key("workspace.error.cannotShowDiff")
+
+	// Counts. The one form is used for one in English; Chinese has one form for
+	// every count and repeats its text in the many form.
+	WorkspaceCountFilesOne      = Key("workspace.count.files.one")
+	WorkspaceCountFilesMany     = Key("workspace.count.files.many")
+	WorkspaceCountConflictsOne  = Key("workspace.count.conflicts.one")
+	WorkspaceCountConflictsMany = Key("workspace.count.conflicts.many")
+
+	WorkspaceCountUnversionedOne  = Key("workspace.count.unversionedFiles.one")
+	WorkspaceCountUnversionedMany = Key("workspace.count.unversionedFiles.many")
+)
+
+func init() {
+	register(EN, map[Key]string{
+		WorkspacePanelCommit:  "Commit",
+		WorkspacePanelStash:   "Stash",
+		WorkspacePanelChanges: "Changes",
+
+		WorkspaceLabelCommitMessage: "Commit message",
+		WorkspaceLabelSubmodule:     "submodule",
+		WorkspaceLabelAndMore:       "and %d more",
+
+		WorkspaceStateLoading: "Loading…",
+
+		WorkspaceEmptyNoChanges:        "No changes",
+		WorkspaceEmptyWorkingTreeClean: "Working tree is clean",
+		WorkspaceEmptyEditorHint:       "Select a file in the Project panel, the Commit tool window or the Git log to see its changes",
+		WorkspaceHintProject:           "Project",
+		WorkspaceHintOpenFile:          "Open File",
+
+		WorkspaceActionRefresh:  "Refresh",
+		WorkspaceActionHide:     "Hide",
+		WorkspaceActionShowDiff: "Show Diff",
+		WorkspaceActionRollback: "Rollback…",
+
+		WorkspaceActionStageAll:   "Stage All",
+		WorkspaceActionStageAllIn: "Stage All in %s",
+		WorkspaceActionUnstageAll: "Unstage All",
+
+		WorkspaceActionGroupByDirectory: "Group by Directory",
+		WorkspaceActionExpandAll:        "Expand All",
+		WorkspaceActionCollapseAll:      "Collapse All",
+
+		WorkspaceActionStashChanges: "Stash Changes…",
+
+		WorkspaceActionCopyPath:         "Copy Path",
+		WorkspaceActionCopyRelativePath: "Copy Relative Path",
+
+		WorkspaceTipResolveFirst:        "Resolve and stage all conflicts first",
+		WorkspaceTipResolveBeforeCommit: "Resolve conflicts before committing",
+		WorkspaceTipStageToCommit:       "Stage changes to commit",
+		WorkspaceTipEnterMessage:        "Enter a commit message",
+		WorkspaceTipCommitOptions:       "Commit Options",
+
+		WorkspaceHintPush:          "Push",
+		WorkspaceHintUpdateProject: "Update Project",
+		WorkspaceHintBranches:      "Branches",
+		WorkspaceHintDiffSelection: "Show Diff of Selection",
+
+		WorkspaceBannerInProgress: "%s in progress",
+		WorkspaceBannerRebasing:   "Rebasing %s onto %s",
+		WorkspaceBannerMerging:    "Merging into %s",
+
+		WorkspaceButtonContinue: "Continue",
+		WorkspaceButtonSkip:     "Skip",
+		WorkspaceButtonAbort:    "Abort",
+		WorkspaceButtonRollback: "Rollback",
+
+		WorkspaceButtonCommit:             "Commit",
+		WorkspaceButtonAmendCommit:        "Amend Commit",
+		WorkspaceButtonCommitAndPush:      "Commit and Push…",
+		WorkspaceButtonAmendCommitAndPush: "Amend Commit and Push…",
+
+		WorkspaceButtonClose: "Close",
+
+		WorkspaceMenuCloseOtherTabs: "Close Other Tabs",
+		WorkspaceMenuCloseAllTabs:   "Close All Tabs",
+		WorkspaceMenuKeepTabOpen:    "Keep Tab Open",
+
+		WorkspaceMenuUpdateSubmodule: "Update Submodule",
+		WorkspaceMenuOpenSubmodule:   "Open Submodule",
+		WorkspaceMenuStage:           "Stage",
+		WorkspaceMenuUnstage:         "Unstage",
+
+		WorkspaceMenuMarkResolved:     "Mark Resolved",
+		WorkspaceMenuMoveToChangeList: "Move to Change List",
+		WorkspaceMenuAddToGitignore:   "Add to .gitignore",
+
+		WorkspaceMenuShowHistory:    "Show History",
+		WorkspaceMenuAnnotate:       "Annotate with Git Blame",
+		WorkspaceMenuOpenInEditor:   "Open in External Editor",
+		WorkspaceMenuRevealInFinder: "Show in Finder",
+
+		WorkspaceMenuCreatePatch:  "Create Patch…",
+		WorkspaceMenuCommitChecks: "Commit Checks",
+
+		WorkspaceCheckAmend:           "Amend",
+		WorkspaceCheckRunHooks:        "Run Git hooks",
+		WorkspaceCheckSignOff:         "Sign-off commit",
+		WorkspaceCheckDeleteUntracked: "Delete %s from disk",
+
+		WorkspaceDialogRollback: "Rollback Changes",
+
+		WorkspaceConfirmAbort:        "Abort %s",
+		WorkspaceConfirmAbortBody:    "Abort the %s and restore the state before it started? Changes made while resolving are lost.",
+		WorkspaceConfirmRollbackBody: "Discard local changes in %s? This cannot be undone.",
+
+		WorkspaceMutedStagedReset: "Staged changes are reset to HEAD.",
+
+		WorkspaceErrorCannotCopy:     "Cannot copy",
+		WorkspaceErrorCannotShowDiff: "Cannot show diff",
+
+		WorkspaceCountFilesOne:      "%d file",
+		WorkspaceCountFilesMany:     "%d files",
+		WorkspaceCountConflictsOne:  "%d conflict",
+		WorkspaceCountConflictsMany: "%d conflicts",
+
+		WorkspaceCountUnversionedOne:  "%d unversioned file",
+		WorkspaceCountUnversionedMany: "%d unversioned files",
+	})
+
+	register(ZHCN, map[Key]string{
+		WorkspacePanelCommit:  "提交",
+		WorkspacePanelStash:   "暂存",
+		WorkspacePanelChanges: "变更",
+
+		WorkspaceLabelCommitMessage: "提交说明",
+		WorkspaceLabelSubmodule:     "子模块",
+		WorkspaceLabelAndMore:       "以及另外 %d 个",
+
+		WorkspaceStateLoading: "加载中…",
+
+		WorkspaceEmptyNoChanges:        "没有变更",
+		WorkspaceEmptyWorkingTreeClean: "工作树是干净的",
+		WorkspaceEmptyEditorHint:       "在项目面板、提交工具窗口或 Git 日志中选择一个文件，即可查看它的改动",
+		WorkspaceHintProject:           "项目",
+		WorkspaceHintOpenFile:          "打开文件",
+
+		WorkspaceActionRefresh:  "刷新",
+		WorkspaceActionHide:     "隐藏",
+		WorkspaceActionShowDiff: "显示 diff",
+		WorkspaceActionRollback: "回滚…",
+
+		WorkspaceActionStageAll:   "全部暂存",
+		WorkspaceActionStageAllIn: "在 %s 中全部暂存",
+		WorkspaceActionUnstageAll: "全部取消暂存",
+
+		WorkspaceActionGroupByDirectory: "按目录分组",
+		WorkspaceActionExpandAll:        "全部展开",
+		WorkspaceActionCollapseAll:      "全部折叠",
+
+		WorkspaceActionStashChanges: "暂存改动…",
+
+		WorkspaceActionCopyPath:         "复制路径",
+		WorkspaceActionCopyRelativePath: "复制相对路径",
+
+		WorkspaceTipResolveFirst:        "请先解决并暂存全部冲突",
+		WorkspaceTipResolveBeforeCommit: "提交前请先解决冲突",
+		WorkspaceTipStageToCommit:       "暂存改动后再提交",
+		WorkspaceTipEnterMessage:        "请输入提交说明",
+		WorkspaceTipCommitOptions:       "提交选项",
+
+		WorkspaceHintPush:          "推送",
+		WorkspaceHintUpdateProject: "更新项目",
+		WorkspaceHintBranches:      "分支",
+		WorkspaceHintDiffSelection: "显示所选内容的 diff",
+
+		WorkspaceBannerInProgress: "%s 进行中",
+		WorkspaceBannerRebasing:   "正在把 %s 变基到 %s",
+		WorkspaceBannerMerging:    "正在合并到 %s",
+
+		WorkspaceButtonContinue: "继续",
+		WorkspaceButtonSkip:     "跳过",
+		WorkspaceButtonAbort:    "中止",
+		WorkspaceButtonRollback: "回滚",
+
+		WorkspaceButtonCommit:             "提交",
+		WorkspaceButtonAmendCommit:        "修正提交",
+		WorkspaceButtonCommitAndPush:      "提交并推送…",
+		WorkspaceButtonAmendCommitAndPush: "修正提交并推送…",
+
+		WorkspaceButtonClose: "关闭",
+
+		WorkspaceMenuCloseOtherTabs: "关闭其他页签",
+		WorkspaceMenuCloseAllTabs:   "关闭全部页签",
+		WorkspaceMenuKeepTabOpen:    "保持页签打开",
+
+		WorkspaceMenuUpdateSubmodule: "更新子模块",
+		WorkspaceMenuOpenSubmodule:   "打开子模块",
+		WorkspaceMenuStage:           "暂存",
+		WorkspaceMenuUnstage:         "取消暂存",
+
+		WorkspaceMenuMarkResolved:     "标记为已解决",
+		WorkspaceMenuMoveToChangeList: "移到变更列表",
+		WorkspaceMenuAddToGitignore:   "添加到 .gitignore",
+
+		WorkspaceMenuShowHistory:    "显示历史",
+		WorkspaceMenuAnnotate:       "用 Git blame 注解",
+		WorkspaceMenuOpenInEditor:   "用外部编辑器打开",
+		WorkspaceMenuRevealInFinder: "在文件管理器中显示",
+
+		WorkspaceMenuCreatePatch:  "创建补丁…",
+		WorkspaceMenuCommitChecks: "提交检查",
+
+		WorkspaceCheckAmend:           "修正",
+		WorkspaceCheckRunHooks:        "运行 Git 钩子",
+		WorkspaceCheckSignOff:         "添加 sign-off",
+		WorkspaceCheckDeleteUntracked: "从磁盘删除 %s",
+
+		WorkspaceDialogRollback: "回滚变更",
+
+		WorkspaceConfirmAbort:        "中止 %s",
+		WorkspaceConfirmAbortBody:    "中止 %s 并恢复到它开始前的状态？解决冲突期间的改动会丢失。",
+		WorkspaceConfirmRollbackBody: "丢弃 %s 中的本地改动？此操作无法撤销。",
+
+		WorkspaceMutedStagedReset: "已暂存的改动会重置到 HEAD。",
+
+		WorkspaceErrorCannotCopy:     "无法复制",
+		WorkspaceErrorCannotShowDiff: "无法显示 diff",
+
+		WorkspaceCountFilesOne:      "%d 个文件",
+		WorkspaceCountFilesMany:     "%d 个文件",
+		WorkspaceCountConflictsOne:  "%d 处冲突",
+		WorkspaceCountConflictsMany: "%d 处冲突",
+
+		WorkspaceCountUnversionedOne:  "%d 个未纳入版本控制的文件",
+		WorkspaceCountUnversionedMany: "%d 个未纳入版本控制的文件",
+	})
+}

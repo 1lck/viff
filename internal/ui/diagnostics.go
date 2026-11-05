@@ -15,6 +15,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 	"viff/internal/platform"
 	"viff/internal/version"
 )
@@ -64,36 +65,34 @@ func (t *textareaField) paint(w *Window, id ui.ID, r ui.Rect) {
 // The description is optional and is kept for the issue template.
 func (w *Window) openReportProblem() {
 	if w.ws.ProblemRecording() {
-		w.ws.Notify(vapp.NoticeInfo, "Diagnostics",
-			"A problem is already being recorded. Reproduce it, then use Help > Stop Recording and Save Diagnostics…")
+		w.ws.Notify(vapp.NoticeInfo, w.t(i18n.DiagTitle), w.t(i18n.DiagNoticeRecording))
 		return
 	}
 	desc := &textareaField{
 		ed:          text.NewEditor(""),
-		label:       "What happened?",
-		placeholder: "What were you doing when the problem appeared? (optional)",
+		label:       w.t(i18n.DiagReportLabel),
+		placeholder: w.t(i18n.DiagReportPlaceholder),
 	}
 	w.openDialog(&dialog{
-		title: "Report a Problem", ok: "Start Recording", width: 560,
+		title: w.t(i18n.DiagReportTitle), ok: w.t(i18n.DiagReportStart), width: 560,
 		textarea: idReportProblemText,
 		focus:    idReportProblemText,
 		body: func(f *form) {
-			f.text("Start a detailed diagnostics recording, reproduce the problem, then save a bundle to attach to your report.")
-			f.muted("Diagnostics stay on this computer unless you save and share them. No repository contents are included.")
+			f.text(w.t(i18n.DiagReportBody))
+			f.muted(w.t(i18n.DiagReportPrivacy))
 			f.gap(8)
 			f.custom(120, func(r ui.Rect) { desc.paint(w, idReportProblemText, r) })
 			f.gap(2)
-			f.muted("The description is optional. Recording keeps going until you stop it from the Help menu.")
+			f.muted(w.t(i18n.DiagReportHint))
 		},
 		onOK: func() bool {
 			description := strings.TrimSpace(desc.ed.String())
 			if err := w.ws.StartProblemRecording(description); err != nil {
-				w.ws.NotifyError("Cannot start diagnostics recording", err)
+				w.ws.NotifyError(w.t(i18n.DiagErrorStart), err)
 				return false
 			}
 			w.diagDesc = description
-			w.ws.Notify(vapp.NoticeInfo, "Diagnostics",
-				"Recording started. Reproduce the problem, then use Help > Stop Recording and Save Diagnostics…")
+			w.ws.Notify(vapp.NoticeInfo, w.t(i18n.DiagTitle), w.t(i18n.DiagNoticeStarted))
 			return true
 		},
 	})
@@ -115,14 +114,14 @@ func (w *Window) saveDiagnostics() {
 func (w *Window) exportDiagnostics() {
 	name := "viff-diagnostics-" + time.Now().Format("20060102-150405") + ".zip"
 	dest, err := app.SaveFile(app.SaveFileOptions{
-		Title:            "Save Diagnostics",
+		Title:            w.t(i18n.DiagSaveTitle),
 		SuggestedName:    name,
 		DefaultExtension: "zip",
-		Filters:          []app.FileFilter{{Name: "Zip archives", Pattern: "*.zip"}},
+		Filters:          []app.FileFilter{{Name: w.t(i18n.DiagSaveFilterZip), Pattern: "*.zip"}},
 	})
 	if err != nil {
 		if !errors.Is(err, app.ErrCanceled) {
-			w.ws.NotifyError("Cannot choose where to save diagnostics", err)
+			w.ws.NotifyError(w.t(i18n.DiagErrorChoosePath), err)
 		}
 		return
 	}
@@ -131,7 +130,7 @@ func (w *Window) exportDiagnostics() {
 	}
 	res, err := w.ws.ExportDiagnostics(dest)
 	if err != nil {
-		w.ws.NotifyError("Cannot save diagnostics", err)
+		w.ws.NotifyError(w.t(i18n.DiagErrorSave), err)
 		return
 	}
 	w.notifyDiagnosticsSaved(res)
@@ -140,9 +139,9 @@ func (w *Window) exportDiagnostics() {
 // notifyDiagnosticsSaved tells the user where the bundle is and offers the
 // issue template on the clipboard.
 func (w *Window) notifyDiagnosticsSaved(res vapp.DiagnosticResult) {
-	body := "Attach this file to your report.\n" + res.Path
-	w.ws.Notify(vapp.NoticeInfo, "Diagnostics saved", body,
-		vapp.NoticeAction{Title: "Copy Issue Template", Run: func() { w.copyText(w.issueTemplate(res)) }})
+	body := w.t(i18n.DiagSavedBody, res.Path)
+	w.ws.Notify(vapp.NoticeInfo, w.t(i18n.DiagSavedTitle), body,
+		vapp.NoticeAction{Title: w.t(i18n.DiagSavedCopy), Run: func() { w.copyText(w.issueTemplate(res)) }})
 }
 
 // issueTemplate is the text to paste into a report: the problem description,
@@ -177,11 +176,11 @@ func (w *Window) issueTemplate(res vapp.DiagnosticResult) string {
 func (w *Window) openLogFolder() {
 	dir := strings.TrimSpace(w.ws.LogDirectory())
 	if dir == "" {
-		w.ws.Notify(vapp.NoticeInfo, "Logs", "This build writes no log files, so there is no log folder to open.")
+		w.ws.Notify(vapp.NoticeInfo, w.t(i18n.DiagLogsTitle), w.t(i18n.DiagLogsNone))
 		return
 	}
 	if err := platform.Reveal(dir); err != nil {
-		w.ws.NotifyError("Cannot open log folder", err)
+		w.ws.NotifyError(w.t(i18n.DiagErrorLogDir), err)
 	}
 }
 

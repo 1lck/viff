@@ -11,6 +11,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -83,7 +84,7 @@ func (w *Window) consoleText() string {
 			continue
 		}
 		if len(out) > consoleOutputLimit {
-			out = truncateText(out, consoleOutputLimit) + "\n… (output truncated)"
+			out = truncateText(out, consoleOutputLimit) + "\n" + w.t(i18n.ConsoleOutputTruncated)
 		}
 		for _, l := range strings.Split(out, "\n") {
 			b.WriteString(consoleOutputIndent)
@@ -116,20 +117,20 @@ func (w *Window) saveConsole() {
 		return
 	}
 	dest, err := app.SaveFile(app.SaveFileOptions{
-		Title:            "Save Console Output",
+		Title:            w.t(i18n.ConsoleSaveTitle),
 		SuggestedName:    "viff-console-" + time.Now().Format("20060102-150405") + ".txt",
 		DefaultExtension: "txt",
-		Filters:          []app.FileFilter{{Name: "Text files", Pattern: "*.txt"}},
+		Filters:          []app.FileFilter{{Name: w.t(i18n.ConsoleSaveFilter), Pattern: "*.txt"}},
 	})
 	if err != nil || dest == "" {
 		return
 	}
 	if err := os.WriteFile(dest, []byte(w.consoleText()), 0o644); err != nil {
-		w.ws.NotifyError("Cannot save console output", err)
+		w.ws.NotifyError(w.t(i18n.ConsoleSaveError), err)
 		return
 	}
-	w.ws.Notify(vapp.NoticeSuccess, "Console saved", dest,
-		vapp.NoticeAction{Title: "Show in Finder", Run: func() { revealPath(dest) }})
+	w.ws.Notify(vapp.NoticeSuccess, w.t(i18n.ConsoleSaved), dest,
+		vapp.NoticeAction{Title: w.t(i18n.ConsoleActionReveal), Run: func() { revealPath(dest) }})
 }
 
 // consoleRows builds the rows of the console and measures the widest one.
@@ -215,28 +216,28 @@ func (w *Window) paintConsole(r ui.Rect) {
 	entries := w.ws.Console
 	tb := splitTop(&r, 34)
 	cx := right(tb) - 8 - actionSize
-	if w.action(idConsoleClear, cx, tb.Y+4, icons.Delete, "Clear All", actOpts{disabled: len(entries) == 0}) {
+	if w.action(idConsoleClear, cx, tb.Y+4, icons.Delete, w.t(i18n.ConsoleActionClear), actOpts{disabled: len(entries) == 0}) {
 		w.after(func() {
-			w.confirm("Clear Console", "Remove all Git commands and their output from the Console?\n\nThis only clears the view; Git is not affected.", "Clear", func() {
+			w.confirm(w.t(i18n.ConsoleConfirmClearTitle), w.t(i18n.ConsoleConfirmClearBody), w.t(i18n.ConsoleConfirmClearOK), func() {
 				w.ws.Console = nil
 			})
 		})
 	}
 	cx -= actionSize + 4
-	if w.action(idConsoleSave, cx, tb.Y+4, icons.Download, "Save Console Output…", actOpts{disabled: len(entries) == 0}) {
+	if w.action(idConsoleSave, cx, tb.Y+4, icons.Download, w.t(i18n.ConsoleActionSave), actOpts{disabled: len(entries) == 0}) {
 		w.after(w.saveConsole)
 	}
 	cx -= actionSize + 4
-	if w.action(idConsoleCopy, cx, tb.Y+4, icons.Copy, "Copy All", actOpts{disabled: len(entries) == 0}) {
+	if w.action(idConsoleCopy, cx, tb.Y+4, icons.Copy, w.t(i18n.ConsoleActionCopyAll), actOpts{disabled: len(entries) == 0}) {
 		w.after(w.copyConsole)
 	}
-	w.p.text("Git commands run by Viff", rect(tb.X+12, tb.Y, cx-24-tb.X, tb.Height), fontSmall, regular, w.pal.TextSecond)
+	w.p.text(w.t(i18n.ConsoleHeader), rect(tb.X+12, tb.Y, cx-24-tb.X, tb.Height), fontSmall, regular, w.pal.TextSecond)
 	_, lineH, fs := w.metrics()
 	w.c.HitWithOptions(idConsole, r, "Console", ui.HitOptions{Role: ui.RoleGroup})
 	rows, widest := w.consoleRows()
 	if len(rows) == 0 {
 		v.reset()
-		w.p.textCenter("No commands yet", rect(r.X, r.Y+r.Height*0.35, r.Width, 22), fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.ConsoleEmpty), rect(r.X, r.Y+r.Height*0.35, r.Width, 22), fontUI, regular, w.pal.TextSecond)
 		return
 	}
 	viewW := max(0, r.Width-consoleBarW)

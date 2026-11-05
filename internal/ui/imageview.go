@@ -12,6 +12,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 )
 
 // maxPictureSide bounds the texture an image diff decodes to. A photograph
@@ -130,21 +131,21 @@ func (w *Window) paintPicturePane(t *diffTab, r ui.Rect, old bool, res *vapp.Dif
 		return
 	}
 	if side.Format == "" {
-		msg := "No new version"
+		msg := w.t(i18n.PictureNoNewVersion)
 		if old {
-			msg = "No previous version"
+			msg = w.t(i18n.PictureNoOldVersion)
 		}
 		w.p.fill(inner, w.pal.IslandAlt)
-		w.paintCentered(inner, msg, "The file does not exist on this side.", w.pal.TextSecond)
+		w.paintCentered(inner, msg, w.t(i18n.PictureNoSide), w.pal.TextSecond)
 		return
 	}
 	label := fmt.Sprintf("%s %d×%d  %s", side.Format, side.Width, side.Height, sizeLabel(content.Size))
 	if side.Format == "GIF" {
-		label += "  · first frame only"
+		label += w.t(i18n.PictureFirstFrameOnly)
 	}
 	b, imgErr := t.picture(old, res)
 	if imgErr != "" {
-		w.paintCentered(r, "Cannot decode picture", imgErr, w.pal.Error)
+		w.paintCentered(r, w.t(i18n.PictureCannotDecode), imgErr, w.pal.Error)
 		return
 	}
 	if b == nil {

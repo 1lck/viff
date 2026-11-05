@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"viff/internal/i18n"
 	"viff/internal/storage"
 )
 
@@ -141,7 +142,7 @@ func (w *Workspace) warnChangeLists(m *ChangeListManager, err error) {
 		return
 	}
 	m.warned = true
-	w.Notify(NoticeWarning, "Change lists are unavailable", err.Error())
+	w.Notify(NoticeWarning, w.tr(i18n.AppNoticeChangeListsUnavailable), err.Error())
 }
 
 // renamesLocked maps a renamed path's new name to its old name for the current
@@ -317,12 +318,12 @@ func (w *Workspace) CreateChangeList(name string) (string, error) {
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", errors.New("change list name is empty")
+		return "", errors.New(w.tr(i18n.AppErrorChangeListNameEmpty))
 	}
 	var id string
 	err := w.changeListUpdate(root, func(repo *storage.RepoChangeLists) (bool, error) {
 		if changeListNamed(*repo, name, "") {
-			return false, fmt.Errorf("a change list named %q already exists", name)
+			return false, errors.New(w.tr(i18n.AppErrorChangeListNamedExists, name))
 		}
 		id = newChangeListID(*repo)
 		repo.Lists = append(repo.Lists, storage.ChangeListRecord{ID: id, Name: name})
@@ -342,19 +343,19 @@ func (w *Workspace) RenameChangeList(id, name string) error {
 		return errChangeListNoRepo
 	}
 	if id == storage.DefaultChangeListID {
-		return errors.New("the default change list cannot be renamed")
+		return errors.New(w.tr(i18n.AppErrorChangeListDefaultRename))
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return errors.New("change list name is empty")
+		return errors.New(w.tr(i18n.AppErrorChangeListNameEmpty))
 	}
 	return w.changeListUpdate(root, func(repo *storage.RepoChangeLists) (bool, error) {
 		index := changeListIndex(*repo, id)
 		if index < 0 {
-			return false, fmt.Errorf("unknown change list %q", id)
+			return false, errors.New(w.tr(i18n.AppErrorChangeListUnknown, id))
 		}
 		if changeListNamed(*repo, name, id) {
-			return false, fmt.Errorf("a change list named %q already exists", name)
+			return false, errors.New(w.tr(i18n.AppErrorChangeListNamedExists, name))
 		}
 		repo.Lists[index].Name = name
 		return true, nil
@@ -370,12 +371,12 @@ func (w *Workspace) DeleteChangeList(id string) error {
 		return errChangeListNoRepo
 	}
 	if id == storage.DefaultChangeListID {
-		return errors.New("the default change list cannot be deleted")
+		return errors.New(w.tr(i18n.AppErrorChangeListDefaultDelete))
 	}
 	return w.changeListUpdate(root, func(repo *storage.RepoChangeLists) (bool, error) {
 		index := changeListIndex(*repo, id)
 		if index < 0 {
-			return false, fmt.Errorf("unknown change list %q", id)
+			return false, errors.New(w.tr(i18n.AppErrorChangeListUnknown, id))
 		}
 		repo.Lists = append(repo.Lists[:index:index], repo.Lists[index+1:]...)
 		for p, listID := range repo.Members {
@@ -398,7 +399,7 @@ func (w *Workspace) MoveToChangeList(paths []string, id string) error {
 		return errChangeListNoRepo
 	}
 	if id == "" {
-		return errors.New("change list is empty")
+		return errors.New(w.tr(i18n.AppErrorChangeListEmpty))
 	}
 	clean := make([]string, 0, len(paths))
 	seen := make(map[string]bool, len(paths))
@@ -417,7 +418,7 @@ func (w *Workspace) MoveToChangeList(paths []string, id string) error {
 	}
 	return w.changeListUpdate(root, func(repo *storage.RepoChangeLists) (bool, error) {
 		if id != storage.DefaultChangeListID && !changeListExists(*repo, id) {
-			return false, fmt.Errorf("unknown change list %q", id)
+			return false, errors.New(w.tr(i18n.AppErrorChangeListUnknown, id))
 		}
 		for _, p := range clean {
 			if id == storage.DefaultChangeListID {

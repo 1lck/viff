@@ -18,26 +18,26 @@ const (
 	SettingsGroupCommands    = Key("settings.group.commands")
 	SettingsGroupRemote      = Key("settings.group.remote")
 
-	SettingsLabelTheme       = Key("settings.label.theme")
-	SettingsLabelFontSize    = Key("settings.label.fontSize")
-	SettingsLabelGitPath     = Key("settings.label.gitPath")
-	SettingsLabelEditor      = Key("settings.label.editor")
-	SettingsLabelLanguage    = Key("settings.label.language")
-	SettingsLabelFetchMins   = Key("settings.label.fetchMinutes")
-	SettingsLabelUpdateMode  = Key("settings.label.updateMethod")
-	SettingsLabelInterface   = Key("settings.label.interfaceFont")
-	SettingsLabelDiffFont    = Key("settings.label.diffFont")
+	SettingsLabelTheme        = Key("settings.label.theme")
+	SettingsLabelFontSize     = Key("settings.label.fontSize")
+	SettingsLabelGitPath      = Key("settings.label.gitPath")
+	SettingsLabelEditor       = Key("settings.label.editor")
+	SettingsLabelLanguage     = Key("settings.label.language")
+	SettingsLabelFetchMins    = Key("settings.label.fetchMinutes")
+	SettingsLabelUpdateMode   = Key("settings.label.updateMethod")
+	SettingsLabelInterface    = Key("settings.label.interfaceFont")
+	SettingsLabelDiffFont     = Key("settings.label.diffFont")
 	SettingsLabelSettingsFile = Key("settings.label.settingsFile")
 
-	SettingsHintEditor       = Key("settings.hint.editor")
-	SettingsHintDebugLog     = Key("settings.hint.debugLog")
-	SettingsHintInterface    = Key("settings.hint.interfaceFont")
-	SettingsHintDiffFont     = Key("settings.hint.diffFont")
+	SettingsHintEditor    = Key("settings.hint.editor")
+	SettingsHintDebugLog  = Key("settings.hint.debugLog")
+	SettingsHintInterface = Key("settings.hint.interfaceFont")
+	SettingsHintDiffFont  = Key("settings.hint.diffFont")
 
-	SettingsCheckDebugLog  = Key("settings.check.debugLog")
+	SettingsCheckDebugLog   = Key("settings.check.debugLog")
 	SettingsCheckAutoUpdate = Key("settings.check.autoUpdate")
-	SettingsCheckPrune     = Key("settings.check.prune")
-	SettingsCheckAutoFetch = Key("settings.check.autoFetch")
+	SettingsCheckPrune      = Key("settings.check.prune")
+	SettingsCheckAutoFetch  = Key("settings.check.autoFetch")
 
 	SettingsThemeDark   = Key("settings.theme.dark")
 	SettingsThemeLight  = Key("settings.theme.light")
@@ -58,6 +58,11 @@ const (
 
 	CommonOK     = Key("common.ok")
 	CommonCancel = Key("common.cancel")
+	CommonClose  = Key("common.close")
+
+	AboutTitle   = Key("about.title")
+	AboutTagline = Key("about.tagline")
+	AboutCredits = Key("about.credits")
 )
 
 func init() {
@@ -116,6 +121,11 @@ func init() {
 
 		CommonOK:     "OK",
 		CommonCancel: "Cancel",
+		CommonClose:  "Close",
+
+		AboutTitle:   "About Viff",
+		AboutTagline: "A Git client in the style of IntelliJ IDEA",
+		AboutCredits: "Icons: IntelliJ Platform (Apache 2.0). Editor font: JetBrains Mono (OFL).",
 	})
 
 	register(ZHCN, map[Key]string{
@@ -173,5 +183,10 @@ func init() {
 
 		CommonOK:     "确定",
 		CommonCancel: "取消",
+		CommonClose:  "关闭",
+
+		AboutTitle:   "关于 Viff",
+		AboutTagline: "IntelliJ IDEA 风格的 Git 客户端",
+		AboutCredits: "图标来自 IntelliJ Platform（Apache 2.0），编辑器字体 JetBrains Mono（OFL）。",
 	})
 }
