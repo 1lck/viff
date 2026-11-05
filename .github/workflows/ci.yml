@@ -20,6 +20,8 @@ jobs:
   # Documentation-only pull requests skip the heavy jobs. This job always runs
   # so the required "CI" check still appears and turns green instead of staying
   # pending forever (a skipped required check would block merging).
+  # Agent conventions count as documentation: AGENTS.md, CLAUDE.md and the
+  # .agents/skills bundles change no executable code.
   changes:
     name: Changed files
     runs-on: ubuntu-latest
@@ -48,7 +50,8 @@ jobs:
           for file in "${changed[@]}"; do
             case "$file" in
               README.md | README.zh-CN.md | CONTRIBUTING.md | SECURITY.md | \
-                THIRD_PARTY_NOTICES.md | LICENSE | docs/*) ;;
+                THIRD_PARTY_NOTICES.md | LICENSE | docs/* | \
+                AGENTS.md | CLAUDE.md | .agents/*) ;;
               *) docs_only=false ;;
             esac
           done
