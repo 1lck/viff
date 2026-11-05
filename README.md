@@ -86,7 +86,7 @@ Screenshots come from real Viva headless tests using disposable demo repositorie
 
 Viff serves both Git and Subversion repositories from the same window. Entry
 points that a backend cannot support are hidden rather than shown and failing;
-the reasoning is recorded in [0024](docs/decisions/0024-svn-support.md).
+the reasoning is recorded in [0025](docs/decisions/0025-svn-support.md).
 
 | Capability                                                       | Git                       | Subversion                                 |
 | ---------------------------------------------------------------- | ------------------------- | ------------------------------------------ |

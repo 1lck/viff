@@ -55,7 +55,7 @@ func (w *Workspace) checkoutBlocked(b CheckoutBlocked) bool {
 	if w.ConfirmCheckout != nil && w.ConfirmCheckout(b) {
 		return true
 	}
-	w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutBlockedBody, ErrorText(b.Err)))
+	w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutBlockedBody, w.ErrorText(b.Err)))
 	return true
 }
 
@@ -117,13 +117,13 @@ func (w *Workspace) checkoutStashing(ctx context.Context, repo domain.Repo, b Ch
 func (w *Workspace) reportStashCheckout(label string, res stashCheckoutResult, err error) {
 	switch {
 	case res == stashNotCreated:
-		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutStashNotCreatedBody, ErrorText(err)))
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutStashNotCreatedBody, w.ErrorText(err)))
 	case res == stashKept && err != nil:
-		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoreFailedBody, ErrorText(err)))
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoreFailedBody, w.ErrorText(err)))
 	case res == stashKept:
 		w.Notify(NoticeWarning, w.tr(i18n.AppNoticeCheckedOut, label), w.tr(i18n.AppNoticeCheckoutStashKeptBody))
 	case err != nil:
-		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoredBody, ErrorText(err)))
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoredBody, w.ErrorText(err)))
 	default:
 		w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeCheckedOut, label), w.tr(i18n.AppNoticeCheckoutStashedBody))
 	}

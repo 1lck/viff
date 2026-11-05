@@ -161,7 +161,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		w.p.textCenter("Loading files…", r, fontUI, regular, w.pal.TextSecond)
 		return
 	case v.err != nil:
-		w.p.textCenter(vapp.ErrorText(v.err), r, fontUI, regular, w.pal.Error)
+		w.p.textCenter(w.ws.ErrorText(v.err), r, fontUI, regular, w.pal.Error)
 		return
 	case len(v.entries) == 0:
 		w.p.textCenter("No files in the working tree", r, fontUI, regular, w.pal.TextSecond)

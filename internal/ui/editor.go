@@ -339,7 +339,7 @@ func (w *Window) paintEditor(r ui.Rect) {
 	}
 	switch {
 	case t.err != nil:
-		w.paintCentered(r, w.t(i18n.WorkspaceErrorCannotShowDiff), vapp.ErrorText(t.err), w.pal.Error)
+		w.paintCentered(r, w.t(i18n.WorkspaceErrorCannotShowDiff), w.ws.ErrorText(t.err), w.pal.Error)
 	case t.res == nil:
 		if t.loading {
 			w.paintCentered(r, w.t(i18n.WorkspaceStateLoading), "", w.pal.TextSecond)

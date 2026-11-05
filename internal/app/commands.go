@@ -537,7 +537,7 @@ func (w *Workspace) pushError(force bool) func(error) bool {
 		if force {
 			msg = w.tr(i18n.AppNoticePushRejectedStaleBody)
 		}
-		w.Notify(NoticeError, w.tr(i18n.AppNoticePushRejected), msg+"\n\n"+ErrorText(err),
+		w.Notify(NoticeError, w.tr(i18n.AppNoticePushRejected), msg+"\n\n"+w.ErrorText(err),
 			NoticeAction{Title: w.tr(i18n.AppActionUpdate), Run: func() { w.Pull(gitcli.PullMerge) }})
 		return true
 	}
@@ -871,7 +871,7 @@ func (w *Workspace) ApplyPatchFile(path string, cached bool, done func(error)) {
 		Success:     w.tr(i18n.AppNoticePatchApplied),
 		SuccessBody: body,
 		OnError: func(err error) bool {
-			w.Notify(NoticeError, w.tr(i18n.AppNoticeCannotApplyPatch), ErrorText(err))
+			w.Notify(NoticeError, w.tr(i18n.AppNoticeCannotApplyPatch), w.ErrorText(err))
 			if done != nil {
 				done(err)
 			}
@@ -1301,7 +1301,7 @@ func (w *Workspace) rewriteError(title string) func(error) bool {
 	return func(err error) bool {
 		switch {
 		case errors.Is(err, gitcli.ErrRewriteAbortLeft):
-			w.Notify(NoticeError, w.tr(i18n.AppNoticeFailed, title), w.tr(i18n.AppNoticeRewriteAbortLeftBody, ErrorText(err)))
+			w.Notify(NoticeError, w.tr(i18n.AppNoticeFailed, title), w.tr(i18n.AppNoticeRewriteAbortLeftBody, w.ErrorText(err)))
 			return true
 		case gitcli.KindOf(err) == gitcli.ErrConflict:
 			w.Notify(NoticeWarning, w.tr(i18n.AppNoticeWasAborted, title), w.tr(i18n.AppNoticeEditHitConflictBody))

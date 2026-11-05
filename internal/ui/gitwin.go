@@ -421,7 +421,7 @@ func (w *Window) paintLogTable(r ui.Rect) {
 		case l.Loading || !l.Loaded():
 			msg = w.t(i18n.ChromeCommonLoading)
 		case l.Err != nil:
-			msg = vapp.ErrorText(l.Err)
+			msg = w.ws.ErrorText(l.Err)
 		case l.Filter.Active():
 			msg = w.t(i18n.ChromeLogEmptyFiltered)
 		case !rs.HasHead():

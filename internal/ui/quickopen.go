@@ -6,7 +6,6 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
-	vapp "viff/internal/app"
 	"viff/internal/ui/icons"
 )
 
@@ -122,7 +121,7 @@ func (w *Window) openQuickOpen() {
 					w.p.textCenter("Loading files…", inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case v.err != nil:
-					w.p.textCenter(vapp.ErrorText(v.err), inner, fontUI, regular, w.pal.Error)
+					w.p.textCenter(w.ws.ErrorText(v.err), inner, fontUI, regular, w.pal.Error)
 					return
 				case len(v.entries) == 0:
 					w.p.textCenter("The working tree has no files", inner, fontUI, regular, w.pal.TextSecond)

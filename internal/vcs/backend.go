@@ -65,6 +65,10 @@ type Reader interface {
 	// Config reads one configuration value, "" when unset. A backend without
 	// configuration returns "".
 	Config(ctx context.Context, repo domain.Repo, key string) string
+	// WorktreeFiles lists the paths a file browser may show: everything the
+	// backend tracks plus the untracked files it does not ignore. Paths are
+	// working-copy relative, use forward slashes, appear once and are sorted.
+	WorktreeFiles(ctx context.Context, repo domain.Repo) ([]string, error)
 }
 
 // WorkspaceWriter changes the working copy without committing.

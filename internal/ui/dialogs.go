@@ -281,7 +281,7 @@ func (w *Window) openPushFor(r domain.Ref) {
 					w.p.textCenter(w.t(i18n.DialogLoadingCommits), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case loadErr != nil:
-					w.p.textCenter(vapp.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
+					w.p.textCenter(w.ws.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
 					return
 				case len(commits) == 0:
 					w.p.textCenter(w.t(i18n.DialogNothingToPush), inner, fontUI, regular, w.pal.TextSecond)

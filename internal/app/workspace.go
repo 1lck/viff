@@ -23,6 +23,7 @@ import (
 	"viff/internal/gitcli"
 	"viff/internal/i18n"
 	"viff/internal/observability"
+	"viff/internal/vcs"
 )
 
 // Notification is a balloon shown to the user.
@@ -567,11 +568,65 @@ func (w *Workspace) NotifyError(title string, err error) {
 		w.notify(NoticeInfo, title, w.tr(i18n.AppNoticeCancelled), gitcli.CodeOf(err))
 		return
 	}
-	w.notify(NoticeError, title, ErrorText(err), gitcli.CodeOf(err))
+	w.notify(NoticeError, title, w.ErrorText(err), gitcli.CodeOf(err))
 }
 
 // ErrorText is the message of an error suitable for the UI, with a hint for
 // failures the user can act on.
+//
+// The hints name the backend because the advice differs: Git goes through the
+// credential helper and the SSH agent, Subversion through its own auth cache.
+// Telling a Subversion user to configure a Git credential helper would send
+// them looking in the wrong place, so the tool recorded on the error decides
+// which hint is right.
+func (w *Workspace) ErrorText(err error) string {
+	svn := errorFromSVN(err)
+	var ge *gitcli.Error
+	msg := err.Error()
+	if errors.As(err, &ge) {
+		msg = ge.Message()
+	}
+	msg = strings.TrimPrefix(msg, "fatal: ")
+	msg = strings.TrimPrefix(msg, "error: ")
+	switch gitcli.KindOf(err) {
+	case gitcli.ErrAuth:
+		if svn {
+			msg += "\n\n" + w.tr(i18n.AppErrorAuthHintSVN)
+		} else {
+			msg += "\n\n" + w.tr(i18n.AppErrorAuthHintGit)
+		}
+	case gitcli.ErrLocked:
+		if svn {
+			msg += "\n\n" + w.tr(i18n.AppErrorLockedHintSVN)
+		} else {
+			msg += "\n\n" + w.tr(i18n.AppErrorLockedHintGit)
+		}
+	case gitcli.ErrNoGit:
+		if svn {
+			msg = w.tr(i18n.AppErrorToolMissingSVN)
+		} else {
+			msg = w.tr(i18n.AppErrorToolMissingGit)
+		}
+	}
+	if errors.Is(err, ErrUnsupported) {
+		msg = w.tr(i18n.AppErrorUnsupported)
+	}
+	if len(msg) > 2000 {
+		msg = msg[:2000] + "…"
+	}
+	return msg
+}
+
+// errorFromSVN reports whether the failure came from the Subversion adapter.
+func errorFromSVN(err error) bool {
+	var ve *vcs.Error
+	return errors.As(err, &ve) && ve.Tool == "svn"
+}
+
+// ErrorText is the backend-agnostic form used where no workspace is at hand.
+// It keeps the Git wording, which is what a caller outside this package had
+// before; anything user-facing inside the application uses the method above so
+// the hint matches the open repository.
 func ErrorText(err error) string {
 	var ge *gitcli.Error
 	msg := err.Error()

@@ -3,6 +3,7 @@ package svncli
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -510,6 +511,49 @@ func (r *Runner) MultiCommitChanges(ctx context.Context, repo domain.Repo, commi
 // Config returns "" for every key: Subversion keeps its configuration in its
 // own files and Viff does not read them.
 func (r *Runner) Config(ctx context.Context, repo domain.Repo, key string) string { return "" }
+
+// WorktreeFiles lists what a file browser may show: every path the working copy
+// records plus the files it does not ignore.
+//
+// One call does both: `svn status -v --no-ignore --xml` reports scheduled paths
+// with their revision and unversioned ones with item="unversioned", so there is
+// no need for a second round trip. The output carries no kind, so a directory
+// is recognised on disk; a path whose entry is gone from disk is still a file
+// candidate and is kept, because the browser must show removed files too.
+func (r *Runner) WorktreeFiles(ctx context.Context, repo domain.Repo) ([]string, error) {
+	out, err := r.Run(ctx, repo.Root, "status", "-v", "--no-ignore", "--xml")
+	if err != nil {
+		return nil, err
+	}
+	entries, err := ParseStatus(out)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(entries))
+	list := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Path == "." || e.Path == "" {
+			continue
+		}
+		// An ignored file is not part of what the browser lists; svn reports
+		// those only because --no-ignore was asked for.
+		if e.Item == "ignored" || e.Item == "external" {
+			continue
+		}
+		p := filepath.ToSlash(e.Path)
+		if _, dup := seen[p]; dup {
+			continue
+		}
+		full := filepath.Join(repo.Root, filepath.FromSlash(p))
+		if st, serr := os.Stat(full); serr == nil && st.IsDir() {
+			continue
+		}
+		seen[p] = struct{}{}
+		list = append(list, p)
+	}
+	sort.Strings(list)
+	return list, nil
+}
 
 // historyCache holds log pages per repository so scrolling through a large
 // history does not re-query the server for every page. It is bounded by entry

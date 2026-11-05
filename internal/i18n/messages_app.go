@@ -162,6 +162,17 @@ const (
 	AppErrorChangeListUnknown        = Key("app.error.changeListUnknown")
 	AppErrorChangeListEmpty          = Key("app.error.changeListEmpty")
 
+	// Hints appended to a failure the user can act on. They name the backend
+	// because the advice differs: Git goes through the credential helper and
+	// SSH agent, Subversion through its own auth cache.
+	AppErrorToolMissingGit = Key("app.error.toolMissingGit")
+	AppErrorToolMissingSVN = Key("app.error.toolMissingSvn")
+	AppErrorAuthHintGit    = Key("app.error.authHintGit")
+	AppErrorAuthHintSVN    = Key("app.error.authHintSvn")
+	AppErrorLockedHintGit  = Key("app.error.lockedHintGit")
+	AppErrorLockedHintSVN  = Key("app.error.lockedHintSvn")
+	AppErrorUnsupported    = Key("app.error.unsupported")
+
 	// Titles of the two sides of a comparison.
 	AppSideStaged      = Key("app.side.staged")
 	AppSideYourVersion = Key("app.side.yourVersion")
@@ -323,6 +334,14 @@ func init() {
 		AppErrorChangeListUnknown:        "unknown change list %q",
 		AppErrorChangeListEmpty:          "change list is empty",
 
+		AppErrorToolMissingGit: "Git was not found. Install Git or set its path in Settings.",
+		AppErrorToolMissingSVN: "Subversion (svn) was not found. Install Subversion or set its path in Settings.",
+		AppErrorAuthHintGit:    "Authentication failed. Viff uses your Git credential helper and SSH agent; configure them in a terminal and try again.",
+		AppErrorAuthHintSVN:    "Authentication failed. Subversion keeps its credentials in its own cache; run an svn command in a terminal to sign in, then try again.",
+		AppErrorLockedHintGit:  "Another Git process is using this repository. Wait for it to finish; remove the .lock file only if no Git process is running.",
+		AppErrorLockedHintSVN:  "The working copy is locked by another Subversion operation. Wait for it to finish, or run \"svn cleanup\" in the working copy.",
+		AppErrorUnsupported:    "This operation is not available for the open repository.",
+
 		AppSideStaged:      "Staged",
 		AppSideYourVersion: "Your version",
 	})
@@ -481,6 +500,14 @@ func init() {
 		AppErrorChangeListDefaultDelete:  "默认变更列表无法删除",
 		AppErrorChangeListUnknown:        "未知的变更列表 %q",
 		AppErrorChangeListEmpty:          "变更列表为空",
+
+		AppErrorToolMissingGit: "未找到 Git。请安装 Git，或在设置中填写它的路径。",
+		AppErrorToolMissingSVN: "未找到 Subversion（svn）。请安装 Subversion，或在设置中填写它的路径。",
+		AppErrorAuthHintGit:    "认证失败。Viff 使用你的 Git 凭据助手与 SSH agent；请在终端里配置好再重试。",
+		AppErrorAuthHintSVN:    "认证失败。Subversion 使用自己的凭据缓存；请在终端里执行一次 svn 命令完成登录后重试。",
+		AppErrorLockedHintGit:  "另一个 Git 进程正在使用此仓库。请等它结束；只有确认没有 Git 进程运行时才删除 .lock 文件。",
+		AppErrorLockedHintSVN:  "工作副本被另一个 Subversion 操作锁定。请等它结束，或在工作副本中执行 \"svn cleanup\"。",
+		AppErrorUnsupported:    "当前仓库不支持此操作。",
 
 		AppSideStaged:      "已暂存",
 		AppSideYourVersion: "你的版本",
