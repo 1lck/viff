@@ -14,7 +14,7 @@ Go + Viva。无需 Electron，无需 WebView，不捆绑浏览器运行时。
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.27.3%2B-00ADD8.svg)](https://go.dev/dl/)
 
-[功能](#轻量也能覆盖完整的-git-工作流) · [参与贡献](CONTRIBUTING.md) · [下载](https://github.com/1lck/viff/releases)
+[功能](#轻量也能覆盖完整的-git-工作流) · [交流群](#加入交流群) · [参与贡献](CONTRIBUTING.md) · [下载](https://github.com/1lck/viff/releases)
 
 </div>
 
@@ -37,6 +37,16 @@ Viff 将工作区、代码差异和提交历史放进一个原生桌面窗口。
 
 “轻量”是设计目标，不是未经测量的性能承诺。实际内存与启动耗时取决于仓库、平台和渲染环境，
 目前不宣称具体内存占用，也不使用“比某产品快几倍”的对比数字。
+
+## 加入交流群
+
+欢迎加入 Viff 交流群，分享使用体验、提出问题，并获取最新动态。
+
+<p align="center">
+  <img src="docs/assets/community/wechat-group.png" width="240" alt="Viff 微信群二维码">
+</p>
+
+<p align="center"><sub>使用微信扫码加入交流群。群二维码会周期性过期，如无法加入，欢迎在 Issue 中告知，我们会更新。</sub></p>
 
 ## 轻量，也能覆盖完整的 Git 工作流
 
