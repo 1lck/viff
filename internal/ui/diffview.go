@@ -57,6 +57,10 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 		r.Y++
 		r.Height--
 	}
+	if res.Image != nil {
+		w.paintImageDiff(t, r)
+		return
+	}
 	if res.Notice != "" {
 		w.paintCentered(r, res.Notice, "", w.pal.TextMuted)
 		return
@@ -653,7 +657,7 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 			}
 		}
 	}
-	if res.Notice != "" {
+	if res.Notice != "" || res.Image != nil {
 		count = ""
 	}
 	cw2 := w.p.width(count, fontUI, regular)

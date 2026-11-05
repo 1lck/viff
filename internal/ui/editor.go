@@ -53,6 +53,11 @@ type diffTab struct {
 	conflictBlock int
 	busy          bool
 
+	// Decoded pictures of an image diff, kept per tab so a repaint does not
+	// decode again.
+	picOld, picNew       *ui.Bitmap
+	picOldErr, picNewErr string
+
 	// File view annotations (Git blame).
 	annotate  bool
 	blame     *domain.Blame
@@ -162,6 +167,8 @@ func (w *Window) loadTab(t *diffTab) {
 			return
 		}
 		first := t.res == nil
+		t.picOld, t.picNew = nil, nil
+		t.picOldErr, t.picNewErr = "", ""
 		t.res = res
 		w.prepareTab(t)
 		if first {
