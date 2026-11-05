@@ -10,6 +10,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/platform"
 	"viff/internal/ui/icons"
 )
@@ -338,10 +339,10 @@ func (w *Window) paintEditor(r ui.Rect) {
 	}
 	switch {
 	case t.err != nil:
-		w.paintCentered(r, "Cannot show diff", vapp.ErrorText(t.err), w.pal.Error)
+		w.paintCentered(r, w.t(i18n.WorkspaceErrorCannotShowDiff), vapp.ErrorText(t.err), w.pal.Error)
 	case t.res == nil:
 		if t.loading {
-			w.paintCentered(r, "Loading…", "", w.pal.TextSecond)
+			w.paintCentered(r, w.t(i18n.WorkspaceStateLoading), "", w.pal.TextSecond)
 		}
 	case t.res.Conflict != nil:
 		w.paintConflict(t, r)
@@ -403,7 +404,7 @@ func (w *Window) paintTabs(r ui.Rect) {
 			}
 			w.p.iconIn(icons.CloseSmall, cr)
 		}
-		w.c.HitWithOptions(cid, cr, "Close", ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
+		w.c.HitWithOptions(cid, cr, w.t(i18n.WorkspaceButtonClose), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
 		if w.c.Clicked(cid) {
 			i := i
 			w.after(func() { w.closeTab(i) })
@@ -415,16 +416,16 @@ func (w *Window) paintTabs(r ui.Rect) {
 		w.onContext(id, func(x, y float32) {
 			i := i
 			w.openMenu(x, y, []item{
-				{title: "Close", shortcut: "⌘W", run: func() { w.closeTab(i) }},
-				{title: "Close Other Tabs", run: func() {
+				{title: w.t(i18n.WorkspaceButtonClose), shortcut: "⌘W", run: func() { w.closeTab(i) }},
+				{title: w.t(i18n.WorkspaceMenuCloseOtherTabs), run: func() {
 					v.tabs = []*diffTab{t}
 					t.clearTextSel()
 					v.active = 0
 				}},
-				{title: "Close All Tabs", run: func() { v.reset() }},
+				{title: w.t(i18n.WorkspaceMenuCloseAllTabs), run: func() { v.reset() }},
 				sep(),
-				{title: "Keep Tab Open", disabled: !t.preview, run: func() { t.preview = false }},
-				{title: "Copy Path", icon: icons.Copy, run: func() { w.copyText(path.Join(w.repo().Repo.Root, t.src.Path)) }},
+				{title: w.t(i18n.WorkspaceMenuKeepTabOpen), disabled: !t.preview, run: func() { t.preview = false }},
+				{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, run: func() { w.copyText(path.Join(w.repo().Repo.Root, t.src.Path)) }},
 			})
 		})
 		x = right(tr) + 4
@@ -434,7 +435,7 @@ func (w *Window) paintTabs(r ui.Rect) {
 func (w *Window) tabTip(t *diffTab) string {
 	s := t.src.Path
 	if t.src.Working {
-		return s + " (" + strings.ToLower(areaTitle(t.src.Area)) + ")"
+		return s + " (" + strings.ToLower(w.areaTitle(t.src.Area)) + ")"
 	}
 	return s + " @ " + domain.ShortHash(t.src.Commit)
 }
@@ -442,17 +443,17 @@ func (w *Window) tabTip(t *diffTab) string {
 // paintEditorEmpty shows the editor's empty-state hints like IntelliJ.
 func (w *Window) paintEditorEmpty(r ui.Rect) {
 	hints := [][2]string{
-		{"Project", "⌘1"},
-		{"Commit", "⌘K"},
-		{"Push", "⇧⌘K"},
-		{"Update Project", "⌘T"},
-		{"Branches", "⌥⇧`"},
-		{"Open File", "⇧⌘O"},
-		{"Show Diff of Selection", "⌘D"},
+		{w.t(i18n.WorkspaceHintProject), "⌘1"},
+		{w.t(i18n.WorkspacePanelCommit), "⌘K"},
+		{w.t(i18n.WorkspaceHintPush), "⇧⌘K"},
+		{w.t(i18n.WorkspaceHintUpdateProject), "⌘T"},
+		{w.t(i18n.WorkspaceHintBranches), "⌥⇧`"},
+		{w.t(i18n.WorkspaceHintOpenFile), "⇧⌘O"},
+		{w.t(i18n.WorkspaceHintDiffSelection), "⌘D"},
 	}
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
-		hints = [][2]string{{"Project", "⌘1"}, {"Commit", "⌘K"}, {"Branches", "⌥⇧`"}, {"Open File", "⇧⌘O"}, {"Show Diff of Selection", "⌘D"}}
+		hints = [][2]string{{w.t(i18n.WorkspaceHintProject), "⌘1"}, {w.t(i18n.WorkspacePanelCommit), "⌘K"}, {w.t(i18n.WorkspaceHintBranches), "⌥⇧`"}, {w.t(i18n.WorkspaceHintOpenFile), "⇧⌘O"}, {w.t(i18n.WorkspaceHintDiffSelection), "⌘D"}}
 	}
 	lineH := float32(30)
 	total := float32(len(hints)) * lineH
@@ -464,7 +465,7 @@ func (w *Window) paintEditorEmpty(r ui.Rect) {
 		w.p.text(kbdHint(h[1]), rect(cx+6, y, 200, lineH), fontUI, regular, w.pal.Link)
 		y += lineH
 	}
-	w.p.textCenter("Select a file in the Project panel, the Commit tool window or the Git log to see its changes", rect(r.X, y+14, r.Width, 22), fontSmall, regular, w.pal.TextDisable)
+	w.p.textCenter(w.t(i18n.WorkspaceEmptyEditorHint), rect(r.X, y+14, r.Width, 22), fontSmall, regular, w.pal.TextDisable)
 }
 
 // ---- file icons ----------------------------------------------------------------

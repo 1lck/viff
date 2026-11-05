@@ -11,6 +11,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -92,7 +93,7 @@ const (
 
 func (w *Window) paintGitWindow(r ui.Rect) {
 	w.island(r)
-	content, ax := w.toolHeader(r, scGitTabs, []string{"Log", "Console", "Reflog"}, w.gitTab, func(i int) {
+	content, ax := w.toolHeader(r, scGitTabs, []string{w.t(i18n.ChromeGitTabLog), w.t(i18n.ChromeGitTabConsole), w.t(i18n.ChromeGitTabReflog)}, w.gitTab, func(i int) {
 		w.gitTab = i
 		if i == 2 {
 			w.loadReflog()
@@ -100,10 +101,10 @@ func (w *Window) paintGitWindow(r ui.Rect) {
 	})
 	ay := r.Y + (headerH-actionSize)/2
 	more := rect(ax-actionSize*2-4, ay, actionSize, actionSize)
-	if w.action(idOptGit, more.X, more.Y, icons.MoreHorizontal, "Git Actions", actOpts{}) {
+	if w.action(idOptGit, more.X, more.Y, icons.MoreHorizontal, w.t(i18n.ChromeGitActions), actOpts{}) {
 		w.after(func() { w.openMenuBelow(rect(right(more)-200, ay, 200, actionSize), w.gitWindowMenu(), 220) })
 	}
-	if w.action(idHideGit, ax-actionSize, ay, icons.Hide, "Hide", actOpts{}) {
+	if w.action(idHideGit, ax-actionSize, ay, icons.Hide, w.t(i18n.ChromeGitHide), actOpts{}) {
 		w.after(func() { w.gitOpen = false })
 	}
 	w.p.hline(content.X, content.Y, content.Width, w.pal.Border)
@@ -153,7 +154,7 @@ func (w *Window) paintLogFilters(r ui.Rect) {
 	v := &w.lg
 	f := rs.Log.Filter
 	fr := rect(r.X+8, r.Y+5, min(260, r.Width*0.32), 28)
-	if w.field(idLogSearch, v.search, fr, fieldOpts{icon: icons.Search, placeholder: "Text or hash"}) {
+	if w.field(idLogSearch, v.search, fr, fieldOpts{icon: icons.Search, placeholder: w.t(i18n.ChromeLogPlaceholder)}) {
 		w.after(func() { w.applyLogText() })
 	}
 	w.onKeys(idLogSearch, func(e ui.KeyEvent) bool {
@@ -185,25 +186,25 @@ func (w *Window) paintLogFilters(r ui.Rect) {
 	x := right(fr) + 8
 	cy := r.Y + 6
 	branchVal := f.Branch
-	clicked, cw := w.filterChip(idLogBranchF, x, cy, 26, "Branch", branchVal)
+	clicked, cw := w.filterChip(idLogBranchF, x, cy, 26, w.t(i18n.ChromeLogFilterBranch), branchVal)
 	if clicked {
 		ar := rect(x, cy, cw, 26)
 		w.after(func() { w.openMenuBelow(ar, w.branchFilterMenu(), 240) })
 	}
 	x += cw + 2
-	clicked, cw = w.filterChip(idLogUserF, x, cy, 26, "User", f.Author)
+	clicked, cw = w.filterChip(idLogUserF, x, cy, 26, w.t(i18n.ChromeLogFilterUser), f.Author)
 	if clicked {
 		ar := rect(x, cy, cw, 26)
 		w.after(func() { w.openMenuBelow(ar, w.userFilterMenu(), 220) })
 	}
 	x += cw + 2
-	clicked, cw = w.filterChip(idLogDateF, x, cy, 26, "Date", sinceTitle(f.Since))
+	clicked, cw = w.filterChip(idLogDateF, x, cy, 26, w.t(i18n.ChromeLogFilterDate), sinceTitle(f.Since))
 	if clicked {
 		ar := rect(x, cy, cw, 26)
 		w.after(func() { w.openMenuBelow(ar, w.dateFilterMenu(), 180) })
 	}
 	x += cw + 2
-	clicked, cw = w.filterChip(idLogPathF, x, cy, 26, "Paths", f.Path)
+	clicked, cw = w.filterChip(idLogPathF, x, cy, 26, w.t(i18n.ChromeLogFilterPaths), f.Path)
 	if clicked {
 		ar := rect(x, cy, cw, 26)
 		w.after(func() { w.openPathFilter(ar) })
@@ -211,16 +212,16 @@ func (w *Window) paintLogFilters(r ui.Rect) {
 	x += cw + 4
 	ax := right(r) - 8 - actionSize
 	ay := r.Y + (r.Height-actionSize)/2
-	if w.action(idLogFetch, ax, ay, icons.Fetch, "Fetch", actOpts{disabled: len(rs.Remotes) == 0}) {
+	if w.action(idLogFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
 		w.after(func() { w.ws.Fetch(false) })
 	}
 	ax -= actionSize + 2
-	if w.action(idLogRefresh, ax, ay, icons.Refresh, "Refresh", actOpts{}) {
+	if w.action(idLogRefresh, ax, ay, icons.Refresh, w.t(i18n.ChromeActionRefresh), actOpts{}) {
 		w.after(func() { w.ws.ReloadLog(); w.ws.Refresh(true) })
 	}
 	if f.Active() {
 		ax -= actionSize + 2
-		if w.action(idLogClearF, ax, ay, icons.Close, "Clear Filters", actOpts{}) {
+		if w.action(idLogClearF, ax, ay, icons.Close, w.t(i18n.ChromeLogClearFilters), actOpts{}) {
 			w.after(func() {
 				setText(v.search, "")
 				v.brSel = ""
@@ -267,7 +268,7 @@ func (w *Window) branchFilterMenu() []item {
 	rs := w.repo()
 	cur := rs.Log.Filter.Branch
 	items := []item{
-		{title: "All", checked: cur == "", run: func() { w.lg.brSel = ""; w.setFilter(func(f *vapp.LogFilter) { f.Branch = "" }) }},
+		{title: w.t(i18n.ChromeLogFilterAll), checked: cur == "", run: func() { w.lg.brSel = ""; w.setFilter(func(f *vapp.LogFilter) { f.Branch = "" }) }},
 		{title: "HEAD", checked: cur == "HEAD", run: func() { w.setFilter(func(f *vapp.LogFilter) { f.Branch = "HEAD" }) }},
 	}
 	add := func(title string, refs []domain.Ref) {
@@ -287,9 +288,9 @@ func (w *Window) branchFilterMenu() []item {
 			}})
 		}
 	}
-	add("Local", rs.RefsOf(domain.RefLocal))
-	add("Remote", rs.RefsOf(domain.RefRemote))
-	add("Tags", rs.RefsOf(domain.RefTag))
+	add(w.t(i18n.ChromeRefsLocal), rs.RefsOf(domain.RefLocal))
+	add(w.t(i18n.ChromeRefsRemote), rs.RefsOf(domain.RefRemote))
+	add(w.t(i18n.ChromeRefsTags), rs.RefsOf(domain.RefTag))
 	return items
 }
 
@@ -310,9 +311,9 @@ func (w *Window) userFilterMenu() []item {
 		}
 		return names[i] < names[j]
 	})
-	items := []item{{title: "All", checked: cur == "", run: func() { w.setFilter(func(f *vapp.LogFilter) { f.Author = "" }) }}}
+	items := []item{{title: w.t(i18n.ChromeLogFilterAll), checked: cur == "", run: func() { w.setFilter(func(f *vapp.LogFilter) { f.Author = "" }) }}}
 	if me := w.myName(); me != "" {
-		items = append(items, item{title: "me", hint: me, checked: cur == me, run: func() { w.setFilter(func(f *vapp.LogFilter) { f.Author = me }) }})
+		items = append(items, item{title: w.t(i18n.ChromeLogFilterMe), hint: me, checked: cur == me, run: func() { w.setFilter(func(f *vapp.LogFilter) { f.Author = me }) }})
 	}
 	items = append(items, sep())
 	for i, n := range names {
@@ -341,19 +342,19 @@ func (w *Window) dateFilterMenu() []item {
 	opt := func(title string, d time.Duration) item {
 		return item{title: title, checked: cur == d, run: func() { w.setFilter(func(f *vapp.LogFilter) { f.Since = d }) }}
 	}
-	return []item{opt("All", 0), opt("Last 24 hours", 24*time.Hour), opt("Last 7 days", 7*24*time.Hour), opt("Last 30 days", 30*24*time.Hour), opt("Last year", 365*24*time.Hour)}
+	return []item{opt(w.t(i18n.ChromeLogFilterAll), 0), opt(w.t(i18n.ChromeLogSinceDay), 24*time.Hour), opt(w.t(i18n.ChromeLogSinceWeek), 7*24*time.Hour), opt(w.t(i18n.ChromeLogSinceMonth), 30*24*time.Hour), opt(w.t(i18n.ChromeLogSinceYear), 365*24*time.Hour)}
 }
 
 func (w *Window) openPathFilter(anchor ui.Rect) {
 	ed := text.NewEditor(w.repo().Log.Filter.Path)
 	w.openDialog(&dialog{
-		title: "Filter by Path", ok: "Apply", width: 460,
+		title: w.t(i18n.ChromeDialogFilterPath), ok: w.t(i18n.ChromeActionApply), width: 460,
 		body: func(f *form) {
-			f.muted("Show only commits that change files under this path (relative to the repository root).")
+			f.muted(w.t(i18n.ChromeDialogFilterPathHint))
 			id := f.field("", ed, "src/main", false)
 			f.w.dialog.focus = id
 		},
-		extra: "Clear", onExtra: func() { w.dialog = nil; w.setFilter(func(f *vapp.LogFilter) { f.Path = "" }) },
+		extra: w.t(i18n.ChromeActionClear), onExtra: func() { w.dialog = nil; w.setFilter(func(f *vapp.LogFilter) { f.Path = "" }) },
 		onOK: func() bool {
 			p := strings.Trim(strings.TrimSpace(ed.String()), "/")
 			w.setFilter(func(f *vapp.LogFilter) { f.Path = p })
@@ -390,7 +391,7 @@ func (w *Window) paintLogTable(r ui.Rect) {
 		}
 		v.sel = keep
 	}
-	w.list(idLogTable, scLogRows, r, "Commits")
+	w.list(idLogTable, scLogRows, r, w.t(i18n.ChromeListCommits))
 	w.onKeys(idLogTable, w.logKey)
 	v.viewH = r.Height
 	if v.reveal != "" && l.Gen != v.revealGen && l.Loaded() && !l.Loading {
@@ -408,16 +409,16 @@ func (w *Window) paintLogTable(r ui.Rect) {
 	v.scroll.clamp(content, r.Height)
 	w.onScrollIn(r, func(dx, dy float32) { v.scroll.Y += dy; v.scroll.clamp(content, r.Height) })
 	if n == 0 {
-		msg := "No commits"
+		msg := w.t(i18n.ChromeLogEmpty)
 		switch {
 		case l.Loading || !l.Loaded():
-			msg = "Loading…"
+			msg = w.t(i18n.ChromeCommonLoading)
 		case l.Err != nil:
 			msg = vapp.ErrorText(l.Err)
 		case l.Filter.Active():
-			msg = "No commits matching filters"
+			msg = w.t(i18n.ChromeLogEmptyFiltered)
 		case !rs.HasHead():
-			msg = "No commits yet"
+			msg = w.t(i18n.ChromeLogEmptyNoHead)
 		}
 		w.p.textCenter(msg, rect(r.X, r.Y+r.Height*0.35, r.Width, 22), fontUI, regular, w.pal.TextSecond)
 		return
@@ -483,7 +484,7 @@ func (w *Window) paintLogTable(r ui.Rect) {
 		})
 	}
 	if !l.Done && last >= n {
-		w.p.textCenter("Loading more…", rect(r.X, r.Y+float32(n)*logRowH-v.scroll.Y, r.Width, logRowH), fontSmall, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.ChromeLogLoadingMore), rect(r.X, r.Y+float32(n)*logRowH-v.scroll.Y, r.Width, logRowH), fontSmall, regular, w.pal.TextSecond)
 	}
 	w.c.Unclip()
 	w.vbar(scLogScrollbars.At(2), r, &v.scroll, content)
@@ -710,7 +711,7 @@ func (w *Window) commitMenu() []item {
 		hashes[len(sel)-1-i] = sel[i].Hash // oldest first
 	}
 	items := []item{
-		{title: "Copy Revision Number", icon: icons.Copy, shortcut: "⌥⇧⌘C", run: func() {
+		{title: w.t(i18n.ChromeMenuCopyRevision), icon: icons.Copy, shortcut: "⌥⇧⌘C", run: func() {
 			var s []string
 			for _, x := range sel {
 				s = append(s, x.Hash)
@@ -718,28 +719,28 @@ func (w *Window) commitMenu() []item {
 			w.copyText(strings.Join(s, " "))
 		}},
 		sep(),
-		{title: "Cherry-Pick", icon: icons.CherryPick, disabled: rs.Operation.Active(), run: func() { w.ws.CherryPick(hashes) }},
-		{title: "Checkout Revision '" + short + "'", disabled: !single, run: func() {
+		{title: w.t(i18n.ChromeMenuCherryPick), icon: icons.CherryPick, disabled: rs.Operation.Active(), run: func() { w.ws.CherryPick(hashes) }},
+		{title: w.t(i18n.ChromeMenuCheckoutRevision, short), disabled: !single, run: func() {
 			w.confirmCheckoutRevision(c.Hash)
 		}},
-		{title: "Show Diff with Working Tree", icon: icons.Diff, disabled: !single, run: func() { w.compareWithWorking(c.Hash) }},
+		{title: w.t(i18n.ChromeMenuShowDiffWorking), icon: icons.Diff, disabled: !single, run: func() { w.compareWithWorking(c.Hash) }},
 	}
 	if len(sel) == 2 {
 		// The log lists the newest commit first; compare oldest → newest.
 		older, newer := sel[1], sel[0]
-		items = append(items, item{title: "Compare Commits", icon: icons.Diff, run: func() {
+		items = append(items, item{title: w.t(i18n.ChromeMenuCompareCommits), icon: icons.Diff, run: func() {
 			w.openCompareCommits(older.Hash, newer.Hash)
 		}})
 	}
 	items = append(items,
 		sep(),
-		item{title: "Reset Current Branch to Here…", icon: icons.Reset, disabled: !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
-		item{title: "Revert Commit", icon: icons.Revert, disabled: rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
-		item{title: "Interactively Rebase from Here…", disabled: !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
+		item{title: w.t(i18n.ChromeMenuResetHere), icon: icons.Reset, disabled: !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
+		item{title: w.t(i18n.ChromeMenuRevert), icon: icons.Revert, disabled: rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
+		item{title: w.t(i18n.ChromeMenuInteractiveRebase), disabled: !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
 	)
 	if single && isHead && len(c.Parents) == 1 && rs.Status.Branch.Ahead > 0 {
-		items = append(items, item{title: "Undo Commit…", icon: icons.Undo, run: func() {
-			w.confirm("Undo Commit", "Undo the last commit '"+c.Subject+"'? Its changes stay staged so you can commit them again.", "Undo Commit", func() {
+		items = append(items, item{title: w.t(i18n.ChromeMenuUndoCommit), icon: icons.Undo, run: func() {
+			w.confirm(w.t(i18n.ChromeDialogUndoCommit), w.t(i18n.ChromeDialogUndoCommitMessage, c.Subject), w.t(i18n.ChromeDialogUndoCommit), func() {
 				w.ws.Reset(gitcli.ResetSoft, "HEAD~1")
 			})
 		}})
@@ -749,17 +750,17 @@ func (w *Window) commitMenu() []item {
 		// a commit with exactly one parent and no operation in flight.
 		canEdit := len(c.Parents) == 1 && !rs.Operation.Active()
 		items = append(items, sep(),
-			item{title: "Edit Commit Message…", disabled: !canEdit, run: func() { w.openRewordCommit(c) }},
-			item{title: "Squash into Parent…", disabled: !canEdit, run: func() { w.openSquashCommit(c) }},
-			item{title: "Drop Commit…", disabled: !canEdit, run: func() { w.openDropCommit(c) }},
+			item{title: w.t(i18n.ChromeMenuEditCommitMessage), disabled: !canEdit, run: func() { w.openRewordCommit(c) }},
+			item{title: w.t(i18n.ChromeMenuSquashIntoParent), disabled: !canEdit, run: func() { w.openSquashCommit(c) }},
+			item{title: w.t(i18n.ChromeMenuDropCommit), disabled: !canEdit, run: func() { w.openDropCommit(c) }},
 		)
 	}
 	items = append(items, sep(),
-		item{title: "New Branch…", icon: icons.Add, disabled: !single, run: func() { w.openNewBranch(c.Hash, short) }},
-		item{title: "New Tag…", icon: icons.BranchLabel, disabled: !single, run: func() { w.openNewTag(c.Hash, short) }},
+		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: !single, run: func() { w.openNewBranch(c.Hash, short) }},
+		item{title: w.t(i18n.ChromeMenuNewTag), icon: icons.BranchLabel, disabled: !single, run: func() { w.openNewTag(c.Hash, short) }},
 		// A merge commit has more than one history, so "up to" is ambiguous.
-		item{title: "Push Up to Commit…", icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }},
-		item{title: "Browse Repository at Revision…", icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }},
+		item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }},
+		item{title: w.t(i18n.ChromeMenuBrowseAtRevision), icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }},
 	)
 	return items
 }
@@ -776,7 +777,7 @@ func reverse(s []string) []string {
 // working tree and opens the first.
 func (w *Window) confirmCheckoutRevision(hash string) {
 	short := domain.ShortHash(hash)
-	w.confirm("Checkout Revision", "Check out "+short+" in detached HEAD state? Commits made there belong to no branch until you create one.", "Checkout", func() {
+	w.confirm(w.t(i18n.ChromeDialogCheckoutRevision), w.t(i18n.ChromeDialogCheckoutRevisionMessage, short), w.t(i18n.ChromeActionCheckout), func() {
 		w.ws.CheckoutRevision(hash)
 	})
 }
@@ -784,11 +785,11 @@ func (w *Window) confirmCheckoutRevision(hash string) {
 func (w *Window) compareWithWorking(hash string) {
 	w.ws.CompareWith(hash, "", func(changes []domain.Change, err error) {
 		if err != nil {
-			w.ws.NotifyError("Cannot compare", err)
+			w.ws.NotifyError(w.t(i18n.ChromeNotifyCannotCompare), err)
 			return
 		}
 		if len(changes) == 0 {
-			w.ws.Notify(vapp.NoticeInfo, "No differences", "The working tree matches "+domain.ShortHash(hash)+".")
+			w.ws.Notify(vapp.NoticeInfo, w.t(i18n.ChromeNotifyNoDifferences), w.t(i18n.ChromeNotifyNoDifferencesMessage, domain.ShortHash(hash)))
 			return
 		}
 		var items []item
@@ -798,7 +799,7 @@ func (w *Window) compareWithWorking(hash string) {
 				w.showDiff(vapp.DiffSource{Path: ch.Path, OldPath: ch.OldPath, Commit: "", Parent: hash, Kind: ch.Kind}, true)
 			}})
 		}
-		p := &popup{x: w.size.Width/2 - 220, y: 120, items: items, sel: -1, minWidth: 440, title: "Changes", search: text.NewEditor("")}
+		p := &popup{x: w.size.Width/2 - 220, y: 120, items: items, sel: -1, minWidth: 440, title: w.t(i18n.ChromePopupChanges), search: text.NewEditor("")}
 		w.popups = []*popup{p}
 	})
 }
@@ -810,12 +811,12 @@ func (w *Window) buildBranchRows() {
 	v := &w.lg
 	v.brRows = v.brRows[:0]
 	if cur, ok := rs.CurrentRef(); ok {
-		v.brRows = append(v.brRows, brRow{key: "HEAD", title: "HEAD (Current Branch)", ref: &cur})
+		v.brRows = append(v.brRows, brRow{key: "HEAD", title: w.t(i18n.ChromeRefsHeadCurrent), ref: &cur})
 	} else if rs.HasHead() {
-		v.brRows = append(v.brRows, brRow{key: "HEAD", title: "HEAD (" + domain.ShortHash(rs.Status.Branch.Head) + ")"})
+		v.brRows = append(v.brRows, brRow{key: "HEAD", title: w.t(i18n.ChromeRefsHeadHash, domain.ShortHash(rs.Status.Branch.Head))})
 	}
 	locals := rs.RefsOf(domain.RefLocal)
-	v.brRows = append(v.brRows, brRow{key: "g:local", title: "Local", group: true, count: len(locals)})
+	v.brRows = append(v.brRows, brRow{key: "g:local", title: w.t(i18n.ChromeRefsLocal), group: true, count: len(locals)})
 	if !v.brClosed["g:local"] {
 		for i := range locals {
 			v.brRows = append(v.brRows, brRow{key: locals[i].Name, title: locals[i].Short, ref: &locals[i], depth: 1})
@@ -823,7 +824,7 @@ func (w *Window) buildBranchRows() {
 	}
 	remotes := rs.RefsOf(domain.RefRemote)
 	if len(remotes) > 0 {
-		v.brRows = append(v.brRows, brRow{key: "g:remote", title: "Remote", group: true, count: len(remotes)})
+		v.brRows = append(v.brRows, brRow{key: "g:remote", title: w.t(i18n.ChromeRefsRemote), group: true, count: len(remotes)})
 		if !v.brClosed["g:remote"] {
 			byRemote := map[string][]int{}
 			for i, r := range remotes {
@@ -843,7 +844,7 @@ func (w *Window) buildBranchRows() {
 	}
 	tags := rs.RefsOf(domain.RefTag)
 	if len(tags) > 0 {
-		v.brRows = append(v.brRows, brRow{key: "g:tags", title: "Tags", group: true, count: len(tags)})
+		v.brRows = append(v.brRows, brRow{key: "g:tags", title: w.t(i18n.ChromeRefsTags), group: true, count: len(tags)})
 		if !v.brClosed["g:tags"] {
 			for i := range tags {
 				v.brRows = append(v.brRows, brRow{key: tags[i].Name, title: tags[i].Short, ref: &tags[i], depth: 1})
@@ -857,18 +858,18 @@ func (w *Window) paintBranches(r ui.Rect) {
 	rs := w.repo()
 	tb := splitTop(&r, 38)
 	x, y := tb.X+8, tb.Y+(tb.Height-actionSize)/2
-	if w.action(idBrNew, x, y, icons.Add, "New Branch…", actOpts{disabled: !rs.HasHead()}) {
+	if w.action(idBrNew, x, y, icons.Add, w.t(i18n.ChromeMenuNewBranch), actOpts{disabled: !rs.HasHead()}) {
 		w.after(func() { w.openNewBranch("", rs.HeadLabel()) })
 	}
 	x += actionSize + 2
-	if w.action(idBrFetch, x, y, icons.Fetch, "Fetch", actOpts{disabled: len(rs.Remotes) == 0}) {
+	if w.action(idBrFetch, x, y, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
 		w.after(func() { w.ws.Fetch(false) })
 	}
 	w.p.hline(r.X, r.Y, r.Width, w.pal.Border)
 	r.Y++
 	r.Height--
 	w.buildBranchRows()
-	w.list(idBranchesTree, scBranchRows, r, "Branches")
+	w.list(idBranchesTree, scBranchRows, r, w.t(i18n.ChromeListBranches))
 	content := float32(len(v.brRows))*rowH + 8
 	v.brScroll.clamp(content, r.Height)
 	w.onScrollIn(r, func(dx, dy float32) { v.brScroll.Y += dy; v.brScroll.clamp(content, r.Height) })
@@ -935,7 +936,7 @@ func (w *Window) paintBranches(r ui.Rect) {
 			if row.ref != nil && row.ref.Kind == domain.RefLocal {
 				hint := ""
 				if row.ref.Gone {
-					hint = "gone"
+					hint = w.t(i18n.ChromeRefsGoneWord)
 				} else if row.ref.Ahead > 0 || row.ref.Behind > 0 {
 					if row.ref.Ahead > 0 {
 						hint += "↑" + itoa(row.ref.Ahead)
@@ -1004,12 +1005,12 @@ func (w *Window) paintDetails(r ui.Rect) {
 	// processes stop instead of finishing a selection the user has left.
 	v.multi.stop()
 	if n == 0 || rs.Detail == nil && !rs.DetailLoading {
-		w.p.textCenter("Select a commit to see its changes", rect(r.X, r.Y+r.Height*0.4, r.Width, 22), fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.ChromeDetailsEmpty), rect(r.X, r.Y+r.Height*0.4, r.Width, 22), fontUI, regular, w.pal.TextSecond)
 		return
 	}
 	d := rs.Detail
 	if d == nil || d.Hash != rs.DetailHash {
-		w.p.textCenter("Loading…", rect(r.X, r.Y+r.Height*0.4, r.Width, 22), fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.ChromeCommonLoading), rect(r.X, r.Y+r.Height*0.4, r.Width, 22), fontUI, regular, w.pal.TextSecond)
 		return
 	}
 	// Files on top, message below.
@@ -1018,7 +1019,7 @@ func (w *Window) paintDetails(r ui.Rect) {
 	msg := rect(r.X, bottom(files), r.Width, msgH)
 	w.p.hline(msg.X, msg.Y, msg.Width, w.pal.Border)
 
-	w.list(idDetailsFiles, scDetailRows, files, "Changed files")
+	w.list(idDetailsFiles, scDetailRows, files, w.t(i18n.ChromeListChangedFiles))
 	content := float32(len(d.Changes))*rowH + 30
 	v.dtScroll.clamp(content, files.Height)
 	w.onScrollIn(files, func(dx, dy float32) { v.dtScroll.Y += dy; v.dtScroll.clamp(content, files.Height) })
@@ -1040,7 +1041,7 @@ func (w *Window) paintDetails(r ui.Rect) {
 	})
 	w.c.Clip(files)
 	y := files.Y + 4 - v.dtScroll.Y
-	w.p.text(plural(len(d.Changes), "file", "files")+" changed", rect(files.X+12, y, files.Width-24, 24), fontSmall, regular, w.pal.TextSecond)
+	w.p.text(w.t(i18n.ChromeDetailsFilesChanged, len(d.Changes)), rect(files.X+12, y, files.Width-24, 24), fontSmall, regular, w.pal.TextSecond)
 	y += 24
 	for i, ch := range d.Changes {
 		rr := rect(files.X, y, files.Width, rowH)
@@ -1085,12 +1086,12 @@ func (w *Window) paintDetails(r ui.Rect) {
 		w.onContext(id, func(x, y float32) {
 			v.dtSel = ii
 			w.openMenu(x, y, []item{
-				{title: "Show Diff", icon: icons.Diff, shortcut: "⌘D", run: func() { w.showCommitFile(d, ii, true) }},
-				{title: "Open Repository Version", disabled: deleted, run: func() { w.openFileView(chPath, hash, false) }},
-				{title: "Annotate Revision", disabled: deleted, run: func() { w.openFileView(chPath, hash, true) }},
-				{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(chPath) }},
+				{title: w.t(i18n.ChromeMenuShowDiff), icon: icons.Diff, shortcut: "⌘D", run: func() { w.showCommitFile(d, ii, true) }},
+				{title: w.t(i18n.ChromeMenuOpenRepoVersion), disabled: deleted, run: func() { w.openFileView(chPath, hash, false) }},
+				{title: w.t(i18n.ChromeMenuAnnotateRevision), disabled: deleted, run: func() { w.openFileView(chPath, hash, true) }},
+				{title: w.t(i18n.ChromeMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(chPath) }},
 				sep(),
-				{title: "Copy Relative Path", icon: icons.Copy, run: func() { w.copyText(chPath) }},
+				{title: w.t(i18n.ChromeMenuCopyRelativePath), icon: icons.Copy, run: func() { w.copyText(chPath) }},
 			})
 		})
 	}
@@ -1126,7 +1127,7 @@ func (w *Window) loadReflog() {
 		v.loading = false
 		v.loaded = true
 		if err != nil {
-			w.ws.NotifyError("Cannot read the reflog", err)
+			w.ws.NotifyError(w.t(i18n.ChromeNotifyCannotReadReflog), err)
 			return
 		}
 		v.entries = entries
@@ -1139,18 +1140,18 @@ func (w *Window) paintReflog(r ui.Rect) {
 		w.after(w.loadReflog)
 	}
 	tb := splitTop(&r, 34)
-	w.p.text("Where HEAD has been. Use it to find commits after a reset or rebase.", rect(tb.X+12, tb.Y, tb.Width-60, tb.Height), fontSmall, regular, w.pal.TextSecond)
-	if w.action(scStashActions.At(9), right(tb)-8-actionSize, tb.Y+4, icons.Refresh, "Refresh", actOpts{}) {
+	w.p.text(w.t(i18n.ChromeReflogHint), rect(tb.X+12, tb.Y, tb.Width-60, tb.Height), fontSmall, regular, w.pal.TextSecond)
+	if w.action(scStashActions.At(9), right(tb)-8-actionSize, tb.Y+4, icons.Refresh, w.t(i18n.ChromeActionRefresh), actOpts{}) {
 		w.after(w.loadReflog)
 	}
-	w.list(idReflogList, scReflogRows, r, "Reflog")
+	w.list(idReflogList, scReflogRows, r, w.t(i18n.ChromeGitTabReflog))
 	content := float32(len(v.entries))*rowH + 8
 	v.scroll.clamp(content, r.Height)
 	w.onScrollIn(r, func(dx, dy float32) { v.scroll.Y += dy; v.scroll.clamp(content, r.Height) })
 	if len(v.entries) == 0 {
-		msg := "No reflog entries"
+		msg := w.t(i18n.ChromeReflogEmpty)
 		if v.loading {
-			msg = "Loading…"
+			msg = w.t(i18n.ChromeCommonLoading)
 		}
 		w.p.textCenter(msg, rect(r.X, r.Y+r.Height*0.35, r.Width, 22), fontUI, regular, w.pal.TextSecond)
 		return
@@ -1190,10 +1191,10 @@ func (w *Window) paintReflog(r ui.Rect) {
 		w.onContext(id, func(x, y float32) {
 			v.sel = ii
 			w.openMenu(x, y, []item{
-				{title: "Copy Revision Number", icon: icons.Copy, run: func() { w.copyText(hash) }},
-				{title: "New Branch…", icon: icons.Add, run: func() { w.openNewBranch(hash, short) }},
-				{title: "Checkout Revision '" + short + "'", run: func() { w.confirmCheckoutRevision(hash) }},
-				{title: "Reset Current Branch to Here…", icon: icons.Reset, run: func() { w.openReset(domain.Commit{Hash: hash, Subject: e.Message}) }},
+				{title: w.t(i18n.ChromeMenuCopyRevision), icon: icons.Copy, run: func() { w.copyText(hash) }},
+				{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, run: func() { w.openNewBranch(hash, short) }},
+				{title: w.t(i18n.ChromeMenuCheckoutRevision, short), run: func() { w.confirmCheckoutRevision(hash) }},
+				{title: w.t(i18n.ChromeMenuResetHere), icon: icons.Reset, run: func() { w.openReset(domain.Commit{Hash: hash, Subject: e.Message}) }},
 			})
 		})
 	}

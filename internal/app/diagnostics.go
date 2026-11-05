@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"viff/internal/diagnostics"
+	"viff/internal/i18n"
 	"viff/internal/observability"
 	"viff/internal/storage"
 	"viff/internal/version"
@@ -130,7 +131,7 @@ func (w *Workspace) LogDirectory() string {
 // StopProblemRecording or ExportDiagnostics ends it.
 func (w *Workspace) StartProblemRecording(description string) error {
 	if w.ProblemRecording() {
-		return errors.New("a problem recording is already running")
+		return errors.New(w.tr(i18n.AppErrorRecordingRunning))
 	}
 	_, err := w.incidentController().StartIncident("problem", description)
 	return err
@@ -168,7 +169,7 @@ func (w *Workspace) LastIncident() (observability.Incident, bool) {
 // minutes. Logs are flushed by the bundle writer before it reads them.
 func (w *Workspace) ExportDiagnostics(dest string) (DiagnosticResult, error) {
 	if strings.TrimSpace(dest) == "" {
-		return DiagnosticResult{}, errors.New("no diagnostics destination chosen")
+		return DiagnosticResult{}, errors.New(w.tr(i18n.AppErrorNoDiagnosticsDestination))
 	}
 	start := time.Now()
 	recording := w.ProblemRecording()

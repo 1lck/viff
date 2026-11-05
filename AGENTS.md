@@ -47,7 +47,7 @@ skill 是必读步骤，不是可选参考。按改动类型加载，跨类型�
 
 - Go 版本与依赖以 `go.mod` 为准（当前 Go 1.27.3，`github.com/vivaui/viva v0.2.3`）；模块名 `viff`。
 - 入口 `cmd/viff`；界面在 `internal/ui`（Viva 视图）；构建产物在 `build/`、安装包在 `dist/`，**都不提交**。
-- 界面文案当前为**英文**，与既有 UI 保持一致。仓库文档的双语布局按文件而定，**沿用该文件既有布局，不要重排**：README 分成英文 `README.md` 与中文 `README.zh-CN.md`；`CONTRIBUTING.md`、`SECURITY.md` 在同一文件内分 `## 中文` / `## English`；`docs/testing.md` 等专题文档按段落中英对照；发布说明必须是「中文 → `---` → English」。
+- 界面文案默认**英文**，可在设置 → General → Language 切到简体中文；新增文案走 `internal/i18n` 的消息表，不要写死字面量。仓库文档的双语布局按文件而定，**沿用该文件既有布局，不要重排**：README 分成英文 `README.md` 与中文 `README.zh-CN.md`；`CONTRIBUTING.md`、`SECURITY.md` 在同一文件内分 `## 中文` / `## English`；`docs/testing.md` 等专题文档按段落中英对照；发布说明必须是「中文 → `---` → English」。
 - 系统 `git` 是运行时依赖，不是 vendor 的库；不假设 Git 版本，能力要探测。
 - 提交消息、分支、PR 可以用中文；面向外部贡献者的 README/CONTRIBUTING 保持中英双语。
 - 本机未安装 Go 时不要声称跑过测试；写清「未运行 + 原因」。
@@ -58,6 +58,7 @@ skill 是必读步骤，不是可选参考。按改动类型加载，跨类型�
 | --- | --- | --- |
 | `cmd/viff` | 启动、装配、退出与资源回收 | 不承载 Git 业务规则 |
 | `internal/domain` | 仓库身份、引用、提交、差异、冲突、操作状态 | 不导入 Viva，不启动进程 |
+| `internal/i18n` | 界面文案表、语言枚举与缺失回退 | 零依赖，不导入 Viva / domain / gitcli / storage |
 | `internal/app` | 用例、查询、调度、状态版本、缓存失效 | 只经窄接口访问外部资源 |
 | `internal/gitcli` | Git 参数构造、机器输出解析、进程生命周期、能力探测 | 不返回 UI 节点，不直接改 UI |
 | `internal/ui` | Viva 视图、视图模型、主题、可复用交互组件 | 不拼 Git 命令，不直接读 `.git` |
@@ -67,7 +68,7 @@ skill 是必读步骤，不是可选参考。按改动类型加载，跨类型�
 | `internal/observability` | 结构化事件日志、崩溃记录、诊断导出 | 脱敏先于落盘 |
 | `internal/diagnostics` | 诊断包组装 | 不含仓库内容、凭据、令牌 |
 
-- 依赖只从外向内：`ui → app → {domain, storage, gitcli, platform, process, observability, diagnostics}`；反向导入不允许。
+- 依赖只从外向内：`ui → app → {domain, storage, gitcli, platform, process, observability, diagnostics}`；`app` 与 `ui` 直接依赖 `i18n`，而 `i18n` 不依赖任何内部包。反向导入不允许。
 - `domain`、`app`、`gitcli`、`storage`、`process` **不得导入 Viva**；Viva 类型留在 `internal/ui`。
 - `ui` 不把 Git 业务规则搬进界面：不拼 Git 业务命令、不解析 Git 输出。现存例外只有打开/初始化对话框里的 `.git` 存在性判断和设置里的 `exec.LookPath` 可用性检查，改动这类代码时保持轻量，不要扩散成第二套 Git 层。
 - 箭头是调用/通知关系；源码依赖由 `app` 定义的小接口约束，适配器在 `cmd/viff` 组装。
@@ -104,7 +105,7 @@ python3 scripts/release_notes.py docs/releases/vTAG.md --tag vTAG  # 发布说�
 - 同一仓库的写操作串行；改共享引用（refs、worktree 共享元数据）按 common Git dir 协调。
 - 不记录完整 argv、环境变量、仓库内容、diff、提交说明、凭据；日志与诊断包一律先脱敏。
 - Windows：所有子进程经 `internal/process`（`SysProcAttr.HideWindow`/`CREATE_NO_WINDOW`），不要新增会弹控制台的调用。
-- UI：渲染路径不做阻塞 IO 和 Git 调用；状态从 `app` 查询，交互文案英文，明暗主题都要可用。
+- UI：渲染路径不做阻塞 IO 和 Git 调用；状态从 `app` 查询，交互文案走 `internal/i18n`（默认英文），明暗主题都要可用。
 - 图标由 `go generate ./internal/ui/icons` 从 `assets/icons/intellij` 生成，生成物提交；新增图标保留版权声明。
 
 ## 测试规则

@@ -14,6 +14,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 	"viff/internal/version"
 )
@@ -56,22 +57,22 @@ func (w *Window) openNewBranch(start, startLabel string) {
 			return p
 		}
 		if w.branchExists(n) && !overwrite {
-			return "Branch '" + n + "' already exists. Select Overwrite to reset it here."
+			return w.t(i18n.DialogBranchExistsOverwrite, n)
 		}
 		return ""
 	}
-	title := "Create New Branch"
+	title := w.t(i18n.DialogNewBranchTitle)
 	if startLabel != "" {
-		title += " from " + startLabel
+		title = w.t(i18n.DialogNewBranchFrom, startLabel)
 	}
 	w.openDialog(&dialog{
-		title: title, ok: "Create", width: 460,
+		title: title, ok: w.t(i18n.DialogCreate), width: 460,
 		body: func(f *form) {
 			n := strings.TrimSpace(name.String())
-			id := f.field("New branch name:", name, "", n != "" && problem() != "")
+			id := f.field(w.t(i18n.DialogNewBranchName), name, "", n != "" && problem() != "")
 			f.w.dialog.focus = id
-			f.check("Checkout branch", &checkout)
-			f.check("Overwrite existing branch", &overwrite)
+			f.check(w.t(i18n.DialogCheckoutBranch), &checkout)
+			f.check(w.t(i18n.DialogOverwriteBranch), &overwrite)
 			if n != "" {
 				if p := problem(); p != "" {
 					f.message(p, w.pal.Error)
@@ -89,14 +90,14 @@ func (w *Window) openNewBranch(start, startLabel string) {
 func (w *Window) openRename(r domain.Ref) {
 	name := text.NewEditor(r.Short)
 	w.openDialog(&dialog{
-		title: "Rename Branch " + r.Short, ok: "Rename", width: 440,
+		title: w.t(i18n.DialogRenameTitle, r.Short), ok: w.t(i18n.DialogRename), width: 440,
 		body: func(f *form) {
 			n := strings.TrimSpace(name.String())
 			p := validRefName(n)
 			if p == "" && n != r.Short && w.branchExists(n) {
-				p = "Branch '" + n + "' already exists"
+				p = w.t(i18n.DialogBranchExists, n)
 			}
-			id := f.field("New name:", name, "", p != "")
+			id := f.field(w.t(i18n.DialogNewName), name, "", p != "")
 			f.w.dialog.focus = id
 			if p != "" && n != "" {
 				f.message(p, w.pal.Error)
@@ -114,9 +115,9 @@ func (w *Window) openSetUpstream(r domain.Ref) {
 	choices := w.repo().RefsOf(domain.RefRemote)
 	sel := w.defaultRemote() + "/" + r.Short
 	w.openDialog(&dialog{
-		title: "Set Upstream for " + r.Short, ok: "Set", width: 440,
+		title: w.t(i18n.DialogSetUpstreamTitle, r.Short), ok: w.t(i18n.DialogSet), width: 440,
 		body: func(f *form) {
-			f.combo("Track remote branch:", sel, func() []item {
+			f.combo(w.t(i18n.DialogTrackRemote), sel, func() []item {
 				var items []item
 				for _, c := range choices {
 					c := c
@@ -133,13 +134,13 @@ func (w *Window) openNewTag(rev, label string) {
 	name := text.NewEditor("")
 	msg := text.NewEditor("")
 	w.openDialog(&dialog{
-		title: "Create Tag on " + label, ok: "Create Tag", width: 460,
+		title: w.t(i18n.DialogCreateTagTitle, label), ok: w.t(i18n.DialogCreateTag), width: 460,
 		body: func(f *form) {
 			n := strings.TrimSpace(name.String())
 			p := validRefName(n)
-			id := f.field("Tag name:", name, "v1.0.0", n != "" && p != "")
+			id := f.field(w.t(i18n.DialogTagName), name, "v1.0.0", n != "" && p != "")
 			f.w.dialog.focus = id
-			f.field("Message (optional, makes an annotated tag):", msg, "", false)
+			f.field(w.t(i18n.DialogTagMessage), msg, "", false)
 			if n != "" && p != "" {
 				f.message(p, w.pal.Error)
 			}
@@ -155,11 +156,11 @@ func (w *Window) openNewTag(rev, label string) {
 func (w *Window) openCheckoutRevision() {
 	rev := text.NewEditor("")
 	w.openDialog(&dialog{
-		title: "Checkout Tag or Revision", ok: "Checkout", width: 460,
+		title: w.t(i18n.DialogCheckoutRevTitle), ok: w.t(i18n.DialogCheckout), width: 460,
 		body: func(f *form) {
-			id := f.field("Tag, commit hash or reference:", rev, "v1.2.0, a1b2c3d, HEAD~2", false)
+			id := f.field(w.t(i18n.DialogRevField), rev, "v1.2.0, a1b2c3d, HEAD~2", false)
 			f.w.dialog.focus = id
-			f.muted("HEAD will be detached. Create a branch to keep commits you make there.")
+			f.muted(w.t(i18n.DialogDetachedHint))
 		},
 		okDisabled: func() bool { return strings.TrimSpace(rev.String()) == "" },
 		onOK:       func() bool { w.ws.CheckoutRevision(strings.TrimSpace(rev.String())); return true },
@@ -174,16 +175,16 @@ func (w *Window) openReset(c domain.Commit) {
 		title, desc string
 		m           gitcli.ResetMode
 	}{
-		{"Soft", "Files are untouched; the differences are staged for commit.", gitcli.ResetSoft},
-		{"Mixed", "Files are untouched; the differences are not staged.", gitcli.ResetMixed},
-		{"Hard", "Files are reverted to the commit. Local changes are lost.", gitcli.ResetHard},
-		{"Keep", "Files are reverted to the commit, but local changes are kept. Fails if they touch the same files.", gitcli.ResetKeep},
+		{w.t(i18n.DialogResetSoft), w.t(i18n.DialogResetSoftDesc), gitcli.ResetSoft},
+		{w.t(i18n.DialogResetMixed), w.t(i18n.DialogResetMixedDesc), gitcli.ResetMixed},
+		{w.t(i18n.DialogResetHard), w.t(i18n.DialogResetHardDesc), gitcli.ResetHard},
+		{w.t(i18n.DialogResetKeep), w.t(i18n.DialogResetKeepDesc), gitcli.ResetKeep},
 	}
 	target := rs.HeadLabel()
 	w.openDialog(&dialog{
-		title: "Git Reset", ok: "Reset", width: 520,
+		title: w.t(i18n.DialogResetTitle), ok: w.t(i18n.DialogReset), width: 520,
 		body: func(f *form) {
-			f.text("Reset " + target + " to " + domain.ShortHash(c.Hash) + " \"" + firstLine(c.Subject) + "\"")
+			f.text(w.t(i18n.DialogResetBody, target, domain.ShortHash(c.Hash), firstLine(c.Subject)))
 			f.gap(4)
 			for i, m := range modes {
 				id := scDialogRadios.At(i)
@@ -196,7 +197,7 @@ func (w *Window) openReset(c domain.Commit) {
 				f.y += 26
 			}
 			if mode == 2 && !rs.Status.Clean() {
-				f.message("Your uncommitted changes will be discarded.", w.pal.Warning)
+				f.message(w.t(i18n.DialogResetWarning), w.pal.Warning)
 			}
 		},
 		onOK: func() bool { w.ws.Reset(modes[mode].m, c.Hash); return true },
@@ -211,14 +212,14 @@ func (w *Window) openPush() {
 		w.openPushFor(r)
 		return
 	}
-	w.ws.Notify(vapp.NoticeWarning, "Nothing to push", "HEAD is detached. Create a branch to push your commits.")
+	w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNothingToPushTitle), w.t(i18n.NotifyNothingToPushBody))
 }
 
 // openPushFor is IntelliJ's Push dialog for one local branch.
 func (w *Window) openPushFor(r domain.Ref) {
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
-		w.ws.Notify(vapp.NoticeWarning, "No remote", "Add a remote before pushing (Settings → Manage Remotes).")
+		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNoRemoteTitle), w.t(i18n.NotifyNoRemoteBody))
 		return
 	}
 	remote := w.defaultRemote()
@@ -239,7 +240,7 @@ func (w *Window) openPushFor(r domain.Ref) {
 	var sel int = -1
 	listScroll := &scroller{}
 	w.openDialog(&dialog{
-		title: "Push Commits to " + w.repo().Repo.Name(), ok: "Push", width: 640,
+		title: w.t(i18n.DialogPushTitle, w.repo().Repo.Name()), ok: w.t(i18n.DialogPush), width: 640,
 		body: func(f *form) {
 			// Branch → remote : target
 			f.custom(30, func(rr ui.Rect) {
@@ -264,9 +265,9 @@ func (w *Window) openPushFor(r domain.Ref) {
 				x += rw + 6
 				x += w.p.text(":", rect(x, rr.Y, 10, rr.Height), fontUI, regular, w.pal.TextMuted) + 6
 				fw := min(240, right(rr)-x-80)
-				w.field(scDialogFields.At(0), target, rect(x, rr.Y+1, fw, 28), fieldOpts{label: "Remote branch"})
+				w.field(scDialogFields.At(0), target, rect(x, rr.Y+1, fw, 28), fieldOpts{label: w.t(i18n.DialogRemoteBranch)})
 				if upstream == "" || strings.TrimSpace(target.String()) != upstreamBranch(upstream) {
-					w.p.text("New", rect(x+fw+8, rr.Y, 60, rr.Height), fontSmall, semibold, w.pal.Success)
+					w.p.text(w.t(i18n.DialogNewLabel), rect(x+fw+8, rr.Y, 60, rr.Height), fontSmall, semibold, w.pal.Success)
 				}
 			})
 			f.gap(10)
@@ -277,13 +278,13 @@ func (w *Window) openPushFor(r domain.Ref) {
 				inner := inset(lr, 1, 1)
 				switch {
 				case loading:
-					w.p.textCenter("Loading commits…", inner, fontUI, regular, w.pal.TextSecond)
+					w.p.textCenter(w.t(i18n.DialogLoadingCommits), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case loadErr != nil:
 					w.p.textCenter(vapp.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
 					return
 				case len(commits) == 0:
-					w.p.textCenter("Nothing to push", inner, fontUI, regular, w.pal.TextSecond)
+					w.p.textCenter(w.t(i18n.DialogNothingToPush), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				}
 				content := float32(len(commits))*rowH + 8
@@ -317,16 +318,16 @@ func (w *Window) openPushFor(r domain.Ref) {
 			})
 			f.gap(10)
 			if !loading && len(commits) > 0 {
-				f.muted(plural(len(commits), "commit", "commits") + " will be pushed")
+				f.muted(w.pluralT(len(commits), i18n.DialogWillBePushedOne, i18n.DialogWillBePushedMany, len(commits)))
 			}
-			f.check("Push tags (annotated tags on the pushed commits)", &tags)
-			f.check("Force push (with lease: refuses if the remote has commits you have not fetched)", &force)
+			f.check(w.t(i18n.DialogPushTags), &tags)
+			f.check(w.t(i18n.DialogPushForce), &force)
 		},
 		okDisabled: func() bool { return validRefName(strings.TrimSpace(target.String())) != "" },
 		onOK: func() bool {
 			if force {
 				w.dialog = nil
-				w.confirm("Force Push", "Force-push "+r.Short+" to "+remote+"/"+strings.TrimSpace(target.String())+"? Commits on the remote that are not in your branch will be removed.", "Force Push", func() {
+				w.confirm(w.t(i18n.DialogForcePushTitle), w.t(i18n.DialogForcePushBody, r.Short, remote, strings.TrimSpace(target.String())), w.t(i18n.DialogForcePushTitle), func() {
 					w.doPush(r, remote, strings.TrimSpace(target.String()), tags, true)
 				})
 				return false
@@ -370,17 +371,17 @@ func (w *Window) openUpdate() {
 		return
 	}
 	if rs.Status.Branch.Upstream == "" {
-		w.ws.Notify(vapp.NoticeWarning, "Cannot update", "The current branch has no upstream. Push it first or set an upstream in the branch popup.")
+		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyCannotUpdateTitle), w.t(i18n.NotifyCannotUpdateBody))
 		return
 	}
 	mode := int(w.pullMode())
 	w.openDialog(&dialog{
-		title: "Update Project", ok: "OK", width: 460,
+		title: w.t(i18n.DialogUpdateTitle), ok: w.t(i18n.CommonOK), width: 460,
 		body: func(f *form) {
-			f.bold("Update Type")
-			f.radio([]string{"Merge incoming changes into the current branch", "Rebase the current branch on top of incoming changes", "Fast-forward only"}, &mode)
+			f.bold(w.t(i18n.DialogUpdateType))
+			f.radio([]string{w.t(i18n.DialogPullMerge), w.t(i18n.DialogPullRebase), w.t(i18n.DialogPullFFOnly)}, &mode)
 			f.gap(4)
-			f.muted("Updates " + rs.CurrentBranch() + " from " + rs.Status.Branch.Upstream + ".")
+			f.muted(w.t(i18n.DialogUpdateBody, rs.CurrentBranch(), rs.Status.Branch.Upstream))
 		},
 		onOK: func() bool {
 			w.ws.Settings.PullMode = []string{"merge", "rebase", "ff-only"}[mode]
@@ -397,13 +398,13 @@ func (w *Window) openStashDialog() {
 	msg := text.NewEditor("")
 	untracked, keep := false, false
 	w.openDialog(&dialog{
-		title: "Stash Changes", ok: "Create Stash", width: 460,
+		title: w.t(i18n.DialogStashTitle), ok: w.t(i18n.DialogCreateStash), width: 460,
 		body: func(f *form) {
-			f.muted("Branch: " + w.repo().HeadLabel())
-			id := f.field("Message:", msg, "Optional", false)
+			f.muted(w.t(i18n.DialogBranchLabel, w.repo().HeadLabel()))
+			id := f.field(w.t(i18n.DialogMessage), msg, w.t(i18n.DialogOptional), false)
 			f.w.dialog.focus = id
-			f.check("Include unversioned files", &untracked)
-			f.check("Keep staged changes in the index", &keep)
+			f.check(w.t(i18n.DialogIncludeUntracked), &untracked)
+			f.check(w.t(i18n.DialogKeepStaged), &keep)
 		},
 		onOK: func() bool { w.ws.StashPush(strings.TrimSpace(msg.String()), untracked, keep); return true },
 	})
@@ -417,10 +418,10 @@ func (w *Window) openClone() {
 	dirEd := text.NewEditor("")
 	lastAuto := ""
 	w.openDialog(&dialog{
-		title: "Get from Version Control", ok: "Clone", width: 560,
+		title: w.t(i18n.DialogCloneTitle), ok: w.t(i18n.DialogClone), width: 560,
 		body: func(f *form) {
 			f.labelW = 90
-			id := f.field("URL:", url, "https://github.com/user/repo.git", false)
+			id := f.field(w.t(i18n.DialogURL), url, "https://github.com/user/repo.git", false)
 			if !w.dialog.focused {
 				w.dialog.focus = id
 			}
@@ -431,23 +432,23 @@ func (w *Window) openClone() {
 				w.after(func() { setText(dirEd, auto) })
 			}
 			f.custom(fieldH+12, func(r ui.Rect) {
-				w.p.text("Directory:", rect(r.X, r.Y, 90, fieldH), fontUI, regular, w.pal.Text)
+				w.p.text(w.t(i18n.DialogDirectory), rect(r.X, r.Y, 90, fieldH), fontUI, regular, w.pal.Text)
 				bw := float32(90)
-				w.field(scDialogFields.At(10), parent, rect(r.X+90, r.Y, r.Width-90-bw-8, fieldH), fieldOpts{label: "Parent directory"})
-				if w.button(idDialogExtra, rect(right(r)-bw, r.Y, bw, fieldH), "Browse…", btnNormal, false) {
+				w.field(scDialogFields.At(10), parent, rect(r.X+90, r.Y, r.Width-90-bw-8, fieldH), fieldOpts{label: w.t(i18n.DialogParentDir)})
+				if w.button(idDialogExtra, rect(right(r)-bw, r.Y, bw, fieldH), w.t(i18n.DialogBrowse), btnNormal, false) {
 					w.after(func() {
-						if d, err := app.OpenDirectory(app.OpenDirectoryOptions{Title: "Clone into"}); err == nil && d != "" {
+						if d, err := app.OpenDirectory(app.OpenDirectoryOptions{Title: w.t(i18n.DialogCloneInto)}); err == nil && d != "" {
 							setText(parent, d)
 						}
 					})
 				}
 			})
-			f.field("Name:", dirEd, "repo", false)
+			f.field(w.t(i18n.DialogName), dirEd, "repo", false)
 			p := filepath.Join(expandHome(strings.TrimSpace(parent.String())), strings.TrimSpace(dirEd.String()))
 			if _, err := os.Stat(p); err == nil && strings.TrimSpace(dirEd.String()) != "" {
-				f.message(p+" already exists", w.pal.Error)
+				f.message(w.t(i18n.DialogExists, p), w.pal.Error)
 			} else if strings.TrimSpace(dirEd.String()) != "" {
-				f.muted("Clones into " + shortenHome(p))
+				f.muted(w.t(i18n.DialogClonesInto, shortenHome(p)))
 			}
 		},
 		okDisabled: func() bool {
@@ -483,7 +484,7 @@ func expandHome(p string) string {
 }
 
 func (w *Window) openInit() {
-	dir, err := app.OpenDirectory(app.OpenDirectoryOptions{Title: "Create Git Repository in"})
+	dir, err := app.OpenDirectory(app.OpenDirectoryOptions{Title: w.t(i18n.DialogInitTitle)})
 	if err != nil || dir == "" {
 		return
 	}
@@ -501,31 +502,31 @@ func (w *Window) openRemotes() {
 	name := text.NewEditor("")
 	url := text.NewEditor("")
 	w.openDialog(&dialog{
-		title: "Git Remotes", ok: "Close", width: 600, noCancel: true,
+		title: w.t(i18n.DialogRemotesTitle), ok: w.t(i18n.CommonClose), width: 600, noCancel: true,
 		body: func(f *form) {
 			if len(rs.Remotes) == 0 {
-				f.muted("This repository has no remotes.")
+				f.muted(w.t(i18n.DialogNoRemotes))
 			}
 			for i, r := range rs.Remotes {
 				r := r
 				f.custom(30, func(rr ui.Rect) {
 					w.p.text(r.Name, rect(rr.X, rr.Y, 100, rr.Height), fontUI, semibold, w.pal.Text)
 					w.p.text(r.FetchURL, rect(rr.X+110, rr.Y, rr.Width-110-80, rr.Height), fontUI, regular, w.pal.TextMuted)
-					if w.button(scDialogLinks.At(i), rect(right(rr)-72, rr.Y+2, 72, 26), "Remove", btnBorderless, false) {
+					if w.button(scDialogLinks.At(i), rect(right(rr)-72, rr.Y+2, 72, 26), w.t(i18n.DialogRemove), btnBorderless, false) {
 						w.after(func() {
-							w.confirm("Remove Remote", "Remove remote '"+r.Name+"'? Its remote-tracking branches are deleted.", "Remove", func() { w.ws.RemoveRemote(r.Name) })
+							w.confirm(w.t(i18n.DialogRemoveRemoteTitle), w.t(i18n.DialogRemoveRemoteBody, r.Name), w.t(i18n.DialogRemove), func() { w.ws.RemoveRemote(r.Name) })
 						})
 					}
 				})
 			}
 			f.gap(10)
-			f.bold("Add Remote")
+			f.bold(w.t(i18n.DialogAddRemote))
 			f.labelW = 60
-			f.field("Name:", name, "origin", false)
-			f.field("URL:", url, "https://github.com/user/repo.git", false)
+			f.field(w.t(i18n.DialogName), name, "origin", false)
+			f.field(w.t(i18n.DialogURL), url, "https://github.com/user/repo.git", false)
 			f.custom(30, func(rr ui.Rect) {
 				ok := validRefName(strings.TrimSpace(name.String())) == "" && strings.TrimSpace(url.String()) != ""
-				if w.button(scDialogLinks.At(99), rect(rr.X+60, rr.Y, 100, 28), "Add Remote", btnNormal, !ok) {
+				if w.button(scDialogLinks.At(99), rect(rr.X+60, rr.Y, 100, 28), w.t(i18n.DialogAddRemoteButton), btnNormal, !ok) {
 					w.after(func() {
 						w.ws.AddRemote(strings.TrimSpace(name.String()), strings.TrimSpace(url.String()))
 						setText(name, "")
@@ -546,18 +547,22 @@ func (w *Window) settingsMenu() []item {
 		return item{title: title, checked: s.Theme == name, run: func() { s.Theme = name; w.applyTheme(); w.saveSettings() }}
 	}
 	items := []item{
-		{title: "Settings…", icon: icons.Settings, shortcut: "⌘,", run: w.openSettings},
-		{title: "Theme", sub: []item{theme("dark", "Islands Dark"), theme("light", "Islands Light"), theme("system", "Sync with OS")}},
+		{title: w.t(i18n.MenuSettings), icon: icons.Settings, shortcut: "⌘,", run: w.openSettings},
+		{title: w.t(i18n.MenuTheme), sub: []item{
+			theme("dark", w.t(i18n.SettingsThemeDark)),
+			theme("light", w.t(i18n.SettingsThemeLight)),
+			theme("system", w.t(i18n.SettingsThemeSystem)),
+		}},
 		sep(),
 	}
 	if w.ws.Repo != nil {
 		items = append(items,
-			item{title: "Manage Remotes…", run: w.openRemotes},
-			item{title: "Fetch", icon: icons.Fetch, disabled: len(w.repo().Remotes) == 0, run: func() { w.ws.Fetch(false) }},
+			item{title: w.t(i18n.MenuManageRemotes), run: w.openRemotes},
+			item{title: w.t(i18n.MenuFetch), icon: icons.Fetch, disabled: len(w.repo().Remotes) == 0, run: func() { w.ws.Fetch(false) }},
 			sep(),
 		)
 	}
-	items = append(items, item{title: "About Viff", icon: icons.Info, run: w.openAbout})
+	items = append(items, item{title: w.t(i18n.AboutTitle), icon: icons.Info, run: w.openAbout})
 	return items
 }
 
@@ -571,16 +576,16 @@ func (w *Window) openAbout() {
 		detail += " · Git " + git
 	}
 	w.openDialog(&dialog{
-		title: "About Viff", ok: "Close", width: 480, noCancel: true,
+		title: w.t(i18n.AboutTitle), ok: w.t(i18n.CommonClose), width: 480, noCancel: true,
 		body: func(f *form) {
 			f.custom(56, func(r ui.Rect) {
 				w.c.DrawBitmap(branding.Bitmap, rect(r.X, r.Y+4, 44, 44))
 				w.p.text("Viff", rect(r.X+58, r.Y+4, 200, 24), 18, semibold, w.pal.Text)
-				w.p.text("A Git client in the style of IntelliJ IDEA", rect(r.X+58, r.Y+28, r.Width-58, 20), fontUI, regular, w.pal.TextMuted)
+				w.p.text(w.t(i18n.AboutTagline), rect(r.X+58, r.Y+28, r.Width-58, 20), fontUI, regular, w.pal.TextMuted)
 			})
 			f.text("Viff " + version.String())
 			f.muted(detail)
-			f.muted("Icons: IntelliJ Platform (Apache 2.0). Editor font: JetBrains Mono (OFL).")
+			f.muted(w.t(i18n.AboutCredits))
 		},
 	})
 }
@@ -590,6 +595,7 @@ func (w *Window) openSettings() {
 	theme := s.Theme
 	editorFont := s.EditorFont
 	diffFont := s.DiffFont
+	language := s.Language
 	// app.FontFamilies and app.MonospaceFamilies read the system on every call
 	// and take a moment, so they are collected once when the dialog opens rather
 	// than while painting.
@@ -605,19 +611,27 @@ func (w *Window) openSettings() {
 	pull := s.PullMode
 	gitDraft := newGitSettingsDraft(s)
 	page := 0
-	themeTitle := map[string]string{"dark": "Islands Dark", "light": "Islands Light", "system": "Sync with OS"}
-	pullTitle := map[string]string{"merge": "Merge", "rebase": "Rebase", "ff-only": "Fast-forward only"}
+	themeTitle := map[string]string{
+		"dark":   w.t(i18n.SettingsThemeDark),
+		"light":  w.t(i18n.SettingsThemeLight),
+		"system": w.t(i18n.SettingsThemeSystem),
+	}
+	pullTitle := map[string]string{
+		"merge":   w.t(i18n.SettingsPullMerge),
+		"rebase":  w.t(i18n.SettingsPullRebase),
+		"ff-only": w.t(i18n.SettingsPullFFOnly),
+	}
 	w.openDialog(&dialog{
-		title: "Settings", ok: "OK", width: 600,
+		title: w.t(i18n.SettingsTitle), ok: w.t(i18n.CommonOK), cancel: w.t(i18n.CommonCancel), width: 600,
 		body: func(f *form) {
 			f.labelW = 170
-			settingsTabs(f, &page, []string{"General", "Git"})
+			settingsTabs(f, &page, []string{w.t(i18n.SettingsTabGeneral), w.t(i18n.SettingsTabGit)})
 			if page == 1 {
-				f.bold("Commands and signing")
+				f.bold(w.t(i18n.SettingsGroupCommands))
 				gitDraft.form(f)
 				f.gap(6)
-				f.bold("Remote")
-				f.combo("Update method:", pullTitle[pull], func() []item {
+				f.bold(w.t(i18n.SettingsGroupRemote))
+				f.combo(w.t(i18n.SettingsLabelUpdateMode), pullTitle[pull], func() []item {
 					var items []item
 					for _, k := range []string{"merge", "rebase", "ff-only"} {
 						k := k
@@ -625,16 +639,26 @@ func (w *Window) openSettings() {
 					}
 					return items
 				})
-				f.check("Prune remote branches on fetch", &prune)
-				f.check("Fetch in the background", &autoFetch)
+				f.check(w.t(i18n.SettingsCheckPrune), &prune)
+				f.check(w.t(i18n.SettingsCheckAutoFetch), &autoFetch)
 				if autoFetch {
 					m, err := strconv.Atoi(strings.TrimSpace(mins.String()))
-					f.field("Every (minutes):", mins, "10", err != nil || m < 1)
+					f.field(w.t(i18n.SettingsLabelFetchMins), mins, "10", err != nil || m < 1)
 				}
 				return
 			}
-			f.bold("Appearance")
-			f.combo("Theme:", themeTitle[theme], func() []item {
+			f.bold(w.t(i18n.SettingsGroupAppearance))
+			langCurrent := w.t(i18n.SettingsLangEnglish)
+			if language == "zh-CN" {
+				langCurrent = w.t(i18n.SettingsLangChinese)
+			}
+			f.combo(w.t(i18n.SettingsLabelLanguage), langCurrent, func() []item {
+				return []item{
+					{title: w.t(i18n.SettingsLangEnglish), checked: language != "zh-CN", run: func() { language = "en" }},
+					{title: w.t(i18n.SettingsLangChinese), checked: language == "zh-CN", run: func() { language = "zh-CN" }},
+				}
+			})
+			f.combo(w.t(i18n.SettingsLabelTheme), themeTitle[theme], func() []item {
 				var items []item
 				for _, k := range []string{"dark", "light", "system"} {
 					k := k
@@ -643,38 +667,39 @@ func (w *Window) openSettings() {
 				return items
 			})
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
-			f.field("Editor font size:", font, "13", err != nil || n < 8 || n > 32)
+			f.field(w.t(i18n.SettingsLabelFontSize), font, "13", err != nil || n < 8 || n > 32)
 			f.gap(6)
-			f.bold("Git executable")
-			f.field("Path to Git:", gitPath, "Detected automatically", false)
+			f.bold(w.t(i18n.SettingsGroupGitExec))
+			f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.t(i18n.SettingsPlaceholderAuto), false)
 			f.gap(6)
-			f.bold("Tools")
-			f.field("External editor command:", editor, "code -g {file}:{line}", false)
+			f.bold(w.t(i18n.SettingsGroupTools))
+			f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)
 			f.y -= 8
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Empty: system default. {file} and {line} are filled in.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.SettingsHintEditor), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
 			f.gap(4)
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Settings file: "+shortenHome(s.Path()), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
+				w.p.text(w.t(i18n.SettingsLabelSettingsFile, shortenHome(s.Path())), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
 			})
 			f.gap(6)
-			f.bold("Diagnostics")
-			f.check("Debug logging", &debugLog)
+			f.bold(w.t(i18n.SettingsGroupDiagnostics))
+			f.check(w.t(i18n.SettingsCheckDebugLog), &debugLog)
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Writes detailed events for troubleshooting. Logs stay on this computer.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.SettingsHintDebugLog), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
 			f.gap(6)
-			f.bold("Updates")
-			f.check("Check for updates at startup", &autoUpdate)
+			f.bold(w.t(i18n.SettingsGroupUpdates))
+			f.check(w.t(i18n.SettingsCheckAutoUpdate), &autoUpdate)
 			f.gap(6)
-			f.bold("Fonts")
-			current := "Default (system interface font)"
+			f.bold(w.t(i18n.SettingsGroupFonts))
+			interfaceDefault := w.t(i18n.SettingsFontDefaultInterface)
+			current := interfaceDefault
 			if editorFont != "" {
 				current = editorFont
 			}
-			f.combo("Interface font:", current, func() []item {
-				items := []item{{title: "Default (system interface font)", checked: editorFont == "", run: func() { editorFont = "" }}}
+			f.combo(w.t(i18n.SettingsLabelInterface), current, func() []item {
+				items := []item{{title: interfaceDefault, checked: editorFont == "", run: func() { editorFont = "" }}}
 				for _, name := range fonts {
 					name := name
 					items = append(items, item{title: name, checked: editorFont == name, run: func() { editorFont = name }})
@@ -682,14 +707,15 @@ func (w *Window) openSettings() {
 				return items
 			})
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Replaces the font of the whole interface. Diffs and the console keep a fixed-pitch face.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.SettingsHintInterface), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
-			diffCurrent := "Default (bundled or system fixed-pitch)"
+			diffDefault := w.t(i18n.SettingsFontDefaultDiff)
+			diffCurrent := diffDefault
 			if diffFont != "" {
 				diffCurrent = diffFont
 			}
-			f.combo("Diff font:", diffCurrent, func() []item {
-				items := []item{{title: "Default (bundled or system fixed-pitch)", checked: diffFont == "", run: func() { diffFont = "" }}}
+			f.combo(w.t(i18n.SettingsLabelDiffFont), diffCurrent, func() []item {
+				items := []item{{title: diffDefault, checked: diffFont == "", run: func() { diffFont = "" }}}
 				for _, name := range monoFonts {
 					name := name
 					items = append(items, item{title: name, checked: diffFont == name, run: func() { diffFont = name }})
@@ -697,7 +723,7 @@ func (w *Window) openSettings() {
 				return items
 			})
 			f.custom(22, func(r ui.Rect) {
-				w.p.text("Only fixed-pitch families: diffs, console and hashes lay their text out on a character grid.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(w.t(i18n.SettingsHintDiffFont), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
 		},
 		okDisabled: func() bool {
@@ -732,8 +758,10 @@ func (w *Window) openSettings() {
 			w.ws.SetLogLevel(s.LogLevel)
 			s.EditorFont = editorFont
 			s.DiffFont = diffFont
+			s.Language = language
 			w.applyTheme()
 			w.applyFont()
+			w.applyLanguage()
 			w.Invalidate()
 			w.flushSettings()
 			w.startAutoFetch()

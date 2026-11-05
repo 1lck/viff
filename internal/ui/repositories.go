@@ -11,6 +11,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -100,7 +101,7 @@ func (w *Window) openRepositories() {
 		v.sel = i
 	}
 	w.openDialog(&dialog{
-		title: "Repositories", width: 900, ok: "Switch to Repository", cancel: "Close",
+		title: w.t(i18n.ReposTitle), width: 900, ok: w.t(i18n.ReposSwitch), cancel: w.t(i18n.CommonClose),
 		body: func(f *form) { w.paintRepositories(f, v) },
 		okDisabled: func() bool {
 			_, ok := w.repositoryAt(v.sel)
@@ -206,7 +207,7 @@ func (w *Window) paintRepositories(f *form, v *repositoriesView) {
 		case v.loading:
 			msg = "Refreshing…"
 		case len(list) == 0:
-			msg = "No repositories yet. Type a repository path and choose Add."
+			msg = w.t(i18n.ReposNone)
 		default:
 			msg = plural(len(list), "repository", "repositories") + " in the workspace"
 			if active := w.activeRepositoryIndex(); active >= 0 {
@@ -229,7 +230,7 @@ func (w *Window) paintRepositories(f *form, v *repositoriesView) {
 		if w.button(idRepositoriesRemove, rect(r.X, r.Y, w.buttonWidth("Remove from Workspace"), buttonH), "Remove from Workspace", btnNormal, !ok) {
 			w.after(func() { w.removeRepository(v) })
 		}
-		note := "Only the active repository takes Git actions; stage and commit in the Commit panel."
+		note := w.t(i18n.ReposActiveOnly)
 		nw := w.p.width(note, fontSmall, regular)
 		if nw < r.Width-220 {
 			w.p.text(note, rect(right(r)-nw, r.Y, nw, buttonH), fontSmall, regular, w.pal.TextDisable)
@@ -293,7 +294,7 @@ func (w *Window) paintRepositoryPanes(v *repositoriesView, r ui.Rect) {
 	s, ok := w.repositoryAt(v.sel)
 	if !ok {
 		w.p.outline(rightR, 6, 1, w.pal.ControlBorder, w.pal.ControlBg)
-		w.p.textCenter("Select a repository to see its branch and changes", rightR, fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.ReposSelectHint), rightR, fontUI, regular, w.pal.TextSecond)
 		return
 	}
 	w.paintRepositoryDetails(v, s, rightR)
@@ -446,7 +447,7 @@ func (w *Window) paintRepositoryDetails(v *repositoriesView, s repositorySummary
 	if s.Err != nil {
 		br := rect(inner.X, inner.Y, inner.Width, 24)
 		w.p.fill(br, w.pal.BannerError)
-		msg := "Cannot read status: " + repositoryOneLine(vapp.ErrorText(s.Err))
+		msg := w.t(i18n.ReposCannotReadStatus, repositoryOneLine(vapp.ErrorText(s.Err)))
 		w.p.text(msg, rect(br.X+8, br.Y, br.Width-16, br.Height), fontSmall, regular, w.pal.Error)
 		filesTop += 24
 	}
@@ -521,14 +522,14 @@ func (w *Window) paintRepositoryFiles(v *repositoriesView, s repositorySummary, 
 		v.files.Y += dy
 		v.files.clamp(content, r.Height)
 	})
-	w.list(idRepositoriesFileList, scRepositoryFiles, r, "Changed files")
+	w.list(idRepositoriesFileList, scRepositoryFiles, r, w.t(i18n.ReposChangedFiles))
 	if len(rows) == 0 {
-		msg := "Working tree clean"
+		msg := w.t(i18n.ReposClean)
 		switch {
 		case s.Err != nil:
-			msg = "No cached changes"
+			msg = w.t(i18n.ReposNoCached)
 		case !s.Loaded:
-			msg = "Loading status…"
+			msg = w.t(i18n.ReposLoadingStatus)
 		}
 		w.p.textCenter(msg, r, fontUI, regular, w.pal.TextSecond)
 		return
@@ -539,7 +540,7 @@ func (w *Window) paintRepositoryFiles(v *repositoriesView, s repositorySummary, 
 		if row.header {
 			hr := rect(r.X, y, r.Width, repoOverviewGroupH)
 			if bottom(hr) > r.Y && hr.Y < bottom(r) {
-				w.p.text(areaTitle(row.area), rect(hr.X+10, hr.Y, hr.Width-20, hr.Height), fontUI, semibold, w.pal.Text)
+				w.p.text(w.areaTitle(row.area), rect(hr.X+10, hr.Y, hr.Width-20, hr.Height), fontUI, semibold, w.pal.Text)
 				count := len(repositoryEntries(s.Status, row.area))
 				cw := w.p.width(itoa(count), fontSmall, regular)
 				w.p.text(itoa(count), rect(right(hr)-cw-10, hr.Y, cw, hr.Height), fontSmall, regular, w.pal.TextSecond)
@@ -613,7 +614,7 @@ func (w *Window) addRepository(v *repositoriesView) {
 	}
 	dir := expandRepositoryPath(strings.TrimSpace(v.path.String()))
 	if dir == "" {
-		v.err = "Enter the path of a repository, or choose Browse…."
+		v.err = w.t(i18n.ReposPathRequired)
 		w.Invalidate()
 		return
 	}
@@ -623,7 +624,7 @@ func (w *Window) addRepository(v *repositoriesView) {
 		w.after(func() {
 			v.adding = false
 			if err != nil {
-				v.err = "Cannot add repository: " + repositoryOneLine(vapp.ErrorText(err))
+				v.err = w.t(i18n.ReposCannotAdd, repositoryOneLine(vapp.ErrorText(err)))
 				w.Invalidate()
 				return
 			}
@@ -661,7 +662,7 @@ func (w *Window) removeRepository(v *repositoriesView) {
 		return
 	}
 	if err := w.ws.RemoveRepository(s.Root); err != nil {
-		v.err = "Cannot remove repository: " + repositoryOneLine(vapp.ErrorText(err))
+		v.err = w.t(i18n.ReposCannotRemove, repositoryOneLine(vapp.ErrorText(err)))
 		w.Invalidate()
 		return
 	}

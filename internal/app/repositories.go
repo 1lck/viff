@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/storage"
 )
 
@@ -172,10 +173,10 @@ func (w *Workspace) saveRepositories() error {
 	store.Repositories = roots
 	store.Active = w.ActiveRoot
 	if err := store.Save(); err != nil {
-		w.WorkspaceWarning = "Cannot save the workspace list: " + err.Error()
+		w.WorkspaceWarning = w.tr(i18n.AppNoticeWorkspaceSaveFailed, err.Error())
 		if !w.workspaceSaveWarned {
 			w.workspaceSaveWarned = true
-			w.Notify(NoticeWarning, "Workspace", w.WorkspaceWarning)
+			w.Notify(NoticeWarning, w.tr(i18n.AppNoticeWorkspace), w.WorkspaceWarning)
 		}
 		return err
 	}

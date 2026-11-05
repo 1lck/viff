@@ -7,6 +7,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -60,7 +61,7 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	titles := splitTop(&r, 28)
 	w.p.fill(titles, w.pal.IslandAlt)
 	w.p.hline(titles.X, bottom(titles)-1, titles.Width, w.pal.Border)
-	rev := "Working tree"
+	rev := w.t(i18n.FileviewWorkingTree)
 	if t.src.Commit != "" {
 		rev = "Revision " + domain.ShortHash(t.src.Commit)
 	}
@@ -72,7 +73,7 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	if t.annotate && t.blameErr != nil {
 		br := splitTop(&r, 30)
 		w.p.fill(br, w.pal.Banner)
-		w.p.text("Cannot annotate: "+vapp.ErrorText(t.blameErr), rect(br.X+12, br.Y, br.Width-24, br.Height), fontUI, regular, w.pal.Error)
+		w.p.text(w.t(i18n.FileviewCannotAnnotate, vapp.ErrorText(t.blameErr)), rect(br.X+12, br.Y, br.Width-24, br.Height), fontUI, regular, w.pal.Error)
 	}
 
 	cellW, lineH, _ := w.metrics()
@@ -98,7 +99,7 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 
 func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
 	x := r.X + 8
-	label := "Annotate with Git Blame"
+	label := w.t(i18n.FileviewAnnotate)
 	if t.annotate {
 		label = "Close Annotations"
 	}
@@ -116,7 +117,7 @@ func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
 	rx := right(r) - 8
 	if t.src.Commit == "" {
 		y := r.Y + (r.Height-actionSize)/2
-		if w.action(idDiffOpen, rx-actionSize, y, icons.Edit, "Open in External Editor\tF4", actOpts{}) {
+		if w.action(idDiffOpen, rx-actionSize, y, icons.Edit, w.t(i18n.FileviewOpenExternal)+"\tF4", actOpts{}) {
 			p := t.src.Path
 			w.after(func() { w.openExternal(p, w.currentLine(t)) })
 		}
@@ -211,7 +212,7 @@ func (w *Window) paintAnnotations(t *diffTab, r ui.Rect, top, lineH float32) {
 	w.onContext(idAnnotations, func(x, y float32) {
 		c, ok := commitAt(y)
 		if !ok || c.Uncommitted() {
-			w.openMenu(x, y, []item{{title: "Close Annotations", run: func() { t.annotate = false }}})
+			w.openMenu(x, y, []item{{title: w.t(i18n.FileviewCloseAnnotations), run: func() { t.annotate = false }}})
 			return
 		}
 		short := domain.ShortHash(c.Hash)
@@ -220,15 +221,15 @@ func (w *Window) paintAnnotations(t *diffTab, r ui.Rect, top, lineH float32) {
 			path = t.src.Path
 		}
 		w.openMenu(x, y, []item{
-			{title: "Show Diff", icon: icons.Diff, run: func() {
+			{title: w.t(i18n.FileviewShowDiff), icon: icons.Diff, run: func() {
 				w.showDiff(vapp.DiffSource{Path: path, OldPath: c.PreviousPath, Commit: c.Hash, Parent: c.Previous}, true)
 			}},
-			{title: "Show in Git Log", run: func() { w.showInLog(c.Hash) }},
-			{title: "Annotate Revision " + short, disabled: c.Previous == "", run: func() { w.openFileView(c.PreviousPath, c.Previous, true) }},
+			{title: w.t(i18n.FileviewShowInLog), run: func() { w.showInLog(c.Hash) }},
+			{title: w.t(i18n.FileviewAnnotateRev, short), disabled: c.Previous == "", run: func() { w.openFileView(c.PreviousPath, c.Previous, true) }},
 			sep(),
-			{title: "Copy Revision Number", icon: icons.Copy, run: func() { w.copyText(c.Hash) }},
+			{title: w.t(i18n.FileviewCopyRev), icon: icons.Copy, run: func() { w.copyText(c.Hash) }},
 			sep(),
-			{title: "Close Annotations", run: func() { t.annotate = false }},
+			{title: w.t(i18n.FileviewCloseAnnotations), run: func() { t.annotate = false }},
 		})
 	})
 }

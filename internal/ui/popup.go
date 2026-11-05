@@ -6,6 +6,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -182,7 +183,7 @@ func (w *Window) popupSize(p *popup) (float32, float32) {
 
 func (w *Window) paintPopups(full ui.Rect) {
 	// A press outside every popup closes the stack.
-	w.c.HitWithOptions(idPopupBackdrop, full, "Close menu", ui.HitOptions{Backdrop: true, SkipFocus: true, PassSecondary: false})
+	w.c.HitWithOptions(idPopupBackdrop, full, w.t(i18n.ChromePopupCloseMenu), ui.HitOptions{Backdrop: true, SkipFocus: true, PassSecondary: false})
 	w.clicked(idPopupBackdrop, w.closePopups)
 	w.onContext(idPopupBackdrop, func(x, y float32) { w.closePopups() })
 	for level, p := range w.popups {
@@ -228,7 +229,7 @@ func (w *Window) paintPopup(level int, p *popup, full ui.Rect) {
 	cy := r.Y + popupPadY
 	if p.search != nil {
 		fr := rect(r.X+8, cy+2, r.Width-16, 30)
-		if w.field(idPopupSearch, p.search, fr, fieldOpts{icon: icons.Search, placeholder: "Search", nav: true, borderless: false}) {
+		if w.field(idPopupSearch, p.search, fr, fieldOpts{icon: icons.Search, placeholder: w.t(i18n.ChromePopupSearch), nav: true, borderless: false}) {
 			if p.sel >= 0 {
 				w.after(func() { w.activate(level, p.sel) })
 			}
@@ -265,7 +266,7 @@ func (w *Window) paintPopup(level int, p *popup, full ui.Rect) {
 	}
 	ry := body.Y - p.scroll.Y
 	if len(shown) == 0 {
-		w.p.text("Nothing found", rect(r.X+16, ry, r.Width-32, popupRowH), fontUI, regular, w.pal.TextSecond)
+		w.p.text(w.t(i18n.ChromePopupEmpty), rect(r.X+16, ry, r.Width-32, popupRowH), fontUI, regular, w.pal.TextSecond)
 	}
 	for _, i := range shown {
 		it := p.items[i]
@@ -338,7 +339,7 @@ func (w *Window) paintPopup(level int, p *popup, full ui.Rect) {
 				}
 				w.p.iconIn(pair, sr)
 			}
-			w.c.HitWithOptions(sid, sr, "Favorite", ui.HitOptions{SkipFocus: true, Role: ui.RoleButton})
+			w.c.HitWithOptions(sid, sr, w.t(i18n.ChromePopupFavorite), ui.HitOptions{SkipFocus: true, Role: ui.RoleButton})
 			if w.c.Clicked(sid) {
 				st := it.star
 				w.after(func() { *st = !*st; p.shown = nil })

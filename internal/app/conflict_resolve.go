@@ -7,6 +7,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 )
 
 // ResolveConflict accepts one side of one conflict block in the working-tree
@@ -30,11 +31,11 @@ func (w *Workspace) ResolveConflict(d *DiffResult, block int, choice domain.Reso
 		done = func(error) {}
 	}
 	fail := func(err error) {
-		w.NotifyError("Resolve conflict failed", err)
+		w.NotifyError(w.tr(i18n.AppNoticeResolveConflictFailed), err)
 		w.post(func() { done(err) })
 	}
 	if w.Repo == nil {
-		fail(errors.New("open a repository first"))
+		fail(errors.New(w.tr(i18n.AppErrorOpenRepositoryFirst)))
 		return
 	}
 	if !choice.Valid() {
@@ -42,12 +43,12 @@ func (w *Workspace) ResolveConflict(d *DiffResult, block int, choice domain.Reso
 		return
 	}
 	if d == nil || d.Conflict == nil || !d.Source.Working {
-		fail(errors.New("no conflict view to resolve; reload the diff"))
+		fail(errors.New(w.tr(i18n.AppErrorNoConflictView)))
 		return
 	}
 	cv := d.Conflict
 	if !cv.Conflict.Kind.Textual() {
-		fail(fmt.Errorf("%w: there is no text to merge", gitcli.ErrResolveUnsupported))
+		fail(fmt.Errorf("%w: %s", gitcli.ErrResolveUnsupported, w.tr(i18n.AppErrorNoTextToMerge)))
 		return
 	}
 	switch {
@@ -95,7 +96,7 @@ func (w *Workspace) ResolveConflict(d *DiffResult, block int, choice domain.Reso
 		OnError: func(err error) bool {
 			done(err)
 			if errors.Is(err, ErrStale) {
-				w.Notify(NoticeWarning, "File changed", ErrStale.Error())
+				w.Notify(NoticeWarning, w.tr(i18n.AppNoticeFileChanged), w.tr(i18n.AppNoticeFileChangedBody))
 				return true
 			}
 			return false

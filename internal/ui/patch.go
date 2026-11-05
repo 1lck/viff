@@ -7,6 +7,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -65,7 +66,7 @@ func (w *Window) savePatch(paths []string, staged bool) {
 		Title:            "Save Patch",
 		SuggestedName:    name,
 		DefaultExtension: "patch",
-		Filters:          []app.FileFilter{{Name: "Patch files", Pattern: "*.patch"}},
+		Filters:          []app.FileFilter{{Name: w.t(i18n.PatchFilter), Pattern: "*.patch"}},
 	})
 	if err != nil || dest == "" {
 		return
@@ -79,19 +80,19 @@ func (w *Window) savePatch(paths []string, staged bool) {
 func (w *Window) writePatch(dest string, paths []string, staged bool) {
 	w.ws.CreatePatch(paths, staged, func(patch []byte, err error) {
 		if err != nil {
-			w.ws.NotifyError("Cannot create patch", err)
+			w.ws.NotifyError(w.t(i18n.PatchCannotCreate), err)
 			return
 		}
 		if len(patch) == 0 {
-			w.ws.Notify(vapp.NoticeInfo, "No patch created", "The selection has no changes to include.")
+			w.ws.Notify(vapp.NoticeInfo, w.t(i18n.PatchNoneCreated), w.t(i18n.PatchNoneBody))
 			return
 		}
 		if err := os.WriteFile(dest, patch, 0o644); err != nil {
-			w.ws.Notify(vapp.NoticeError, "Cannot write patch", err.Error())
+			w.ws.Notify(vapp.NoticeError, w.t(i18n.PatchCannotWrite), err.Error())
 			return
 		}
-		w.ws.Notify(vapp.NoticeSuccess, "Patch created", dest,
-			vapp.NoticeAction{Title: "Show in Finder", Run: func() { revealPath(dest) }})
+		w.ws.Notify(vapp.NoticeSuccess, w.t(i18n.PatchCreated), dest,
+			vapp.NoticeAction{Title: w.t(i18n.ShowInFileManager), Run: func() { revealPath(dest) }})
 	})
 }
 
@@ -101,13 +102,13 @@ func (w *Window) gitWindowMenu() []item {
 		return nil
 	}
 	items := []item{
-		{title: "Apply Patch…", icon: icons.Patch, run: func() { w.choosePatch(false) }},
-		{title: "Apply Patch to Index…", icon: icons.Patch, run: func() { w.choosePatch(true) }},
+		{title: w.t(i18n.PatchApply), icon: icons.Patch, run: func() { w.choosePatch(false) }},
+		{title: w.t(i18n.PatchApplyIndex), icon: icons.Patch, run: func() { w.choosePatch(true) }},
 	}
 	// The submodule actions share this one menu.
 	items = append(append(items, sep()), w.gitMenu()...)
 	if w.repo().Shallow {
-		items = append(items, sep(), item{title: "Fetch Full History (Unshallow)", icon: icons.Fetch, run: func() { w.fetchFullHistory() }})
+		items = append(items, sep(), item{title: w.t(i18n.PatchFetchFull), icon: icons.Fetch, run: func() { w.fetchFullHistory() }})
 	}
 	return items
 }

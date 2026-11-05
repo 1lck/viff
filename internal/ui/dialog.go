@@ -4,6 +4,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -55,10 +56,10 @@ func (w *Window) openDialog(d *dialog) {
 		d.width = 480
 	}
 	if d.ok == "" {
-		d.ok = "OK"
+		d.ok = w.t(i18n.CommonOK)
 	}
 	if d.cancel == "" {
-		d.cancel = "Cancel"
+		d.cancel = w.t(i18n.CommonCancel)
 	}
 	w.closePopups()
 	w.dialog = d

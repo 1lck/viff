@@ -8,6 +8,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -126,7 +127,7 @@ func (w *Window) paintMultiCommitDetails(r ui.Rect, commits []domain.Commit) {
 func (w *Window) paintMultiCommitFiles(r ui.Rect, v *multiCommitView) {
 	w.list(idMultiCommitFiles, scMultiCommitRows, r, "Changed files")
 	if v.summary == nil {
-		w.p.textCenter("Loading changed files…", rect(r.X, r.Y+r.Height*0.28, r.Width, 22), fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.CompareLoading), rect(r.X, r.Y+r.Height*0.28, r.Width, 22), fontUI, regular, w.pal.TextSecond)
 		return
 	}
 	files := v.summary.Files
@@ -215,7 +216,7 @@ func (w *Window) paintMultiCommitFiles(r ui.Rect, v *multiCommitView) {
 		})
 	}
 	if len(files) == 0 {
-		w.p.textCenter("The selected commits change no files", rect(r.X, r.Y+r.Height*0.3, r.Width, 22), fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.MultiNoFileChanges), rect(r.X, r.Y+r.Height*0.3, r.Width, 22), fontUI, regular, w.pal.TextSecond)
 	}
 	w.c.Unclip()
 	w.vbar(idMultiCommitScroll, r, &v.scroll, content)
@@ -260,7 +261,7 @@ func (w *Window) paintMultiCommitSelection(r ui.Rect, commits []domain.Commit) {
 		w.p.text(c.Subject, rect(r.X+96, y, r.Width-112, lineH), fontUI, regular, w.pal.Text)
 		y += lineH
 	}
-	w.p.text("Choose a file to view its changes", rect(r.X+14, hintY, r.Width-28, 18), fontSmall, regular, w.pal.TextMuted)
+	w.p.text(w.t(i18n.MultiChooseFile), rect(r.X+14, hintY, r.Width-28, 18), fontSmall, regular, w.pal.TextMuted)
 	w.c.Unclip()
 }
 
@@ -360,7 +361,7 @@ func (w *Window) multiCommitFileMenu(i int) []item {
 	for _, src := range f.Sources {
 		src := src
 		items = append(items, item{
-			title: "Show Diff from " + domain.ShortHash(src.Commit.Hash),
+			title: w.t(i18n.MultiShowDiffFrom, domain.ShortHash(src.Commit.Hash)),
 			hint:  multiCommitSourceLabel(src.Change),
 			icon:  icons.Diff,
 			run:   func() { w.showMultiCommitSource(src, true) },
@@ -370,8 +371,8 @@ func (w *Window) multiCommitFileMenu(i int) []item {
 		items = append(items, sep())
 	}
 	items = append(items,
-		item{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(f.Path) }},
-		item{title: "Copy Relative Path", icon: icons.Copy, run: func() { w.copyText(f.Path) }},
+		item{title: w.t(i18n.MultiShowHistory), icon: icons.History, run: func() { w.showPathHistory(f.Path) }},
+		item{title: w.t(i18n.MultiCopyPath), icon: icons.Copy, run: func() { w.copyText(f.Path) }},
 	)
 	return items
 }

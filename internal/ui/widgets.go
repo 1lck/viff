@@ -7,6 +7,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -363,7 +364,7 @@ func (w *Window) vbar(id ui.ID, area ui.Rect, s *scroller, content float32) {
 		c = w.pal.ScrollThumbHover
 	}
 	w.p.round(r, tw/2, c)
-	w.c.HitWithOptions(id, rect(right(area)-12, area.Y, 12, area.Height), "Scroll bar", ui.HitOptions{SkipFocus: true, SkipTab: true})
+	w.c.HitWithOptions(id, rect(right(area)-12, area.Y, 12, area.Height), w.t(i18n.ChromeA11yScrollBar), ui.HitOptions{SkipFocus: true, SkipTab: true})
 	start := s.Y
 	w.onDrag(id, func(e dragEvent) {
 		switch e.Phase {
@@ -399,7 +400,7 @@ func (w *Window) hbar(id ui.ID, area ui.Rect, s *scroller, content float32) {
 		c = w.pal.ScrollThumbHover
 	}
 	w.p.round(rect(tx, bottom(area)-tw-2, th, tw), tw/2, c)
-	w.c.HitWithOptions(id, rect(area.X, bottom(area)-12, area.Width, 12), "Scroll bar", ui.HitOptions{SkipFocus: true, SkipTab: true})
+	w.c.HitWithOptions(id, rect(area.X, bottom(area)-12, area.Width, 12), w.t(i18n.ChromeA11yScrollBar), ui.HitOptions{SkipFocus: true, SkipTab: true})
 	start := s.X
 	w.onDrag(id, func(e dragEvent) {
 		switch e.Phase {
@@ -420,7 +421,7 @@ func (w *Window) splitter(id ui.ID, r ui.Rect, vertical bool, begin func(), fn f
 	if vertical {
 		cursor = ui.PointerCursorResizeHorizontal
 	}
-	w.c.HitWithOptions(id, r, "Resize", ui.HitOptions{Cursor: cursor, SkipFocus: true, SkipTab: true})
+	w.c.HitWithOptions(id, r, w.t(i18n.ChromeA11yResize), ui.HitOptions{Cursor: cursor, SkipFocus: true, SkipTab: true})
 	w.onDrag(id, func(e dragEvent) {
 		switch e.Phase {
 		case dragBegin:

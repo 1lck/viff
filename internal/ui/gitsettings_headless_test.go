@@ -219,3 +219,30 @@ func TestDiffFontSelection(t *testing.T) {
 	}
 	f.assertIdle()
 }
+
+// Switching the language rewrites the settings dialog: its title, page tab and a
+// section heading come from the message table.
+func TestLanguageSwitchesDialogText(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openSettings()
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+
+	if !f.s.HasText("Settings") || !f.s.HasText("Appearance") {
+		t.Fatalf("English dialog text missing; texts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+
+	// A dialog takes its labels when it opens, so the switch is checked on a
+	// freshly opened one.
+	f.ws.Settings.Language = "zh-CN"
+	f.win.applyLanguage()
+	f.win.dialog = nil
+	f.win.openSettings()
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+
+	if !f.s.HasText("设置") || !f.s.HasText("外观") {
+		t.Fatalf("Chinese dialog text missing; texts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+}

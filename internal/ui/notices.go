@@ -6,6 +6,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -190,7 +191,7 @@ func (w *Window) paintNoticeCard(n vapp.Notification, r ui.Rect, k int, balloon 
 		cid = scNoticeClose.At(100 + k)
 	}
 	if w.hovered(bid) || w.hovered(cid) || !balloon {
-		if w.action(cid, right(r)-30, r.Y+8, icons.CloseSmall, "Close", actOpts{size: 22}) {
+		if w.action(cid, right(r)-30, r.Y+8, icons.CloseSmall, w.t(i18n.CommonClose), actOpts{size: 22}) {
 			nid := n.ID
 			w.after(func() {
 				w.nt.hidden[nid] = true
@@ -205,13 +206,13 @@ func (w *Window) paintNoticeCard(n vapp.Notification, r ui.Rect, k int, balloon 
 // paintNotificationsPanel is the Notifications tool window.
 func (w *Window) paintNotificationsPanel(r ui.Rect) {
 	w.island(r)
-	content, ax := w.toolHeader(r, scNoticeExpand, []string{"Notifications"}, 0, func(int) {})
-	if w.action(scNoticeExpand.At(50), ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, "Hide", actOpts{}) {
+	content, ax := w.toolHeader(r, scNoticeExpand, []string{w.t(i18n.NoticesTitle)}, 0, func(int) {})
+	if w.action(scNoticeExpand.At(50), ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, w.t(i18n.NoticesHide), actOpts{}) {
 		w.after(func() { w.notifyOpen = false })
 	}
 	ns := w.ws.Notifications
 	if len(ns) > 0 {
-		if w.action(scNoticeExpand.At(51), ax-2*actionSize-4, r.Y+(headerH-actionSize)/2, icons.Delete, "Clear All", actOpts{}) {
+		if w.action(scNoticeExpand.At(51), ax-2*actionSize-4, r.Y+(headerH-actionSize)/2, icons.Delete, w.t(i18n.NoticesClearAll), actOpts{}) {
 			w.after(func() {
 				for _, n := range w.ws.Notifications {
 					w.nt.hidden[n.ID] = true
@@ -221,7 +222,7 @@ func (w *Window) paintNotificationsPanel(r ui.Rect) {
 		}
 	}
 	if len(ns) == 0 {
-		w.p.textCenter("No notifications", rect(content.X, content.Y+content.Height*0.35, content.Width, 22), fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.NoticesEmpty), rect(content.X, content.Y+content.Height*0.35, content.Width, 22), fontUI, regular, w.pal.TextSecond)
 		return
 	}
 	v := &w.nt

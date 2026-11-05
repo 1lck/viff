@@ -10,6 +10,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
+	"viff/internal/i18n"
 )
 
 // DiffSource names what a diff compares.
@@ -122,7 +123,7 @@ func (w *Workspace) LoadDiff(src DiffSource, mode domain.WhitespaceMode, done fu
 		if src.Working && src.Area == domain.AreaConflicts && isConflict {
 			res, err = loadConflict(ctx, w.Git, repo, conflict, op, branch)
 		} else {
-			res, err = loadDiff(ctx, w.Git, repo, src, mode)
+			res, err = loadDiff(ctx, w.Git, repo, src, mode, w.translator())
 			if res != nil && src.Working {
 				applyStatusModes(res, src, entry)
 			}
@@ -139,11 +140,11 @@ func (w *Workspace) LoadDiff(src DiffSource, mode domain.WhitespaceMode, done fu
 	}()
 }
 
-func loadDiff(ctx context.Context, git Git, repo domain.Repo, src DiffSource, mode domain.WhitespaceMode) (*DiffResult, error) {
+func loadDiff(ctx context.Context, git Git, repo domain.Repo, src DiffSource, mode domain.WhitespaceMode, tr *i18n.Translator) (*DiffResult, error) {
 	if src.View {
-		return loadView(ctx, git, repo, src)
+		return loadView(ctx, git, repo, src, tr)
 	}
-	oldRev, newRev, oldTitle, newTitle := revisions(src)
+	oldRev, newRev, oldTitle, newTitle := revisions(src, tr)
 	oldPath := src.Path
 	if src.OldPath != "" {
 		oldPath = src.OldPath
@@ -166,8 +167,8 @@ func loadDiff(ctx context.Context, git Git, repo domain.Repo, src DiffSource, mo
 }
 
 // loadView reads one version of a file for the read-only file viewer.
-func loadView(ctx context.Context, git Git, repo domain.Repo, src DiffSource) (*DiffResult, error) {
-	rev, title := gitcli.RevWorktree, "Your version"
+func loadView(ctx context.Context, git Git, repo domain.Repo, src DiffSource, tr *i18n.Translator) (*DiffResult, error) {
+	rev, title := gitcli.RevWorktree, tr.T(i18n.AppSideYourVersion)
 	if src.Commit != "" {
 		rev, title = gitcli.RevCommit(src.Commit), domain.ShortHash(src.Commit)
 	}
@@ -192,19 +193,21 @@ func loadView(ctx context.Context, git Git, repo domain.Repo, src DiffSource) (*
 }
 
 // revisions maps a source to the two revisions compared.
-func revisions(src DiffSource) (oldRev, newRev gitcli.Revision, oldTitle, newTitle string) {
+func revisions(src DiffSource, tr *i18n.Translator) (oldRev, newRev gitcli.Revision, oldTitle, newTitle string) {
+	staged := tr.T(i18n.AppSideStaged)
+	yours := tr.T(i18n.AppSideYourVersion)
 	if src.Working {
 		switch src.Area {
 		case domain.AreaStaged:
-			return gitcli.RevHead, gitcli.RevIndex, "HEAD", "Staged"
+			return gitcli.RevHead, gitcli.RevIndex, "HEAD", staged
 		case domain.AreaUntracked:
-			return gitcli.Revision{}, gitcli.RevWorktree, "", "Your version"
+			return gitcli.Revision{}, gitcli.RevWorktree, "", yours
 		}
-		return gitcli.RevIndex, gitcli.RevWorktree, "Staged", "Your version"
+		return gitcli.RevIndex, gitcli.RevWorktree, staged, yours
 	}
 	if src.Commit == "" {
 		// A revision compared with the working tree.
-		newRev, newTitle = gitcli.RevWorktree, "Your version"
+		newRev, newTitle = gitcli.RevWorktree, yours
 	} else {
 		newRev = gitcli.RevCommit(src.Commit)
 		newTitle = domain.ShortHash(src.Commit)
