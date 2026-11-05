@@ -151,7 +151,9 @@ func (d *aiSettingsDraft) form(f *form) {
 	})
 	if !d.custom {
 		f.custom(22, func(r ui.Rect) {
-			w.p.text(w.t(i18n.GitAIBaseURL)+" "+d.endpoint.String(), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextSecond)
+			text := w.t(i18n.GitAIBaseURL) + " " + d.endpoint.String()
+			lw := w.p.width(text, fontSmall, regular)
+			w.p.text(text, rect(right(r)-lw, r.Y, lw+2, 20), fontSmall, regular, w.pal.TextSecond)
 		})
 	}
 	f.secretField(w.t(i18n.GitAIKey), d.key, &d.showKey, "sk-…")
@@ -170,10 +172,6 @@ func (d *aiSettingsDraft) form(f *form) {
 			w.p.text(d.fetchErr, rect(r.X, r.Y, r.Width, 18), fontSmall, regular, w.pal.Error)
 		})
 	}
-	f.gap(6)
-	f.custom(22, func(r ui.Rect) {
-		w.p.text(w.t(i18n.GitAIHint), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextSecond)
-	})
 }
 
 // pick switches to a built-in provider and fills in what it brings.

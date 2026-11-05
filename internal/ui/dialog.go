@@ -252,7 +252,8 @@ func (f *form) secretField(label string, ed *text.Editor, shown *bool, placehold
 	if *shown {
 		eye = icons.Eye
 	}
-	if f.w.action(idAIEye, right(rect(x, f.y, width, fieldH))-eyeW+4, f.y+3, eye, f.w.t(i18n.GitAIShowKey), actOpts{}) {
+	eyeX := right(rect(x, f.y, width, fieldH)) - eyeW + (eyeW-actionSize)/2
+	if f.w.action(idAIEye, eyeX, f.y+(fieldH-actionSize)/2, eye, f.w.t(i18n.GitAIShowKey), actOpts{}) {
 		f.w.after(func() { *shown = !*shown })
 	}
 	f.y += fieldH + 12
