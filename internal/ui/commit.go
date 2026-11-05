@@ -980,9 +980,18 @@ func (w *Window) changesMenu() []item {
 }
 
 func (w *Window) copyText(s string) {
-	if err := app.SetClipboardText(s); err != nil {
+	if err := w.setClipboardText(s); err != nil {
 		w.ws.NotifyError(w.t(i18n.WorkspaceErrorCannotCopy), err)
 	}
+}
+
+// setClipboardText writes text through the window's clipboard seam.
+func (w *Window) setClipboardText(s string) error {
+	write := w.clipboard
+	if write == nil {
+		write = app.SetClipboardText
+	}
+	return write(s)
 }
 
 // ---- message and commit buttons ------------------------------------------------

@@ -42,6 +42,10 @@ type Window struct {
 	// openURL opens a web link in the system browser. Tests replace it to assert
 	// which address an action would open without starting a browser.
 	openURL func(string) error
+	// clipboard writes text to the system clipboard. It is Viva's clipboard in
+	// the application; headless tests replace it so a copy never touches the
+	// real one.
+	clipboard func(string) error
 
 	// Registries rebuilt by every paint; event handlers read the latest.
 	scrolls  []scrollRegion
