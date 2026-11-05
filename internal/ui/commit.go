@@ -19,20 +19,21 @@ import (
 
 // commitView is the Commit tool window's view state.
 type commitView struct {
-	msg       *text.Editor
-	layout    components.TextareaLayout
-	amend     bool
-	saved     string // the message typed before Amend loaded HEAD's
-	loaded    string // HEAD's message as loaded for Amend
-	signOff   bool
-	noVerify  bool
-	collapsed map[string]bool
-	sel       map[string]bool
-	anchor    string
-	cursor    string
-	scroll    scroller
-	rows      []changeRow
-	msgH      float32
+	msg          *text.Editor
+	layout       components.TextareaLayout
+	amend        bool
+	saved        string // the message typed before Amend loaded HEAD's
+	loaded       string // HEAD's message as loaded for Amend
+	signOff      bool
+	noVerify     bool
+	collapsed    map[string]bool
+	sel          map[string]bool
+	anchor       string
+	cursor       string
+	scroll       scroller
+	rows         []changeRow
+	msgH         float32
+	msgCollapsed bool
 	// listID filters the changes tree by change list. "" shows every list,
 	// which keeps the historical behavior; any other value is the selected
 	// list's ID.
@@ -232,12 +233,23 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	// The changes tree keeps at least ~110px (a few rows) before the message
 	// area grows; a small window shrinks the message down to 60px first.
 	msgH := clampF(v.msgH, 60, max(60, content.Height-84-110))
-	bottomR := splitBottom(&content, msgH+40+44)
+	if v.msgCollapsed {
+		msgH = 0
+	}
+	bottomH := msgH + 40 + 44
+	if v.msgCollapsed {
+		// The message area and the commit buttons fold away with it, leaving
+		// just the Amend row and the two small buttons beside it.
+		bottomH = 40
+	}
+	bottomR := splitBottom(&content, bottomH)
 	w.p.hline(bottomR.X, bottomR.Y, bottomR.Width, w.pal.Border)
-	startH := msgH
-	w.splitter(idSplitMessage, rect(bottomR.X, bottomR.Y-3, bottomR.Width, 6), false,
-		func() { startH = msgH },
-		func(d float32) { v.msgH = clampF(startH-d, 60, max(60, content.Height+msgH-110)) }, nil)
+	if !v.msgCollapsed {
+		startH := msgH
+		w.splitter(idSplitMessage, rect(bottomR.X, bottomR.Y-3, bottomR.Width, 6), false,
+			func() { startH = msgH },
+			func(d float32) { v.msgH = clampF(startH-d, 60, max(60, content.Height+msgH-110)) }, nil)
+	}
 	w.paintChanges(content)
 	w.paintCommitMessage(bottomR, msgH)
 }
@@ -979,35 +991,48 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	if w.checkbox(idCmAmend, top.X, top.Y, top.Height, w.t(i18n.WorkspaceCheckAmend), v.amend, !rs.HasHead()) {
 		w.after(w.toggleAmend)
 	}
+	chevron, chevronTip := icons.ChevronDown, w.t(i18n.WorkspaceTipCollapseMessage)
+	if v.msgCollapsed {
+		chevron, chevronTip = icons.ChevronUp, w.t(i18n.WorkspaceTipExpandMessage)
+	}
+	if w.action(idCmOptionsDropdown, right(top)-actionSize*2-6, top.Y+1, chevron, chevronTip, actOpts{}) {
+		w.after(func() { v.msgCollapsed = !v.msgCollapsed })
+	}
 	if w.action(idCmOptions, right(top)-actionSize, top.Y+1, icons.Settings, w.t(i18n.WorkspaceTipCommitOptions), actOpts{}) {
 		w.after(func() { w.openMenuBelow(rect(right(top)-200, top.Y, 200, top.Height), w.commitOptionsMenu(), 220) })
 	}
 	mr := rect(r.X+10, bottom(top)+4, r.Width-20, msgH)
 	value := v.msg.String()
-	sel := v.msg.Selection()
-	caret := runeToByte(value, v.msg.Caret())
-	ss, se := runeToByte(value, min(sel.Start, sel.End)), runeToByte(value, max(sel.Start, sel.End))
-	components.PaintTextarea(w.c, w.theme, mr, components.TextareaSnapshot{
-		ID: idCmMessage, Label: w.t(i18n.WorkspaceLabelCommitMessage), Value: value, Placeholder: w.t(i18n.WorkspaceLabelCommitMessage),
-		ShowCaret: true, HideEditorText: true, Layout: &v.layout,
-		Caret: caret, SelectionStart: ss, SelectionEnd: se,
-	})
-	w.editors[idCmMessage] = v.msg
-	w.onScrollIn(mr, func(dx, dy float32) { v.layout.ScrollBy(dy) })
-	w.onKeys(idCmMessage, func(e ui.KeyEvent) bool {
-		if e.Key == ui.KeyEnter && e.Modifiers&ui.ModifierMeta != 0 {
-			w.doCommit(false)
+	if msgH > 0 {
+		sel := v.msg.Selection()
+		caret := runeToByte(value, v.msg.Caret())
+		ss, se := runeToByte(value, min(sel.Start, sel.End)), runeToByte(value, max(sel.Start, sel.End))
+		components.PaintTextarea(w.c, w.theme, mr, components.TextareaSnapshot{
+			ID: idCmMessage, Label: w.t(i18n.WorkspaceLabelCommitMessage), Value: value, Placeholder: w.t(i18n.WorkspaceLabelCommitMessage),
+			ShowCaret: true, HideEditorText: true, Layout: &v.layout,
+			Caret: caret, SelectionStart: ss, SelectionEnd: se,
+		})
+		w.editors[idCmMessage] = v.msg
+		w.onScrollIn(mr, func(dx, dy float32) { v.layout.ScrollBy(dy) })
+		w.onKeys(idCmMessage, func(e ui.KeyEvent) bool {
+			if e.Key == ui.KeyEnter && e.Modifiers&ui.ModifierMeta != 0 {
+				w.doCommit(false)
+				return true
+			}
+			mv, extend := components.TextareaMovementForKey(e.Key, e.Modifiers)
+			if mv == components.TextareaMoveNone || mv == components.TextareaMoveLineStart || mv == components.TextareaMoveLineEnd {
+				return false
+			}
+			val := v.msg.String()
+			nb := v.layout.Move(val, runeToByte(val, v.msg.Caret()), mv)
+			v.msg.MoveTo(byteToRune(val, nb), extend)
 			return true
-		}
-		mv, extend := components.TextareaMovementForKey(e.Key, e.Modifiers)
-		if mv == components.TextareaMoveNone || mv == components.TextareaMoveLineStart || mv == components.TextareaMoveLineEnd {
-			return false
-		}
-		val := v.msg.String()
-		nb := v.layout.Move(val, runeToByte(val, v.msg.Caret()), mv)
-		v.msg.MoveTo(byteToRune(val, nb), extend)
-		return true
-	})
+		})
+	}
+
+	if v.msgCollapsed {
+		return
+	}
 
 	// Buttons.
 	by := bottom(mr) + 10
