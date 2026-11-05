@@ -161,14 +161,6 @@ func (w *Window) applyTheme() {
 	w.theme = w.pal.viewTheme()
 }
 
-// onMinimize keeps Viff in the status area instead of the taskbar: the platform
-// minimizes the window first, and it hides itself so only the icon remains.
-func (w *Window) onMinimize(minimized bool) {
-	if minimized && w.native != nil {
-		w.native.Hide()
-	}
-}
-
 // SetTray hands the window the native handle the application opened and how to
 // quit, which the status item's menu uses. Headless runs leave it nil.
 func (w *Window) SetTray(native *app.Window, quit func()) {
@@ -232,7 +224,6 @@ func (w *Window) Config() app.Config {
 		Invalidator:    &w.inv,
 		OnWake:         w.onWake,
 		OnClosed:       w.onClosed,
-		OnMinimize:     w.onMinimize,
 	}
 }
 

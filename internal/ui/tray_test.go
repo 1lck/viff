@@ -27,11 +27,9 @@ func TestTrayMenu(t *testing.T) {
 	}
 }
 
-// A headless run has no native window, so the status-item callbacks must stay
+// A headless run has no native window, so the status-item callback must stay
 // harmless instead of dereferencing it.
 func TestTrayCallbacksWithoutNative(t *testing.T) {
 	w := &Window{}
-	w.onMinimize(true)
-	w.onMinimize(false)
 	w.ShowFromTray()
 }
