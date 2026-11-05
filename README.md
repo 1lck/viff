@@ -14,7 +14,7 @@ Go + Viva. No Electron. No WebView. No bundled browser.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.27.3%2B-00ADD8.svg)](https://go.dev/dl/)
 
-[Features](#a-full-git-workflow) · [Contribute](CONTRIBUTING.md) · [Releases](https://github.com/1lck/viff/releases)
+[Features](#a-full-git-workflow) · [Community](#join-the-community) · [Contribute](CONTRIBUTING.md) · [Releases](https://github.com/1lck/viff/releases)
 
 </div>
 
@@ -39,6 +39,18 @@ and runtime memory are separate measurements.
 Lightweight is a design goal, not an unmeasured performance claim. Memory usage
 and startup time vary with the repository, platform, and renderer; no comparative
 RAM or startup benchmark is claimed.
+
+## Join the community
+
+Welcome to join the Viff community — share your experience, ask questions, and
+follow the latest updates.
+
+<p align="center">
+  <img src="docs/assets/community/wechat-group.png" width="240" alt="Viff WeChat group QR code">
+</p>
+
+<p align="center"><sub>Scan with WeChat to join the group. The group QR code expires
+periodically; if it no longer works, open an issue and we will refresh it.</sub></p>
 
 ## A full Git workflow
 
