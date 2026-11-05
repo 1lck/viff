@@ -139,6 +139,9 @@ func (w *Window) paintPicturePane(t *diffTab, r ui.Rect, old bool, res *vapp.Dif
 		return
 	}
 	label := fmt.Sprintf("%s %d×%d  %s", side.Format, side.Width, side.Height, sizeLabel(content.Size))
+	if side.Format == "GIF" {
+		label += "  · first frame only"
+	}
 	b, imgErr := t.picture(old, res)
 	if imgErr != "" {
 		w.paintCentered(r, "Cannot decode picture", imgErr, w.pal.Error)

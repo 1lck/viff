@@ -133,6 +133,10 @@ func (w *Window) closeTab(i int) {
 	if i < 0 || i >= len(v.tabs) {
 		return
 	}
+	// Drop the decoded pictures before the tab leaves the slice: one image diff
+	// can hold 16 MiB per side, and nothing would free it until the garbage
+	// collector happened to run.
+	v.tabs[i].picOld, v.tabs[i].picNew = nil, nil
 	v.tabs = append(v.tabs[:i], v.tabs[i+1:]...)
 	if v.active >= len(v.tabs) {
 		v.active = len(v.tabs) - 1
