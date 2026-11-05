@@ -48,6 +48,10 @@ type changeRow struct {
 	entry domain.StatusEntry
 	count int
 	depth int
+	// files are the selection keys a group or directory row covers. They are
+	// kept even while the row is collapsed, so its checkbox can still toggle
+	// files that have no row of their own.
+	files []string
 }
 
 const (
@@ -117,7 +121,7 @@ func (w *Window) buildRows() {
 			continue
 		}
 		gk := rowKey(a, "")
-		v.rows = append(v.rows, changeRow{key: gk, area: a, kind: rowGroup, count: len(entries)})
+		v.rows = append(v.rows, changeRow{key: gk, area: a, kind: rowGroup, count: len(entries), files: entryKeys(a, entries)})
 		if v.collapsed[gk] {
 			continue
 		}
@@ -138,7 +142,7 @@ func (w *Window) buildRows() {
 			depth := 1
 			if d != "" {
 				dk := rowKey(a, d+"/")
-				v.rows = append(v.rows, changeRow{key: dk, area: a, kind: rowDir, dir: d, count: len(files), depth: 1})
+				v.rows = append(v.rows, changeRow{key: dk, area: a, kind: rowDir, dir: d, count: len(files), depth: 1, files: entryKeys(a, files)})
 				if v.collapsed[dk] {
 					continue
 				}
@@ -354,6 +358,8 @@ func (w *Window) paintChanges(r ui.Rect) {
 			w.p.round(hl, 4, w.pal.Hover)
 		}
 		x := rr.X + 10 + float32(row.depth)*18
+		cbX := x
+		x += 22
 		switch row.kind {
 		case rowGroup, rowDir:
 			chev := icons.ChevronDown
@@ -401,6 +407,16 @@ func (w *Window) paintChanges(r ui.Rect) {
 			}
 		}
 		w.c.HitWithOptions(id, hl, w.rowLabel(row), ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected, Expandable: row.kind != rowFile, Expanded: row.kind != rowFile && !v.collapsed[row.key]})
+		// The checkbox is painted after the row's hit area, so a click on it
+		// toggles the check instead of selecting the row.
+		checked := v.sel[row.key]
+		if row.kind != rowFile {
+			checked = w.changesRowChecked(i)
+		}
+		if w.checkbox(scChangeChecks.At(i), cbX, rr.Y, rowH, "", checked, false) {
+			i := i
+			w.after(func() { w.toggleRowCheck(i) })
+		}
 		w.rowAction(i, row, hl)
 		if w.c.Clicked(id) {
 			i := i
@@ -428,6 +444,73 @@ func (w *Window) rowLabel(row changeRow) string {
 		return row.dir
 	}
 	return row.entry.Path
+}
+
+// entryKeys names the selection keys of the files a group or directory row
+// covers.
+func entryKeys(a domain.Area, entries []domain.StatusEntry) []string {
+	keys := make([]string, 0, len(entries))
+	for _, e := range entries {
+		keys = append(keys, rowKey(a, e.Path))
+	}
+	return keys
+}
+
+// toggleRowCheck flips one row's checkbox: a file toggles itself, a group takes
+// every file in its area, and a directory takes only its own files. The set
+// comes from the row, not from the rows below it, so a collapsed row toggles
+// files that are not painted.
+func (w *Window) toggleRowCheck(i int) {
+	v := &w.cm
+	if i < 0 || i >= len(v.rows) {
+		return
+	}
+	row := v.rows[i]
+	if row.kind == rowFile {
+		if v.sel[row.key] {
+			delete(v.sel, row.key)
+		} else {
+			v.sel[row.key] = true
+		}
+		return
+	}
+	on := !w.changesRowChecked(i)
+	// A row key covers its files through selectedEntries; once the box drives
+	// the choice, the file keys are the precise statement and the row key goes.
+	delete(v.sel, row.key)
+	for _, key := range row.files {
+		if on {
+			v.sel[key] = true
+		} else {
+			delete(v.sel, key)
+		}
+	}
+}
+
+// changesRowChecked reports whether every file a row covers is selected, which
+// is what fills a group's or directory's checkbox.
+func (w *Window) changesRowChecked(i int) bool {
+	if i < 0 || i >= len(w.cm.rows) {
+		return false
+	}
+	row := w.cm.rows[i]
+	if row.kind == rowFile {
+		return w.cm.sel[row.key]
+	}
+	// A selected group or directory row already covers its files, the way a
+	// row click selects them; the box must show that state too.
+	if w.cm.sel[row.key] {
+		return true
+	}
+	if len(row.files) == 0 {
+		return false
+	}
+	for _, key := range row.files {
+		if !w.cm.sel[key] {
+			return false
+		}
+	}
+	return true
 }
 
 // rowAction paints the hover +/- action at the right of a row.
