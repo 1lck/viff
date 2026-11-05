@@ -589,9 +589,12 @@ func (w *Window) openSettings() {
 	s := w.ws.Settings
 	theme := s.Theme
 	editorFont := s.EditorFont
-	// app.FontFamilies reads the system on every call and takes a moment, so it
-	// is collected once when the dialog opens rather than while painting.
+	diffFont := s.DiffFont
+	// app.FontFamilies and app.MonospaceFamilies read the system on every call
+	// and take a moment, so they are collected once when the dialog opens rather
+	// than while painting.
 	fonts := app.FontFamilies()
+	monoFonts := app.MonospaceFamilies()
 	font := text.NewEditor(strconv.Itoa(int(s.FontSize)))
 	gitPath := text.NewEditor(s.GitPath)
 	editor := text.NewEditor(s.ExternalEditor)
@@ -681,6 +684,21 @@ func (w *Window) openSettings() {
 			f.custom(22, func(r ui.Rect) {
 				w.p.text("Replaces the font of the whole interface. Diffs and the console keep a fixed-pitch face.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 			})
+			diffCurrent := "Default (bundled or system fixed-pitch)"
+			if diffFont != "" {
+				diffCurrent = diffFont
+			}
+			f.combo("Diff font:", diffCurrent, func() []item {
+				items := []item{{title: "Default (bundled or system fixed-pitch)", checked: diffFont == "", run: func() { diffFont = "" }}}
+				for _, name := range monoFonts {
+					name := name
+					items = append(items, item{title: name, checked: diffFont == name, run: func() { diffFont = name }})
+				}
+				return items
+			})
+			f.custom(22, func(r ui.Rect) {
+				w.p.text("Only fixed-pitch families: diffs, console and hashes lay their text out on a character grid.", rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+			})
 		},
 		okDisabled: func() bool {
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
@@ -713,6 +731,7 @@ func (w *Window) openSettings() {
 			}
 			w.ws.SetLogLevel(s.LogLevel)
 			s.EditorFont = editorFont
+			s.DiffFont = diffFont
 			w.applyTheme()
 			w.applyFont()
 			w.Invalidate()

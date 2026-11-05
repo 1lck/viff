@@ -102,34 +102,38 @@ func TestAutoUpdateCheckDefaultsOnAndPersistsOff(t *testing.T) {
 	}
 }
 
-// EditorFont is the family the settings page picked from the system's list. A
-// value that could not name a family must not survive a load, and a usable one
-// is kept without its surrounding spaces.
-func TestEditorFontSanitized(t *testing.T) {
+// EditorFont and DiffFont are family names the settings page picks from the
+// system's lists. A value that could not name a family must not survive a load,
+// and a usable one is kept without its surrounding spaces.
+func TestFontFamiliesSanitized(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	write := func(editorFont string) {
+	load := func(field, value string) *Settings {
 		t.Helper()
-		data, err := json.Marshal(map[string]any{"version": 1, "editorFont": editorFont})
+		data, err := json.Marshal(map[string]any{"version": 1, field: value})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(path, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
+		return Load(path)
+	}
+	family := func(s *Settings, field string) string {
+		if field == "diffFont" {
+			return s.DiffFont
+		}
+		return s.EditorFont
 	}
 
-	write("   ")
-	if got := Load(path).EditorFont; got != "" {
-		t.Fatalf("blank editorFont = %q, want empty", got)
-	}
-
-	write(strings.Repeat("x", 97))
-	if got := Load(path).EditorFont; got != "" {
-		t.Fatalf("over-long editorFont kept: %q", got)
-	}
-
-	write("  Cascadia Mono  ")
-	if got := Load(path).EditorFont; got != "Cascadia Mono" {
-		t.Fatalf("editorFont = %q, want the trimmed name", got)
+	for _, field := range []string{"editorFont", "diffFont"} {
+		if got := family(load(field, "   "), field); got != "" {
+			t.Errorf("blank %s = %q, want empty", field, got)
+		}
+		if got := family(load(field, strings.Repeat("x", 97)), field); got != "" {
+			t.Errorf("over-long %s kept: %q", field, got)
+		}
+		if got := family(load(field, "  Cascadia Mono  "), field); got != "Cascadia Mono" {
+			t.Errorf("%s = %q, want the trimmed name", field, got)
+		}
 	}
 }
