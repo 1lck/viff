@@ -459,6 +459,7 @@ func (w *Window) paintTooltip(full ui.Rect) {
 		return
 	}
 	main, short := splitShortcut(text)
+	short = kbdHint(short)
 	tw := w.p.width(main, fontUI, regular)
 	sw := float32(0)
 	if short != "" {

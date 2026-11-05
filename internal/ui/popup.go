@@ -163,7 +163,7 @@ func (w *Window) popupSize(p *popup) (float32, float32) {
 				tw += w.p.width(it.hint, fontUI, regular) + 10
 			}
 			if it.shortcut != "" {
-				tw += w.p.width(it.shortcut, fontUI, regular) + 24
+				tw += w.p.width(kbdHint(it.shortcut), fontUI, regular) + 24
 			}
 			if it.hasSub() {
 				tw += 20
@@ -322,8 +322,9 @@ func (w *Window) paintPopup(level int, p *popup, full ui.Rect) {
 			rightEdge -= 22
 		}
 		if it.shortcut != "" {
-			sw := w.p.width(it.shortcut, fontUI, regular)
-			w.p.text(it.shortcut, rect(rightEdge-sw, row.Y, sw, h), fontUI, regular, w.pal.TextSecond)
+			short := kbdHint(it.shortcut)
+			sw := w.p.width(short, fontUI, regular)
+			w.p.text(short, rect(rightEdge-sw, row.Y, sw, h), fontUI, regular, w.pal.TextSecond)
 			rightEdge -= sw + 16
 		}
 		if it.star != nil {

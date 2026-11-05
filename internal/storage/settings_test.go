@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -98,5 +99,37 @@ func TestAutoUpdateCheckDefaultsOnAndPersistsOff(t *testing.T) {
 	}
 	if back := Load(path); back.AutoUpdateCheck {
 		t.Fatal("explicit autoUpdateCheck=false was not persisted")
+	}
+}
+
+// EditorFont is the family the settings page picked from the system's list. A
+// value that could not name a family must not survive a load, and a usable one
+// is kept without its surrounding spaces.
+func TestEditorFontSanitized(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	write := func(editorFont string) {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{"version": 1, "editorFont": editorFont})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("   ")
+	if got := Load(path).EditorFont; got != "" {
+		t.Fatalf("blank editorFont = %q, want empty", got)
+	}
+
+	write(strings.Repeat("x", 97))
+	if got := Load(path).EditorFont; got != "" {
+		t.Fatalf("over-long editorFont kept: %q", got)
+	}
+
+	write("  Cascadia Mono  ")
+	if got := Load(path).EditorFont; got != "Cascadia Mono" {
+		t.Fatalf("editorFont = %q, want the trimmed name", got)
 	}
 }
