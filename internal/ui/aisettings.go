@@ -134,7 +134,15 @@ func (d *aiSettingsDraft) form(f *form) {
 			p := p
 			items = append(items, item{title: p.Name, checked: !d.custom && d.provider == p.ID, run: func() { d.pick(p) }})
 		}
-		items = append(items, item{title: w.t(i18n.GitAIProviderCustom), checked: d.custom, run: func() { d.custom = true }})
+		items = append(items, item{title: w.t(i18n.GitAIProviderCustom), checked: d.custom, run: func() {
+			d.custom = true
+			// A preset's id is not a name the user typed. Keeping it here
+			// would store a custom endpoint under a preset name, and the next
+			// open would treat it as that preset and drop the URL.
+			if _, ok := presetByID(d.provider); ok {
+				setText(d.name, "")
+			}
+		}})
 		return items
 	})
 	if d.custom {
