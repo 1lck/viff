@@ -16,7 +16,16 @@ CATEGORIES = [
     ('#### ⚡ 改进', '#### ⚡ Improvements'),
     ('#### 🛠 修复', '#### 🛠 Fixes'),
 ]
-ARTIFACTS = ('darwin-arm64.dmg', 'windows-amd64-setup.exe', 'linux-amd64.deb', 'linux-amd64.tar.gz')
+ARTIFACTS = ('darwin-arm64.dmg', 'darwin-amd64.dmg', 'windows-amd64-setup.exe', 'linux-amd64.deb', 'linux-amd64.tar.gz')
+# The macOS Intel package first shipped in v0.1.0; notes for earlier releases
+# must keep describing the artifacts that actually existed.
+ARTIFACTS_BEFORE_AMD64_MAC = {'v0.1.0-alpha.1', 'v0.1.0-alpha.2'}
+
+
+def required_artifacts(tag):
+    if tag in ARTIFACTS_BEFORE_AMD64_MAC:
+        return tuple(name for name in ARTIFACTS if name != 'darwin-amd64.dmg')
+    return ARTIFACTS
 
 
 def visible_markdown(text):
@@ -104,7 +113,7 @@ def load_notes(path, tag, repo='1lck/viff'):
     base = f'https://github.com/{repo}'
     download_base = f'{base}/releases/download/{tag}'
     expected = {base, f'{base}/releases/tag/{tag}', f'{download_base}/SHA256SUMS'}
-    expected.update(f'{download_base}/viff-{tag}-{suffix}' for suffix in ARTIFACTS)
+    expected.update(f'{download_base}/viff-{tag}-{suffix}' for suffix in required_artifacts(tag))
     previous = []
     for download, language in (('### 下载', '## 中文'), ('### Downloads', '## English')):
         if not expected.issubset(links(section(download))):

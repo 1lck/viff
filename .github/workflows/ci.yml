@@ -319,7 +319,20 @@ jobs:
             exit "$status"
           fi
       - name: Package and check installation without opening windows
-        run: python scripts/package.py v0.1.0-ci --smoke
+        run: |
+          python scripts/package.py v0.1.0-ci --smoke
+          # IntelliJ-style release matrix also ships an Intel DMG; build and
+          # package it here so the x86_64 cross-compile cannot rot unnoticed.
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          LD="-X viff/internal/version.Version=$VERSION -X viff/internal/version.Commit=$COMMIT -X viff/internal/version.BuildDate=$BUILD_DATE"
+          GOARCH=amd64 CC="clang -arch x86_64" CGO_ENABLED=1 \
+            CGO_CFLAGS="-arch x86_64 -mmacosx-version-min=13.0" \
+            CGO_LDFLAGS="-arch x86_64 -mmacosx-version-min=13.0" \
+            MACOSX_DEPLOYMENT_TARGET=13.0 \
+            go build -trimpath -ldflags="-s -w $LD" -o build/viff-amd64 ./cmd/viff
+          python scripts/package.py v0.1.0-ci --smoke --arch amd64 --binary build/viff-amd64
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

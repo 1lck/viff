@@ -72,14 +72,25 @@ not establish full desktop compatibility.
 
 ## Choose the package / 选择安装包
 
-For `v0.1.0-alpha.2`, the artifact names are:
+For `v0.1.0`, the artifact names are:
 
-| Platform / 平台             | Artifact / 文件                               | Installation / 安装                                           |
-| --------------------------- | --------------------------------------------- | ------------------------------------------------------------- |
-| macOS 13+, Apple Silicon    | `viff-v0.1.0-alpha.2-darwin-arm64.dmg`        | Drag Viff.app to Applications / 将 Viff.app 拖入 Applications |
-| Windows x64                 | `viff-v0.1.0-alpha.2-windows-amd64-setup.exe` | Per-user installation / 安装到当前用户目录                    |
-| Debian/Ubuntu x64           | `viff-v0.1.0-alpha.2-linux-amd64.deb`         | `sudo apt install ./viff-v0.1.0-alpha.2-linux-amd64.deb`      |
-| Linux x64 portable / 便携包 | `viff-v0.1.0-alpha.2-linux-amd64.tar.gz`      | Extract, then run `./viff` / 解压后执行 `./viff`              |
+| Platform / 平台             | Artifact / 文件                            | Installation / 安装                                           |
+| --------------------------- | ------------------------------------------ | ------------------------------------------------------------- |
+| macOS 13+, Apple Silicon    | `viff-v0.1.0-darwin-arm64.dmg`             | Drag Viff.app to Applications / 将 Viff.app 拖入 Applications |
+| macOS 13+, Intel            | `viff-v0.1.0-darwin-amd64.dmg`             | Drag Viff.app to Applications / 将 Viff.app 拖入 Applications |
+| Windows x64                 | `viff-v0.1.0-windows-amd64-setup.exe`      | Per-user installation / 安装到当前用户目录                    |
+| Debian/Ubuntu x64           | `viff-v0.1.0-linux-amd64.deb`              | `sudo apt install ./viff-v0.1.0-linux-amd64.deb`              |
+| Linux x64 portable / 便携包 | `viff-v0.1.0-linux-amd64.tar.gz`           | Extract, then run `./viff` / 解压后执行 `./viff`              |
+
+The macOS arm64 package is built natively on the Apple Silicon runner. GitHub no
+longer provides an Intel macOS runner, so the amd64 package is cross-compiled on
+that runner with `CC="clang -arch x86_64"`; `scripts/package.py --arch amd64
+--binary build/viff-amd64` verifies the Mach-O architecture before it builds the
+DMG. Both packages target macOS 13 or later.
+macOS arm64 包在 Apple Silicon runner 上原生构建；GitHub 已不再提供 Intel macOS
+runner，因此 amd64 包在同一 runner 上用 `CC="clang -arch x86_64"` 交叉编译，
+由 `scripts/package.py --arch amd64 --binary build/viff-amd64` 校验 Mach-O 架构后再生成 DMG。
+两个包都面向 macOS 13 及以上。
 
 Git must be available on `PATH`. The Linux DEB declares dependencies on `git`,
 `libvulkan1`, `libxcb1`, `libcairo2`, `libfontconfig1`, `libfreetype6`,

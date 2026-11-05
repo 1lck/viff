@@ -15,13 +15,14 @@ notes_path = Path(__file__).resolve().parent.parent / 'docs/releases' / f'{tag}.
 notes = load_notes(notes_path, tag, repo)
 expected = {
     f'viff-{tag}-darwin-arm64.dmg',
+    f'viff-{tag}-darwin-amd64.dmg',
     f'viff-{tag}-windows-amd64-setup.exe',
     f'viff-{tag}-linux-amd64.deb',
     f'viff-{tag}-linux-amd64.tar.gz',
     'SHA256SUMS',
 }
 if {p.name for p in Path('dist').iterdir()} != expected:
-    raise SystemExit('Release assets do not match the required three-platform distribution')
+    raise SystemExit('Release assets do not match the required platform distribution')
 
 
 def gh(*args):
