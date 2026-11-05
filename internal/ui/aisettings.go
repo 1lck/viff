@@ -12,38 +12,50 @@ import (
 	"viff/internal/storage"
 )
 
-// aiProviderPreset is one built-in provider: choosing it fills the base URL and
-// the protocol, so only the key and the model stay to be typed.
+// aiProviderPreset is one built-in provider. Like a provider in pi, it declares
+// the wire formats it actually serves and the base URL they share: the protocol
+// decides the path, the provider decides the host, so a provider that has no
+// messages endpoint simply never offers that protocol.
 type aiProviderPreset struct {
-	ID       string
-	Name     string
-	BaseURL  string
-	Protocol string // one of aiProtocols
+	ID        string
+	Name      string
+	BaseURL   string
+	Protocols []string // the formats this host serves; the first is the default
 }
 
-// aiProviderPresets lists the endpoints people actually use. Every entry here
-// speaks an OpenAI-compatible API except Anthropic, so the protocol can be
-// corrected by hand when a gateway differs.
+// supports reports whether this provider speaks a wire format.
+func (p aiProviderPreset) supports(protocol string) bool {
+	for _, q := range p.Protocols {
+		if q == protocol {
+			return true
+		}
+	}
+	return false
+}
+
+// aiProviderPresets lists the endpoints people actually use. The base URL is
+// the prefix each protocol's path hangs off, so it is stored without the path
+// the transport appends.
 var aiProviderPresets = []aiProviderPreset{
-	{"openai", "OpenAI", "https://api.openai.com/v1", "openai-completions"},
-	{"anthropic", "Anthropic", "https://api.anthropic.com", "anthropic-messages"},
-	{"google", "Google AI", "https://generativelanguage.googleapis.com/v1beta/openai", "openai-completions"},
-	{"mistral", "Mistral", "https://api.mistral.ai/v1", "openai-completions"},
-	{"groq", "Groq", "https://api.groq.com/openai/v1", "openai-completions"},
-	{"xai", "xAI", "https://api.x.ai/v1", "openai-completions"},
-	{"deepseek", "DeepSeek", "https://api.deepseek.com/v1", "openai-completions"},
-	{"cerebras", "Cerebras", "https://api.cerebras.ai/v1", "openai-completions"},
-	{"together", "Together AI", "https://api.together.xyz/v1", "openai-completions"},
-	{"fireworks", "Fireworks", "https://api.fireworks.ai/inference/v1", "openai-completions"},
-	{"openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "openai-completions"},
-	{"moonshot", "Moonshot", "https://api.moonshot.cn/v1", "openai-completions"},
-	{"zai", "Z.ai", "https://api.z.ai/api/paas/v4", "openai-completions"},
-	{"minimax", "MiniMax", "https://api.minimax.chat/v1", "openai-completions"},
-	{"nvidia", "NVIDIA", "https://integrate.api.nvidia.com/v1", "openai-completions"},
-	{"huggingface", "Hugging Face", "https://router.huggingface.co/v1", "openai-completions"},
-	{"baseten", "Baseten", "https://inference.baseten.co/v1", "openai-completions"},
-	{"ollama", "Ollama", "http://localhost:11434/v1", "openai-completions"},
-	{"lmstudio", "LM Studio", "http://localhost:1234/v1", "openai-completions"},
+	{"openai", "OpenAI", "https://api.openai.com/v1", []string{"openai-completions", "openai-responses"}},
+	{"anthropic", "Anthropic", "https://api.anthropic.com", []string{"anthropic-messages"}},
+	{"deepseek", "DeepSeek", "https://api.deepseek.com", []string{"openai-completions"}},
+	{"openrouter", "OpenRouter", "https://openrouter.ai/api/v1", []string{"openai-completions", "anthropic-messages"}},
+	{"google", "Google AI", "https://generativelanguage.googleapis.com/v1beta/openai", []string{"openai-completions"}},
+	{"mistral", "Mistral", "https://api.mistral.ai/v1", []string{"openai-completions"}},
+	{"groq", "Groq", "https://api.groq.com/openai/v1", []string{"openai-completions"}},
+	{"xai", "xAI", "https://api.x.ai/v1", []string{"openai-completions"}},
+	{"cerebras", "Cerebras", "https://api.cerebras.ai/v1", []string{"openai-completions"}},
+	{"together", "Together AI", "https://api.together.xyz/v1", []string{"openai-completions"}},
+	{"fireworks", "Fireworks", "https://api.fireworks.ai/inference/v1", []string{"openai-completions"}},
+	{"moonshot", "Moonshot", "https://api.moonshot.cn/v1", []string{"openai-completions"}},
+	{"zai", "Z.ai", "https://api.z.ai/api/paas/v4", []string{"openai-completions"}},
+	{"minimax", "MiniMax", "https://api.minimax.chat/v1", []string{"openai-completions"}},
+	{"nvidia", "NVIDIA", "https://integrate.api.nvidia.com/v1", []string{"openai-completions"}},
+	{"huggingface", "Hugging Face", "https://router.huggingface.co/v1", []string{"openai-completions"}},
+	{"baseten", "Baseten", "https://inference.baseten.co/v1", []string{"openai-completions"}},
+	{"ollama", "Ollama", "http://localhost:11434/v1", []string{"openai-completions"}},
+	{"lmstudio", "LM Studio", "http://localhost:1234/v1", []string{"openai-completions"}},
 }
 
 func presetByID(id string) (aiProviderPreset, bool) {
@@ -110,9 +122,16 @@ func newAISettingsDraft(s *storage.Settings) *aiSettingsDraft {
 		key:      text.NewEditor(s.AIKey),
 		protocol: aiProtocolIndex(s.AIProtocol),
 	}
-	if _, ok := presetByID(d.provider); !ok {
+	p, ok := presetByID(d.provider)
+	if !ok {
 		// An older settings file has no provider: treat its endpoint as custom.
 		d.custom = true
+		return d
+	}
+	// A stored protocol the provider does not serve would silently send the
+	// request to a path that host does not have, so fall back to its default.
+	if !p.supports(aiProtocols[d.protocol]) {
+		d.protocol = aiProtocolIndex(p.Protocols[0])
 	}
 	return d
 }
@@ -124,7 +143,6 @@ func (d *aiSettingsDraft) form(f *form) {
 	current := w.t(i18n.GitAIProviderCustom)
 	if p, ok := presetByID(d.provider); ok && !d.custom {
 		current = p.Name
-		d.endpoint = text.NewEditor(p.BaseURL)
 	} else if name := strings.TrimSpace(d.name.String()); name != "" {
 		current = name
 	}
@@ -149,11 +167,17 @@ func (d *aiSettingsDraft) form(f *form) {
 		f.field(w.t(i18n.GitAIName), d.name, "My gateway", false)
 		f.field(w.t(i18n.GitAIBaseURL), d.endpoint, "https://example.com/v1", false)
 	}
+	// The protocol list is the provider's own capability list, so a host with
+	// no messages endpoint (DeepSeek, Groq, …) cannot be asked for one.
+	names := aiProtocols
+	if p, ok := presetByID(d.provider); ok && !d.custom {
+		names = p.Protocols
+	}
 	f.combo(w.t(i18n.GitAIProtocol), protocolTitle(w, d.protocol), func() []item {
-		items := make([]item, 0, len(aiProtocols))
-		for i := range aiProtocols {
-			i := i
-			items = append(items, item{title: protocolTitle(w, i), checked: d.protocol == i, run: func() { d.protocol = i }})
+		items := make([]item, 0, len(names))
+		for _, name := range names {
+			index := aiProtocolIndex(name)
+			items = append(items, item{title: protocolTitle(w, index), checked: d.protocol == index, run: func() { d.protocol = index }})
 		}
 		return items
 	})
@@ -186,8 +210,8 @@ func (d *aiSettingsDraft) form(f *form) {
 func (d *aiSettingsDraft) pick(p aiProviderPreset) {
 	d.custom = false
 	d.provider = p.ID
-	d.endpoint = text.NewEditor(p.BaseURL)
-	d.protocol = aiProtocolIndex(p.Protocol)
+	setText(d.endpoint, p.BaseURL)
+	d.protocol = aiProtocolIndex(p.Protocols[0])
 	d.models = nil
 	d.fetchErr = ""
 }
@@ -242,7 +266,7 @@ func (d *aiSettingsDraft) commit(s *storage.Settings) {
 	}
 	if p, ok := presetByID(d.provider); ok {
 		s.AIProvider = p.ID
-		s.AIEndpoint = p.BaseURL
+		s.AIEndpoint = strings.TrimSpace(d.endpoint.String())
 		return
 	}
 	s.AIEndpoint = strings.TrimSpace(d.endpoint.String())
