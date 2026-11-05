@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -197,7 +197,7 @@ func linuxManagedInstall() bool {
 // underSystemPrefix reports whether path lives under /usr, where the release
 // DEB installs viff.
 func underSystemPrefix(path string) bool {
-	clean := filepath.Clean(path)
+	clean := path.Clean(path)
 	return clean == "/usr" || strings.HasPrefix(clean, "/usr/")
 }
 

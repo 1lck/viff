@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func TestCacheDirUsesOverrideAndCreatesDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o700 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o700 {
 		t.Fatalf("cache dir mode = %o, want 700", info.Mode().Perm())
 	}
 	if client.DownloadDir() != client.CacheDir {
@@ -66,6 +67,9 @@ func TestCleanupDirRemovesOnlyStaleAndInterruptedFiles(t *testing.T) {
 }
 
 func TestRequireWritableDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX directory permissions")
+	}
 	if err := requireWritableDir(t.TempDir(), "/tmp/target", "/tmp/pkg", "reason"); err != nil {
 		t.Fatalf("writable directory rejected: %v", err)
 	}
