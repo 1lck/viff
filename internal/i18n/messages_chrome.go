@@ -29,6 +29,7 @@ const (
 	ChromeMenuShowInFinder   = Key("chrome.menu.showInFinder")
 	ChromeMenuOpenFile       = Key("chrome.menu.openFile")
 	ChromeMenuOpenTerminal   = Key("chrome.menu.openTerminal")
+	ChromeMenuOpenSystemTerm = Key("chrome.menu.openSystemTerminal")
 	ChromeMenuCloseProject   = Key("chrome.menu.closeProject")
 
 	// Accessibility names of chrome widgets and generic controls.
@@ -203,6 +204,7 @@ func init() {
 		ChromeMenuShowInFinder:   "Show in Finder",
 		ChromeMenuOpenFile:       "Open File…",
 		ChromeMenuOpenTerminal:   "Open in Terminal",
+		ChromeMenuOpenSystemTerm: "Open in System Terminal",
 		ChromeMenuCloseProject:   "Close Project",
 
 		ChromeA11yProject:      "Project: %s",
@@ -361,6 +363,7 @@ func init() {
 		ChromeMenuShowInFinder:   "在文件管理器中显示",
 		ChromeMenuOpenFile:       "打开文件…",
 		ChromeMenuOpenTerminal:   "在终端中打开",
+		ChromeMenuOpenSystemTerm: "在系统终端中打开",
 		ChromeMenuCloseProject:   "关闭项目",
 
 		ChromeA11yProject:      "项目：%s",

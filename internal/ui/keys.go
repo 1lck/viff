@@ -115,7 +115,7 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 	case ch == "1":
 		w.toggleProject()
 	case ch == "9":
-		w.gitOpen = !w.gitOpen
+		w.toggleGitWindow()
 	case ch == "z" && alt:
 		if len(w.rollbackTargets()) > 0 {
 			w.openRollback()

@@ -2,7 +2,11 @@ module viff
 
 go 1.27.3
 
-require github.com/vivaui/viva v0.2.4
+require (
+	github.com/creack/pty v1.1.24
+	github.com/vivaui/viva v0.2.4
+	golang.org/x/sys v0.49.0
+)
 
 require (
 	github.com/ebitengine/purego v0.11.1 // indirect

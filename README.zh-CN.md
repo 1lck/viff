@@ -62,6 +62,7 @@ Git 仍是核心。围绕它，Viff 提供只读的项目浏览与 Quick Open、
 | 解决冲突   | Ours / Result / Theirs 三栏，逐块接受 Ours / Theirs / Both，显式标记解决                                                          |
 | 多工作目录 | 从新分支或已有分支创建 Worktree，管理子模块，保护未提交改动                                                                       |
 | 同步协作   | Fetch、Pull、Push、force-with-lease、远端、补丁、签名与凭据设置                                                                   |
+| 执行命令   | 内置终端，在当前仓库打开；支持滚动回看、选择复制、粘贴、清屏、重启与缩放                                                           |
 | 使用母语   | 界面支持英文与简体中文，默认英文，可在 设置 → General → Language 切换                                                             |
 
 **界面默认英文，可在 设置 → General → Language 切到简体中文。**

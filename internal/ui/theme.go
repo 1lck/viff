@@ -102,6 +102,13 @@ type Palette struct {
 	StatusIgnored  ui.Color
 	StatusRenamed  ui.Color
 
+	// Terminal scheme.
+	TermBG        ui.Color
+	TermFG        ui.Color
+	TermCursor    ui.Color
+	TermSelection ui.Color
+	TermANSI      [16]ui.Color
+
 	// VCS log.
 	RefHead          ui.Color
 	RefLocal         ui.Color
@@ -140,7 +147,14 @@ func DarkPalette() *Palette {
 		StatusConflict: c(0xDE6A66), StatusIgnored: c(0xD69A6B), StatusRenamed: c(0x70AEFF),
 		RefHead: c(0xF5D273), RefLocal: c(0x5FAD65), RefRemote: c(0xB589EC), RefTag: c(0x868A91),
 		RefLabelBg: c(0x2B2D30), CurrentBranchRow: c(0x1D2336),
-		Graph: [8]ui.Color{c(0x3D7DEB), c(0x5FAD65), c(0xC77DBB), c(0xE5A54B), c(0x2AACB8), c(0xE36D74), c(0xA2D06C), c(0x9C7BDB)},
+		Graph:  [8]ui.Color{c(0x3D7DEB), c(0x5FAD65), c(0xC77DBB), c(0xE5A54B), c(0x2AACB8), c(0xE36D74), c(0xA2D06C), c(0x9C7BDB)},
+		TermBG: c(0x191A1C), TermFG: c(0xBCBEC4), TermCursor: c(0xBCBEC4), TermSelection: c(0x2A4371),
+		TermANSI: [16]ui.Color{
+			c(0x5C6370), c(0xE06C75), c(0x98C379), c(0xE5C07B),
+			c(0x61AFEF), c(0xC678DD), c(0x56B6C2), c(0xABB2BF),
+			c(0x7A7E85), c(0xE88F89), c(0x73BD79), c(0xD5B778),
+			c(0x70AEFF), c(0xC77DBB), c(0x2AACB8), c(0xFFFFFF),
+		},
 	}
 }
 
@@ -171,7 +185,14 @@ func LightPalette() *Palette {
 		StatusConflict: c(0xDE1B2E), StatusIgnored: c(0x8C4F00), StatusRenamed: c(0x0033B3),
 		RefHead: c(0xE0A200), RefLocal: c(0x3E8C49), RefRemote: c(0x8E5BD1), RefTag: c(0x868A91),
 		RefLabelBg: c(0xEBECF0), CurrentBranchRow: c(0xF0F4FF),
-		Graph: [8]ui.Color{c(0x3574F0), c(0x3E8C49), c(0xA651A0), c(0xD2861B), c(0x15918F), c(0xD7414C), c(0x6E9A2C), c(0x7553C9)},
+		Graph:  [8]ui.Color{c(0x3574F0), c(0x3E8C49), c(0xA651A0), c(0xD2861B), c(0x15918F), c(0xD7414C), c(0x6E9A2C), c(0x7553C9)},
+		TermBG: c(0xFFFFFF), TermFG: c(0x080808), TermCursor: c(0x080808), TermSelection: c(0xD0DFFE),
+		TermANSI: [16]ui.Color{
+			c(0x000000), c(0xC54E58), c(0x067D17), c(0xA56906),
+			c(0x0033B3), c(0x871094), c(0x0E7C86), c(0x5F6269),
+			c(0x6C707E), c(0xD7414C), c(0x3E8C49), c(0xB87A10),
+			c(0x3574F0), c(0xA651A0), c(0x15918F), c(0x000000),
+		},
 	}
 }
 

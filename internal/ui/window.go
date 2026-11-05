@@ -68,19 +68,21 @@ type Window struct {
 	commitOpen  bool
 	projectOpen bool
 	gitOpen     bool
+	termOpen    bool
 	notifyOpen  bool
 	commitTab   int // 0 = Commit, 1 = Stash
 	gitTab      int // 0 = Log, 1 = Console, 2 = Reflog
 
-	cm  commitView
-	fm  filesView
-	ed  editorView
-	lg  logView
-	st  stashView
-	rf  reflogView
-	con consoleView
-	wel welcomeView
-	nt  noticeView
+	cm   commitView
+	fm   filesView
+	ed   editorView
+	lg   logView
+	st   stashView
+	rf   reflogView
+	con  consoleView
+	wel  welcomeView
+	nt   noticeView
+	term terminalView
 
 	favPtr                map[string]*bool
 	pendingRebase         string
@@ -283,6 +285,7 @@ func (w *Window) Config() app.Config {
 
 func (w *Window) onWake() {
 	w.ws.Drain()
+	w.pumpTerminal()
 	if w.ws.ConsumeUpdatePrompt() {
 		w.openUpdateDialog()
 	}
@@ -327,6 +330,7 @@ func (w *Window) ShowCrashNotice(crashPath string) {
 
 func (w *Window) onClosed() {
 	w.lg.multi.stop()
+	w.stopTerminal()
 	w.flushSettings()
 	w.stopAutoFetch()
 	w.ws.Close()
@@ -338,6 +342,7 @@ func (w *Window) onClosed() {
 // window; the helper waits for this exit before replacing files.
 func (w *Window) quitForUpdate() {
 	w.lg.multi.stop()
+	w.stopTerminal()
 	w.flushSettings()
 	w.stopAutoFetch()
 	w.ws.Close()
@@ -348,6 +353,8 @@ func (w *Window) onResize(size ui.Size) {
 	w.ws.Settings.Window.Width = int(size.Width)
 	w.ws.Settings.Window.Height = int(size.Height)
 	w.saveSettings()
+	// The grid's cell count follows the panel, and the pty follows the grid.
+	w.Invalidate()
 }
 
 // saveSettings writes settings shortly after the last change. Git settings
@@ -600,6 +607,13 @@ func (w *Window) onKey(e ui.KeyEvent) ui.EventResult {
 		return ui.EventResult{}
 	}
 	handled := ui.EventResult{Handled: true, Repaint: true}
+	// The tool-window chord belongs to the application even while the shell has
+	// the keyboard: a terminal program has no use for Option+F12.
+	if e.Key == ui.KeyF12 && e.Modifiers&ui.ModifierAlt != 0 && e.Modifiers&ui.ModifierMeta == 0 &&
+		w.dialog == nil && len(w.popups) == 0 {
+		w.after(w.toggleTerminal)
+		return handled
+	}
 	if len(w.popups) > 0 {
 		if w.popupKey(e) {
 			return handled
@@ -628,6 +642,14 @@ func (w *Window) onShortcut(e ui.KeyEvent) ui.EventResult {
 	if e.Release {
 		return ui.EventResult{}
 	}
+	if result, handled := w.terminalShortcut(e); handled {
+		return result
+	}
+	if w.terminalOwnsChord(e) {
+		// The shell owns this Control chord; leaving it unhandled lets the
+		// native key path encode it for the terminal.
+		return ui.EventResult{}
+	}
 	if w.shortcut(e) {
 		return ui.EventResult{Handled: true, Repaint: true}
 	}
@@ -646,6 +668,9 @@ func (w *Window) onFileDrop(e ui.FileDropEvent) ui.EventResult {
 }
 
 func (w *Window) textInput(ctx app.TextInputContext) *app.TextInput {
+	if ctx.ID == idTerminal && w.termOpen && w.term.emu != nil {
+		return w.ensureTerminalInput()
+	}
 	ed, ok := w.editors[ctx.ID]
 	if !ok {
 		return nil

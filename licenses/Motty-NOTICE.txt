@@ -1,0 +1,26 @@
+Motty
+Copyright 2026 Motty contributors
+
+This product includes software developed by the Motty contributors
+(https://github.com/t8y2/motty), used under the Apache License 2.0. The
+terminal emulator in internal/ui/term and the pseudo-terminal session in
+internal/platform/pty are taken from that project at commit fbd26b8.
+
+Changes made for Viff: the terminal emulator is used unchanged except for its
+package path; the pty session was reduced to a local shell on Unix pty and
+Windows ConPTY, without the Windows Subsystem for Linux support, the
+directory-report prompt integration and the leak counter of the original. The
+view, keyboard routing and tool window around them are Viff code.
+
+The original project's notice follows.
+
+Motty
+Copyright 2026 Motty contributors
+
+This product includes software developed by the gopher-rdp contributors
+(internal/rdpcore), used under the MIT License. Its license and a list of
+changes are in internal/rdpcore/LICENSE and internal/rdpcore/NOTICE.md.
+
+Interface icons include works from Lucide, Simple Icons, SVG Logos, Skill Icons,
+Devicon, selfh.st/icons, Material Icon Theme and LobeHub Icons. Their licenses
+and trademark notes are in internal/workbench/icons/NOTICE.

@@ -44,6 +44,7 @@
 - **推送变体**：日志右键“Push Up to Commit…”把某个历史提交及其之前的提交推到远端分支；分支弹窗“Push to Another Remote…”把 HEAD 推到别的远端或分支名；标签菜单可以只删除远端标签（本地标签保留）。非 fast-forward 默认被 Git 拒绝并显示原文，强制推送需显式勾选 force-with-lease。
 - **更新未检出的分支**：分支弹窗里非当前分支的本地分支有“Update from Remote”，快进到远端同名分支并说明前进了几个提交；分叉时拒绝且分支不变。浅克隆时 Git 工具窗口的 ⋯ 菜单会多出“Fetch Full History (Unshallow)”。
 - **Git 设置**：设置对话框的 Git 页可以指定 SSH 命令、GPG 程序、签名格式（Git 默认 / OpenPGP / SSH）、签名密钥、默认签名提交与 credential helper；保存后对下一次 Git 调用立即生效，不改写仓库或全局 Git 配置。
+- **终端工具窗**：左侧 stripe 的终端图标或 ⌥F12 在底部打开，当前目录是打开的仓库。支持 5000 行回看、滚轮与滚动条、拖选复制、粘贴（含 bracketed paste）、清屏、重启与拖动高度；隐藏工具窗或切换仓库不结束 shell；重启、关闭项目（有运行中的 shell 时先确认）或关闭窗口才结束进程。实现与边界见 [0028](decisions/0028-integrated-terminal.md)。
 - **通知**：右下角气泡（成功消息 10 秒后自动隐藏），以及通知工具窗口。
 - **应用内更新**：`Help → Check for Updates…` 或启动时自动检查；发现新版本后应用内下载、用 `SHA256SUMS` 校验，点“Restart to Update”自动替换并重启，不需要打开浏览器。Windows 使用便携 ZIP，Linux 便携包使用 tar.gz；DEB 安装需要 `sudo apt install` 完成。
 - **界面语言**：默认英文，设置 → General → Language 可切到简体中文；菜单、对话框、工具窗口与通知随语言切换，Git 命令与输出、路径与哈希、快捷键与日志字段保持英文。
@@ -71,6 +72,7 @@ go build -o viff ./cmd/viff
 | F7 / ⇧F7      | 下一个 / 上一个差异              |
 | ⌘F            | 在 diff 中搜索，或聚焦日志搜索   |
 | ⌘0 / ⌘9       | 显示或隐藏 Commit / Git 工具窗口 |
+| ⌥F12          | 显示或隐藏终端工具窗             |
 | ⌘1            | 打开 Project 面板（与 Commit 共用停靠区） |
 | ⇧⌘O           | Quick Open                       |
 | ⌥⌘Z           | 回滚                             |
@@ -98,3 +100,4 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - 界面语言覆盖主要窗口；少量相对时间提示（如“Moments ago”“Today 14:30”）与诊断 issue 模板仍是英文。
 - AI 生成提交说明默认关闭；启用后会把当前改动的分支名、最近五条提交、变更文件与 diff 发到你自己配置的端点，范围与隐私边界见 [privacy.md](privacy.md)。
 - 应用内更新没有系统签名校验（macOS ad-hoc 签名、Windows 无 Authenticode），只做 HTTPS + SHA-256；宿主的系统安全提示仍可能出现。DEB 安装受权限限制只能提示手动安装；随包文档在 Windows/Linux 自替换后保持旧版本，见 [0023](decisions/0023-app-update.md)。旧版本（v0.1.0 及更早）没有更新器，升级到第一个带更新器的版本需要手动下载一次。
+- 终端目前只有一个本地会话：不连 SSH、不支持多标签/分屏、搜索、链接、内联图片与鼠标上报；隐藏工具窗时 shell 继续运行，会话不跨重启恢复。切换仓库不会改写已在运行的 shell 的当前目录，新会话才从新仓库根目录开始。Windows 使用 ConPTY（需要 Windows 10 1809+），本机未做 Windows 实机验收。见 [0028](decisions/0028-integrated-terminal.md)。

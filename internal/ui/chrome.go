@@ -34,7 +34,23 @@ func (w *Window) paintMain(full ui.Rect) {
 		nr.Width -= islandGap
 		w.paintNotificationsPanel(nr)
 	}
-	if w.gitOpen {
+	// The bottom dock holds one tool window at a time, like IntelliJ's bottom
+	// stripe: the terminal replaces the Git window while it is shown, and
+	// closing it brings Git back if that was open.
+	switch {
+	case w.termOpen:
+		h := clampF(s.TerminalHeight, terminalMinHeight, max(terminalMinHeight, area.Height-160))
+		tr := splitBottom(&area, h)
+		area.Height -= islandGap
+		w.paintTerminal(tr)
+		start := s.TerminalHeight
+		w.splitter(idSplitTerminal, rect(tr.X, tr.Y-islandGap, tr.Width, islandGap), false,
+			func() { start = h },
+			func(d float32) {
+				s.TerminalHeight = clampF(start-d, terminalMinHeight, max(terminalMinHeight, full.Height-toolbarH-statusH-160))
+			},
+			w.saveSettings)
+	case w.gitOpen:
 		h := clampF(s.GitPanelHeight, 120, max(120, area.Height-160))
 		gr := splitBottom(&area, h)
 		area.Height -= islandGap
@@ -82,6 +98,19 @@ func (w *Window) paintMain(full ui.Rect) {
 			}
 		})
 	}
+}
+
+// toggleGitWindow shows or hides the Git tool window. While the terminal has
+// the bottom dock, the first press brings Git back rather than hiding both.
+func (w *Window) toggleGitWindow() {
+	if w.termOpen {
+		w.termOpen = false
+		w.gitOpen = true
+		w.Invalidate()
+		return
+	}
+	w.gitOpen = !w.gitOpen
+	w.Invalidate()
 }
 
 // island paints a rounded tool-window surface and returns it.
@@ -254,9 +283,10 @@ func (w *Window) projectMenu() []item {
 		out = append(out, sep(),
 			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
 			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, run: func() { revealPath(cur) }},
-			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: func() { openTerminal(cur) }},
+			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: w.openTerminal},
+			item{title: w.t(i18n.ChromeMenuOpenSystemTerm), icon: icons.Shell, run: func() { openTerminal(cur) }},
 			sep(),
-			item{title: w.t(i18n.ChromeMenuCloseProject), run: func() { w.ws.Close() }})
+			item{title: w.t(i18n.ChromeMenuCloseProject), run: w.closeProject})
 	}
 	return out
 }
@@ -300,8 +330,12 @@ func (w *Window) paintStripes(left, rightS ui.Rect) {
 		w.after(w.toggleCommit)
 	}
 	by := bottom(left) - 36
-	if w.stripeButton(idStripeGit, rect(left.X+5, by, 30, 30), icons.Vcs, w.t(i18n.ChromeStripeGit)+"\t⌘9", w.gitOpen) {
-		w.after(func() { w.gitOpen = !w.gitOpen })
+	if w.stripeButton(idStripeGit, rect(left.X+5, by, 30, 30), icons.Vcs, w.t(i18n.ChromeStripeGit)+"\t⌘9", w.gitOpen && !w.termOpen) {
+		w.after(w.toggleGitWindow)
+	}
+	by -= 36
+	if w.stripeButton(idStripeTerm, rect(left.X+5, by, 30, 30), icons.Shell, w.t(i18n.TermStripe), w.termOpen) {
+		w.after(w.toggleTerminal)
 	}
 	unread := w.nt.unread(w.ws)
 	if w.stripeButton(idStripeNotify, rect(rightS.X+5, rightS.Y+6, 30, 30), icons.Notifications, w.t(i18n.ChromeStripeNotifications), w.notifyOpen) {
