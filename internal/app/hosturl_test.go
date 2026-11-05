@@ -131,6 +131,8 @@ func TestParseRemoteURLErrors(t *testing.T) {
 		{"blank", "   "},
 		{"local path", "/srv/git/demo.git"},
 		{"relative path", "../demo"},
+		{"windows drive path", "C:/Users/me/remote.git"},
+		{"windows drive path with backslashes", `C:\Users\me\remote.git`},
 		{"file transport", "file:///srv/git/demo.git"},
 		{"owner only", "https://github.com/acme"},
 		{"scp owner only", "git@github.com:demo.git"},

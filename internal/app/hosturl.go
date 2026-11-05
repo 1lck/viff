@@ -98,6 +98,12 @@ func ParseRemoteURL(raw string) (RemoteLink, error) {
 		}
 		path = u.Path
 	} else if i := strings.IndexByte(s, ':'); i > 0 && !strings.ContainsAny(s[:i], `/\`) {
+		// "C:/work/repo" is a Windows drive path, not an scp remote. Git prints
+		// it with forward slashes, and reading "C" as a host would build a link
+		// to https://c/... instead of reporting that the remote has no web page.
+		if i == 1 && isASCIILetter(s[0]) {
+			return RemoteLink{}, remoteURLError("%q is a local path", raw)
+		}
 		// scp-like: [user@]host:path
 		host = hostOnly(s[:i])
 		path = s[i+1:]
@@ -120,6 +126,10 @@ func ParseRemoteURL(raw string) (RemoteLink, error) {
 	link := RemoteLink{Forge: forgeOf(host), Host: host, Path: p, scheme: scheme}
 	return link, nil
 }
+
+// isASCIILetter reports an ASCII letter, the first character of a Windows
+// drive path such as "C:/work/repo".
+func isASCIILetter(b byte) bool { return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' }
 
 // hostOnly drops the user and the port from "[user@]host[:port]".
 func hostOnly(s string) string {
