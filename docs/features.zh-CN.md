@@ -26,7 +26,7 @@
   - F7 / ⇧F7 在差异之间跳转，⌘F 搜索，可忽略空白差异，F4 用外部编辑器打开。
   - 预览页签跟随选中的文件；双击或 ⌘D 固定页签。
   - 图片预览：PNG / JPEG / GIF（仅首帧）在 diff 中并排显示，等比缩放并标注格式、像素尺寸与文件大小；超过内容读取上限的图片仍按“文件过大”处理。
-- **冲突查看器**：Ours / Result / Theirs 三栏，在冲突块间跳转，可逐块接受 Ours / Theirs / Both；修改后先检查结果，再标记为已解决。支持在外部编辑器中自由编辑。
+- **冲突查看器**：Ours / Result / Theirs 三栏，在冲突块间跳转，可逐块接受 Ours / Theirs / Both；修改后先检查结果，再标记为已解决。支持在外部编辑器中自由编辑；横幅的 Copy for AI（以及每块的 Copy This Block）把仓库、文件、操作、双方来源与冲突块原文复制到剪贴板，交给外部 AI 修改——Viff 不调用模型、不联网，外部保存后自动刷新，仍由你手动标记已解决。
 - **文件查看**：只读打开某个提交里的文件（“Open Repository Version”），显示行数、换行符，以及二进制、超大文件和子模块的说明；可定位到当前行用外部编辑器打开。
   - **Git blame 注解**：按提交新旧着色，显示作者与日期；点击注解在日志中定位该提交，右键可看该提交的 diff 或注解上一个版本。
 - **浏览提交的仓库树**（“Browse Repository at Revision…”）：在日志里右键一个提交，列出该提交里的全部文件（路径、大小，并标出可执行、符号链接和子模块），可按路径过滤，双击或回车以只读方式打开该版本。
@@ -38,6 +38,9 @@
   - 直接编辑历史：修改提交信息、把提交 squash 进父提交、删除提交（drop），冲突时自动 abort 并保持分支不变。
   - 控制台显示所有执行过的 Git 命令及其输出，支持长行横向滚动；引用日志页签可以查看 reflog。
 - **分支弹窗**（⌥⇧`）：速搜、收藏、本地和远程分支的子菜单，可执行检出、新建、重命名、合并、rebase、比较、设置上游、推送、删除；“Show Changed Files”列出两个分支 tip 之间的文件，双击打开 diff。
+- **网页入口**：Log 单提交右键“Open Commit on GitHub/GitLab/…”，分支弹窗里本地分支可打开分支页、与基准分支比较、打开创建 PR / 合并请求的页面。只生成服务地址并用系统浏览器打开，不登录、不调用 API；Bitbucket 不生成比较与创建 PR 页面，改为打开分支页并提示。
+- **撤销**：⌘Z 撤销本会话内最近一次本地操作（提交、Amend、merge、rebase、cherry-pick、revert、reset、检出、分支新建/删除/重命名）。撤销前重新校验 HEAD、分支与工作区，状态不匹配就拒绝；保留最近 20 条，切仓库清空，不持久化。
+- **Git LFS**：检测仓库的 LFS 规则与受管文件，状态栏显示 LFS 数量；本机缺少 git-lfs 时在提交面板给出警告并提供安装命令（只复制，不执行）。Viff 不管理 LFS 对象，只报告状态。
 - **Smart Checkout**：工作区有未提交改动时切换分支或检出修订不再直接失败——Git 因改动会被覆盖而拒绝后弹出确认，选“Stash and Checkout”会连同未跟踪文件一起 stash，检出后自动恢复；恢复冲突时改动留在 stash 并提示，检出失败则恢复改动、当前分支不变。
 - **工作树（Worktrees）**：分支弹窗底部的“Worktrees…”列出仓库的所有工作树（分支、短 HEAD、路径，当前工作树有标记），可以新建（创建新分支或选择未被占用的已有本地分支，路径按分支名建议）、删除（可强制丢弃改动，分支保留）、打开为当前仓库、复制路径；已被其他工作树检出的分支在分支菜单里标注，检出会打开那个工作树。
 - **推送和更新**：推送对话框列出待推送的提交，可选推送标签和 force-with-lease；更新支持 merge 或 rebase 方式；也支持 Fetch、后台定时 Fetch 和管理远程仓库。
@@ -94,7 +97,10 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - 多仓库写入操作只针对当前仓库；非活动仓库在打开总览或手动刷新时更新。ChangeList 是文件分组，不提供独立索引或跨仓库提交，见 [0020](decisions/0020-repositories-changelists.md)。
 - 已在 macOS，以及 Windows Server 2022 x64（Git 2.56.0.windows.4）上验证 Git 功能和 Viva 无头界面；Windows 10/11 的实际桌面交互、输入法及安装分发尚未验收。Linux 和 Windows 的文件监听仍是轮询，见 [0003](decisions/0003-file-watching.md)。
 - 界面字体默认为系统字体（SF Pro），没有使用 Inter；设置里可分别选择「界面字体」（全部已安装族）与「diff 字体」（仅等宽族，用于 diff、控制台与哈希），见 [0002](decisions/0002-fonts.md)。
-- 冲突支持逐块接受两侧内容；自由文本编辑、二进制或不可靠冲突标记仍需要外部编辑器，见 [0019](decisions/0019-git-issue-gaps.md)。
+- 冲突支持逐块接受两侧内容；自由文本编辑、二进制或不可靠冲突标记仍需要外部编辑器，见 [0019](decisions/0019-git-issue-gaps.md)。Copy for AI 只写系统剪贴板，不调用模型、不发网络请求；单块 200 行 / 20 KB、全文 200 KB 截断，见 [0032](decisions/0032-ai-conflict-context.md)。
+- 撤销只在当前会话、当前仓库生效，保留最近 20 条；首次提交、reword/squash/drop、冲突后 continue、reset --soft/--mixed 的撤销不支持，也没有 redo，见 [0030](decisions/0030-undo.md)。
+- 网页链接不做 OAuth/API：未知主机的页面布局按 GitHub 猜测，Bitbucket 不生成比较与创建 PR 页面，未推送的分支由服务端提示不存在，见 [0029](decisions/0029-pr-links.md)。
+- LFS 只检测不管理：不安装 git-lfs、不执行 git lfs install/track/pull/push；未暂存的 LFS 指针文件不计入列表，见 [0031](decisions/0031-lfs.md)。
 - 已有分支创建工作树见 [0018](decisions/0018-existing-branch-worktree.md)；prunable 工作树只能查看、不能删除。嵌套子模块的移除和 deinit 需要先打开其所属仓库，见 [0019](decisions/0019-git-issue-gaps.md)。
 - Project 面板与 Commit 共用左侧停靠区，不能同时显示；默认显示 Commit，按 ⌘1 打开 Project。ignored 文件默认不显示，折叠状态不持久化；Project 中打开的图片仍只显示二进制说明（diff 的图片预览不适用于单版本查看）；文本支持鼠标拖选、Shift+方向键与 ⌘A/⌘C 复制（制表符按显示展开为空格），但不支持编辑与拖选自动滚动。见 [0024](decisions/0024-file-browser.md)。
 - 界面语言覆盖主要窗口；少量相对时间提示（如“Moments ago”“Today 14:30”）与诊断 issue 模板仍是英文。

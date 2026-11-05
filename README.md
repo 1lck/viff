@@ -64,9 +64,12 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |
 | Browse files          | Project tool window with folders, status colours, Quick Open, read-only viewing, blame, and file history                                                      |
 | Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                                                              |
-| Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, and explicit mark-as-resolved                                                               |
+| Undo mistakes         | Command-Z reverses the last local commit, merge, rebase, checkout, or branch change from this session                                                         |
+| Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, explicit mark-as-resolved, and a copyable context for an external AI tool                  |
 | Work across checkouts | Create worktrees from new or existing branches; manage submodules with dirty-work protection                                                                  |
+| Track large files     | Detect Git LFS rules and managed files, and say what to install when git-lfs is missing                                                                      |
 | Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                                                                        |
+| Work on the web       | Open commits, branches, comparisons, and the pull request form on GitHub, GitLab, Bitbucket, or Gitea                                                        |
 | Run commands          | Integrated terminal in the current repository: scrollback, selection copy, paste, clear, restart, and resize                                                   |
 | Work in your language | English and Simplified Chinese interface, English by default, switchable in Settings                                                                          |
 
@@ -80,6 +83,9 @@ staging only stages visible files.
 **AI commit messages are optional and off by default.** When enabled, the changed
 files and their diffs are sent to the endpoint you configure; see the
 [privacy guide](docs/privacy.md).
+
+**Copy for AI puts the conflict context on your clipboard.** It is for whatever
+external tool you choose; Viff calls no model and sends nothing.
 
 <details>
 <summary>Light theme</summary>
