@@ -41,9 +41,11 @@ func New(lang Lang) *Translator { return &Translator{lang: lang} }
 // Lang reports the translator's language.
 func (t *Translator) Lang() Lang { return t.lang }
 
-// T returns the message for key formatted with args. A message missing from this
-// language falls back to English, then to the key itself, so a gap shows up in
-// the interface instead of blank text.
+// T returns the message for key formatted with args. A message that needs a
+// literal percent sign writes %% the way fmt does, because a lone % starts a
+// verb; TestPercentInMessages pins that. A message missing from this language
+// falls back to English, then to the key itself, so a gap shows up in the
+// interface instead of blank text.
 func (t *Translator) T(key Key, args ...any) string {
 	text := message(t.lang, key)
 	if text == "" && t.lang != EN {
@@ -53,7 +55,9 @@ func (t *Translator) T(key Key, args ...any) string {
 		return string(key)
 	}
 	if len(args) == 0 {
-		return text
+		// Nothing to format, but a literal percent sign is still written the
+		// fmt way, so the same message reads correctly with and without args.
+		return strings.ReplaceAll(text, "%%", "%")
 	}
 	return fmt.Sprintf(text, args...)
 }

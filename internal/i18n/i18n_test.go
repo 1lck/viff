@@ -39,3 +39,31 @@ func TestTranslatorFallsBack(t *testing.T) {
 		t.Fatalf("empty language = %q, want English", got)
 	}
 }
+
+// A message formats its arguments, so a literal percent sign has to be written
+// %% the way fmt does. A lone % would be read as a verb and come out as
+// "%!s(MISSING)" in the interface; this pins the rule for both languages.
+func TestPercentInMessages(t *testing.T) {
+	const literal = Key("test.percentLiteral")
+	const withArg = Key("test.percentArg")
+	register(EN, map[Key]string{
+		literal: "Saving 100%% of the files",
+		withArg: "%d%% of %s",
+	})
+	register(ZHCN, map[Key]string{
+		literal: "已保存 100%% 的文件",
+		withArg: "%d%%，共 %s",
+	})
+	if got := New(EN).T(literal); got != "Saving 100% of the files" {
+		t.Fatalf("EN literal = %q", got)
+	}
+	if got := New(ZHCN).T(literal); got != "已保存 100% 的文件" {
+		t.Fatalf("ZH literal = %q", got)
+	}
+	if got := New(EN).T(withArg, 42, "files"); got != "42% of files" {
+		t.Fatalf("EN with arg = %q", got)
+	}
+	if got := New(ZHCN).T(withArg, 42, "3 个文件"); got != "42%，共 3 个文件" {
+		t.Fatalf("ZH with arg = %q", got)
+	}
+}

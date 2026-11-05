@@ -66,6 +66,9 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Work across checkouts | Create worktrees from new or existing branches; manage submodules with dirty-work protection                         |
 | Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                               |
 
+**The interface is English by default; switch it to Simplified Chinese in
+Settings → General → Language.**
+
 **ChangeLists group files; they do not create separate Git indexes.** A commit
 includes **all staged files**, even when a list filter is active. Filtered bulk
 staging only stages visible files.
