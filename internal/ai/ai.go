@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -26,6 +27,9 @@ const (
 	// ProtocolAnthropic is POST {base}/v1/messages with an x-api-key header and
 	// the system prompt as its own field.
 	ProtocolAnthropic Protocol = "anthropic-messages"
+	// ProtocolResponses is POST {base}/responses, the newer OpenAI surface: the
+	// system prompt is "instructions" and the answer is a list of output items.
+	ProtocolResponses Protocol = "openai-responses"
 )
 
 // ParseProtocol maps a stored protocol name to one, falling back to OpenAI
@@ -34,6 +38,8 @@ func ParseProtocol(name string) Protocol {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "anthropic", "anthropic-messages", "messages":
 		return ProtocolAnthropic
+	case "openai-responses", "responses":
+		return ProtocolResponses
 	}
 	return ProtocolOpenAI
 }
@@ -93,8 +99,11 @@ func (c *Client) CommitMessage(ctx context.Context, cfg Config, user string) (st
 		system += "\n\nWrite the whole message in the language named by the BCP 47 tag " + lang +
 			"; keep the Conventional Commits tokens (type, scope, BREAKING CHANGE) in English."
 	}
-	if cfg.Protocol == ProtocolAnthropic {
+	switch cfg.Protocol {
+	case ProtocolAnthropic:
 		return c.anthropicMessage(ctx, cfg, system, user)
+	case ProtocolResponses:
+		return c.responsesMessage(ctx, cfg, system, user)
 	}
 	return c.openAIMessage(ctx, cfg, system, user)
 }
@@ -196,6 +205,125 @@ func messagesURL(endpoint string) string {
 		return endpoint + "/messages"
 	}
 	return endpoint + "/v1/messages"
+}
+
+// responsesMessage posts to an OpenAI-compatible responses endpoint, where the
+// system prompt is "instructions" and the answer is a list of output items.
+func (c *Client) responsesMessage(ctx context.Context, cfg Config, system, user string) (string, error) {
+	body := map[string]any{
+		"model":        cfg.Model,
+		"instructions": system,
+		"input": []map[string]string{
+			{"role": "user", "content": user},
+		},
+		"temperature": 0.3,
+	}
+	headers := map[string]string{}
+	if key := strings.TrimSpace(cfg.APIKey); key != "" {
+		headers["Authorization"] = "Bearer " + key
+	}
+	url := strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/") + "/responses"
+	data, err := c.post(ctx, url, headers, body)
+	if err != nil {
+		return "", err
+	}
+	var decoded struct {
+		Output []struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return "", fmt.Errorf("ai: cannot read the answer: %w", err)
+	}
+	if decoded.Error != nil && decoded.Error.Message != "" {
+		return "", fmt.Errorf("ai: %s", decoded.Error.Message)
+	}
+	var text strings.Builder
+	for _, item := range decoded.Output {
+		for _, part := range item.Content {
+			if part.Type == "" || part.Type == "output_text" || part.Type == "text" {
+				text.WriteString(part.Text)
+			}
+		}
+	}
+	return finish(text.String())
+}
+
+// ListModels asks the endpoint for the model names it serves. Only
+// OpenAI-compatible endpoints answer this; an Anthropic-compatible one refuses,
+// and the caller keeps the field editable.
+func (c *Client) ListModels(ctx context.Context, cfg Config) ([]string, error) {
+	endpoint := strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/")
+	if endpoint == "" {
+		return nil, fmt.Errorf("ai: endpoint is required")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/models", nil)
+	if err != nil {
+		return nil, err
+	}
+	if key := strings.TrimSpace(cfg.APIKey); key != "" {
+		request.Header.Set("Authorization", "Bearer "+key)
+	}
+	client := c.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: requestTimeout}
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		message := strings.TrimSpace(string(data))
+		if len(message) > 200 {
+			message = message[:200] + "…"
+		}
+		return nil, fmt.Errorf("ai: endpoint answered %s: %s", response.Status, message)
+	}
+	var decoded struct {
+		// OpenAI and its clones answer with data[].id.
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+		// Ollama's native endpoint answers with models[].name.
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return nil, fmt.Errorf("ai: cannot read the model list: %w", err)
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, entry := range decoded.Data {
+		if entry.ID == "" || seen[entry.ID] {
+			continue
+		}
+		seen[entry.ID] = true
+		names = append(names, entry.ID)
+	}
+	for _, entry := range decoded.Models {
+		if entry.Name == "" || seen[entry.Name] {
+			continue
+		}
+		seen[entry.Name] = true
+		names = append(names, entry.Name)
+	}
+	if len(names) == 0 {
+		return nil, fmt.Errorf("ai: the endpoint listed no models")
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 // post sends one JSON request and returns the body of a successful answer.

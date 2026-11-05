@@ -21,9 +21,16 @@ const (
 	GitAIKey            = Key("gitsettings.aiKey")
 	GitAIKeyHint        = Key("gitsettings.aiKeyHint")
 	GitAIProtocol       = Key("gitsettings.aiProtocol")
-	GitAIProtoOpenAI    = Key("gitsettings.aiProtocolOpenAI")
+	GitAIProtoChat      = Key("gitsettings.aiProtocolChat")
+	GitAIProtoResponses = Key("gitsettings.aiProtocolResponses")
 	GitAIProtoAnthropic = Key("gitsettings.aiProtocolAnthropic")
 	GitAIHint           = Key("gitsettings.aiHint")
+	GitAIProvider       = Key("gitsettings.aiProvider")
+	GitAIProviderCustom = Key("gitsettings.aiProviderCustom")
+	GitAIName           = Key("gitsettings.aiName")
+	GitAIBaseURL        = Key("gitsettings.aiBaseURL")
+	GitAIFetchModels    = Key("gitsettings.aiFetchModels")
+	GitAIFetching       = Key("gitsettings.aiFetching")
 )
 
 func init() {
@@ -47,9 +54,16 @@ func init() {
 		GitAIKey:            "AI key:",
 		GitAIKeyHint:        "Sent as a Bearer token, stored in plain text",
 		GitAIProtocol:       "AI protocol:",
-		GitAIProtoOpenAI:    "OpenAI-compatible",
-		GitAIProtoAnthropic: "Anthropic-compatible",
+		GitAIProtoChat:      "Chat Completions (/chat/completions)",
+		GitAIProtoResponses: "Responses (/responses)",
+		GitAIProtoAnthropic: "Anthropic Messages (/v1/messages)",
 		GitAIHint:           "Leave the endpoint empty to turn AI commit messages off; the key is stored in plain text.",
+		GitAIProvider:       "Provider:",
+		GitAIProviderCustom: "Custom…",
+		GitAIName:           "Name:",
+		GitAIBaseURL:        "Base URL:",
+		GitAIFetchModels:    "Get models",
+		GitAIFetching:       "Loading models…",
 	})
 	register(ZHCN, map[Key]string{
 		GitSSHCommand:       "SSH 命令：",
@@ -71,8 +85,15 @@ func init() {
 		GitAIKey:            "AI 密钥：",
 		GitAIKeyHint:        "作为 Bearer 令牌发送，明文保存在设置里",
 		GitAIProtocol:       "AI 协议：",
-		GitAIProtoOpenAI:    "OpenAI 兼容",
-		GitAIProtoAnthropic: "Anthropic 兼容",
+		GitAIProtoChat:      "Chat Completions（/chat/completions）",
+		GitAIProtoResponses: "Responses（/responses）",
+		GitAIProtoAnthropic: "Anthropic Messages（/v1/messages）",
 		GitAIHint:           "端点留空即关闭 AI 生成；密钥以明文保存在设置文件里。",
+		GitAIProvider:       "提供商：",
+		GitAIProviderCustom: "自定义…",
+		GitAIName:           "名称：",
+		GitAIBaseURL:        "Base URL：",
+		GitAIFetchModels:    "获取模型",
+		GitAIFetching:       "正在获取模型…",
 	})
 }

@@ -37,6 +37,15 @@ func (w *Workspace) GenerateCommitMessage(ctx context.Context, cfg ai.Config, pr
 	}()
 }
 
+// ListAIModels asks the configured endpoint for the model names it serves and
+// reports them on the workspace goroutine.
+func (w *Workspace) ListAIModels(ctx context.Context, cfg ai.Config, done func([]string, error)) {
+	go func() {
+		names, err := (&ai.Client{}).ListModels(ctx, cfg)
+		w.post(func() { done(names, err) })
+	}()
+}
+
 // commitContext renders the branch, the recent commits, the changed files and
 // their diffs as one user message. Staged changes are preferred; the working
 // tree is used when nothing is staged.

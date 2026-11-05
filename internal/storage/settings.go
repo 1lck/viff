@@ -63,6 +63,10 @@ type Settings struct {
 	// URL such as https://api.openai.com/v1, the model name, and the key. The
 	// key is stored in plain text on purpose: this is a local single-user
 	// application, and the file already holds SSH and signing settings.
+	// AIProvider is the chosen provider: a built-in id ("openai", "anthropic",
+	// "deepseek", "openrouter", "ollama"), a name typed for a custom endpoint, or
+	// empty for an older settings file that only has endpoint and protocol.
+	AIProvider string `json:"aiProvider,omitempty"`
 	AIEndpoint string `json:"aiEndpoint,omitempty"`
 	AIModel    string `json:"aiModel,omitempty"`
 	AIKey      string `json:"aiKey,omitempty"`
