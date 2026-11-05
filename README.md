@@ -4,7 +4,7 @@
 
 # Viff
 
-**A lightweight, native Git and Subversion desktop client.**
+**A lightweight, native Git and Subversion desktop client, with a read-only project browser, an English/Chinese interface, and optional AI-written commit messages.**
 
 Go + Viva. No Electron. No WebView. No bundled browser.
 
@@ -18,23 +18,25 @@ Go + Viva. No Electron. No WebView. No bundled browser.
 
 </div>
 
-![Viff in dark mode: line staging, side-by-side diff, and commit history](docs/screenshots/diff-dark.png)
+![Viff in dark mode: checked changes, a side-by-side diff, and commit history](docs/screenshots/diff-dark.png)
 
 ## Keep the tool lightweight. Keep the workflow complete.
 
-Viff puts your working tree, diffs, and history in one native desktop window.
-It is written in Go with [Viva](https://github.com/vivaui/viva), renders without a
-browser engine, and runs your installed Git executable.
+Git stays the core. Around it, Viff adds a read-only project browser with
+Quick Open, picture diffs, an English/Chinese interface, and optional
+model-written commit messages. It is written in Go with
+[Viva](https://github.com/vivaui/viva), renders without a browser engine, and
+runs your installed Git executable.
 
 - **A small distribution:** one application executable, plus license files. No separate browser runtime or local server to install.
 - **A native desktop foundation:** Viva handles rendering and platform integration; Viff does not ship an Electron or WebView application.
 - **Git stays Git:** use your repositories, remotes, hooks, and configured credentials. Inspect executed commands and output in the Console.
 - **Work is loaded as needed:** paginated history and on-demand diffs keep large repositories from becoming a single eager load.
 
-For a concrete size reference, stripped Go 1.27.3 builds on November 4, 2026
-were **7.37 MiB on macOS arm64** and **7.65 MiB on Windows amd64**
-(`-trimpath -ldflags="-s -w"`, executable only). Archive size, installed Git,
-and runtime memory are separate measurements.
+For a concrete size reference, the stripped executables built from v0.2.0 on
+November 5, 2026 were **12.05 MiB on macOS arm64** and **13.61 MiB on Windows
+amd64** (`-trimpath -ldflags="-s -w"`, executable only). Archive size,
+installed Git, and runtime memory are separate measurements.
 
 Lightweight is a design goal, not an unmeasured performance claim. Memory usage
 and startup time vary with the repository, platform, and renderer; no comparative
@@ -54,17 +56,22 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 
 ## A full Git workflow
 
-| Work                  | What Viff provides                                                                                                   |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, and multiple tabs      |
-| Build a commit        | Stage files, hunks, or selected lines; unstage, roll back, amend, sign off, and commit/push                          |
-| Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, and named ChangeLists                       |
-| Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing |
-| Browse files          | Project tool window with folders, status colours, Quick Open, read-only viewing, blame, and file history |
-| Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                     |
-| Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, and explicit mark-as-resolved                      |
-| Work across checkouts | Create worktrees from new or existing branches; manage submodules with dirty-work protection                         |
-| Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                               |
+| Work                  | What Viff provides                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, and picture previews                                      |
+| Build a commit        | Check files, folders, or groups; stage files, hunks, or lines; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
+| Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, and named ChangeLists                                                                |
+| Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |
+| Browse files          | Project tool window with folders, status colours, Quick Open, read-only viewing, blame, and file history                                                      |
+| Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                                                              |
+| Undo mistakes         | Command-Z reverses the last local commit, merge, rebase, checkout, or branch change from this session                                                         |
+| Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, explicit mark-as-resolved, and a copyable context for an external AI tool                  |
+| Work across checkouts | Create worktrees from new or existing branches; manage submodules with dirty-work protection                                                                  |
+| Track large files     | Detect Git LFS rules and managed files, and say what to install when git-lfs is missing                                                                      |
+| Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                                                                        |
+| Work on the web       | Open commits, branches, comparisons, and the pull request form on GitHub, GitLab, Bitbucket, or Gitea                                                        |
+| Run commands          | Integrated terminal in the current repository: scrollback, selection copy, paste, clear, restart, and resize                                                   |
+| Work in your language | English and Simplified Chinese interface, English by default, switchable in Settings                                                                          |
 
 **The interface is English by default; switch it to Simplified Chinese in
 Settings → General → Language.**
@@ -72,6 +79,13 @@ Settings → General → Language.**
 **ChangeLists group files; they do not create separate Git indexes.** A commit
 includes **all staged files**, even when a list filter is active. Filtered bulk
 staging only stages visible files.
+
+**AI commit messages are optional and off by default.** When enabled, the changed
+files and their diffs are sent to the endpoint you configure; see the
+[privacy guide](docs/privacy.md).
+
+**Copy for AI puts the conflict context on your clipboard.** It is for whatever
+external tool you choose; Viff calls no model and sends nothing.
 
 <details>
 <summary>Light theme</summary>

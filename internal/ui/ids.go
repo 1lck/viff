@@ -15,6 +15,7 @@ var (
 	fDialog  = tree.Feature("dialog")
 	fNotify  = tree.Feature("notify")
 	fWelcome = tree.Feature("welcome")
+	fTerm    = tree.Feature("terminal")
 
 	// Chrome.
 	idProjectWidget   = tree.ID(fChrome, "project-widget")
@@ -35,10 +36,12 @@ var (
 	idStatusTask      = tree.ID(fChrome, "status-task")
 	idStatusCancel    = tree.ID(fChrome, "status-cancel")
 	idStatusRecording = tree.ID(fChrome, "status-recording")
+	idStatusLFS       = tree.ID(fChrome, "status-lfs")
 	idStatusRepo      = tree.ID(fChrome, "status-repo")
 	idSplitProject    = tree.ID(fChrome, "split-project")
 	idSplitCommit     = tree.ID(fChrome, "split-commit")
 	idSplitGit        = tree.ID(fChrome, "split-git")
+	idSplitTerminal   = tree.ID(fChrome, "split-terminal")
 	idSplitBranches   = tree.ID(fChrome, "split-branches")
 	idSplitDetails    = tree.ID(fChrome, "split-details")
 	idSplitMessage    = tree.ID(fChrome, "split-message")
@@ -49,6 +52,14 @@ var (
 	idOptGit          = tree.ID(fChrome, "options-git")
 	idTooltipLayer    = tree.ID(fChrome, "tooltip")
 	idBanner          = tree.Sub(fChrome, tree.Name("banner"))
+
+	// Terminal tool window.
+	idTerminal        = tree.ID(fTerm, "screen")
+	idTerminalClear   = tree.ID(fTerm, "clear")
+	idTerminalRestart = tree.ID(fTerm, "restart")
+	idTerminalRetry   = tree.ID(fTerm, "retry")
+	idTerminalHide    = tree.ID(fTerm, "hide")
+	idTerminalScroll  = tree.ID(fTerm, "scrollbar")
 
 	// Commit tool window.
 	idChangesList       = tree.ID(fCommit, "changes")
@@ -69,8 +80,12 @@ var (
 	idCmAmend           = tree.ID(fCommit, "amend")
 	idCmOptions         = tree.ID(fCommit, "commit-options")
 	idCmOptionsDropdown = tree.ID(fCommit, "commit-options-dropdown")
+	idCmAI              = tree.ID(fCommit, "commit-ai")
+	idAIFetchModels     = tree.ID(fCommit, "ai-fetch-models")
+	idAIEye             = tree.ID(fCommit, "ai-eye")
 	idCmCommit          = tree.ID(fCommit, "commit-button")
 	idCmCommitPush      = tree.ID(fCommit, "commit-push-button")
+	idCmLFSCopy         = tree.ID(fCommit, "lfs-copy-install")
 	idCmContinue        = tree.ID(fCommit, "continue")
 	idCmAbort           = tree.ID(fCommit, "abort")
 	idCmSkip            = tree.ID(fCommit, "skip")

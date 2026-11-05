@@ -115,11 +115,18 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 	case ch == "1":
 		w.toggleProject()
 	case ch == "9":
-		w.gitOpen = !w.gitOpen
+		w.toggleGitWindow()
 	case ch == "z" && alt:
 		if len(w.rollbackTargets()) > 0 {
 			w.openRollback()
 		}
+	case ch == "z" && !shift:
+		// A focused text field keeps Command-Z for its own undo; only the
+		// window outside text editing reverses a repository operation.
+		if _, editing := w.editors[w.c.Focused()]; editing {
+			return false
+		}
+		w.ws.Undo()
 	case ch == "n" && alt:
 		if rs.HasHead() {
 			w.openNewBranch("", rs.HeadLabel())

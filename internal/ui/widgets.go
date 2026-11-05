@@ -197,6 +197,9 @@ type fieldOpts struct {
 	label       string
 	placeholder string
 	rightPad    float32
+	// display replaces what the field shows without changing the editor, which
+	// is how a masked secret stays editable. An empty display shows the text.
+	display string
 }
 
 // field paints an IntelliJ text field bound to an editor. It returns true
@@ -227,7 +230,11 @@ func (w *Window) field(id ui.ID, ed *text.Editor, r ui.Rect, o fieldOpts) bool {
 	}
 	content := rect(tx, r.Y, max(0, right(r)-tx-8-o.rightPad), r.Height)
 	value := ed.String()
-	platform := focused && value != ""
+	masked := o.display != ""
+	if masked {
+		value = o.display
+	}
+	platform := focused && value != "" && !masked
 	fg := w.pal.Text
 	if o.disabled {
 		fg = w.pal.TextDisable

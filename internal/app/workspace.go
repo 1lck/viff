@@ -135,6 +135,11 @@ type Workspace struct {
 
 	// repos is the private state behind Repositories; see repositories.go.
 	repos repositoriesState
+	// undos is the session undo history, newest last; undoing marks a running
+	// Undo task. Both are UI-thread state and are cleared when the repository
+	// changes (see undo.go).
+	undos   []*undoEntry
+	undoing bool
 	// nextGen is the repository generation counter. It only ever grows: a
 	// generation is never reused after a repository is closed or removed, so a
 	// stale view can never match a newer repository.
@@ -256,6 +261,9 @@ var quietReads = map[string]bool{
 	"ls-tree": true, "blame": true, "ls-remote": true, "show-ref": true,
 	"symbolic-ref": true, "describe": true, "grep": true, "check-ignore": true,
 	"check-ref-format": true, "name-rev": true, "stash": true,
+	// LFS detection runs `lfs version` and `lfs ls-files`, both reads; a
+	// failure is still shown.
+	"lfs": true,
 	// --version is not a subcommand, but the startup probe goes through
 	// Runner.Log and must not appear as Console noise before any repository
 	// is open.

@@ -63,6 +63,22 @@ type Settings struct {
 	CommitSigning    bool   `json:"commitSigning,omitempty"`
 	CredentialHelper string `json:"credentialHelper,omitempty"`
 
+	// AI endpoint for the commit message generator: an OpenAI-compatible base
+	// URL such as https://api.openai.com/v1, the model name, and the key. The
+	// key is stored in plain text on purpose: this is a local single-user
+	// application, and the file already holds SSH and signing settings.
+	// AIProvider is the chosen provider: a built-in id ("openai", "anthropic",
+	// "deepseek", "openrouter", "ollama"), a name typed for a custom endpoint, or
+	// empty for an older settings file that only has endpoint and protocol.
+	AIProvider string `json:"aiProvider,omitempty"`
+	AIEndpoint string `json:"aiEndpoint,omitempty"`
+	AIModel    string `json:"aiModel,omitempty"`
+	AIKey      string `json:"aiKey,omitempty"`
+	// AIProtocol names the wire format of the endpoint: "openai-completions"
+	// (the default when empty, which keeps an older settings file working) or
+	// "anthropic-messages".
+	AIProtocol string `json:"aiProtocol,omitempty"`
+
 	ExternalEditor string `json:"externalEditor"`
 
 	Recent []Recent `json:"recent"`
@@ -73,6 +89,7 @@ type Settings struct {
 	CommitPanelWidth   float32 `json:"commitPanelWidth"`
 	ProjectPanelWidth  float32 `json:"projectPanelWidth"`
 	GitPanelHeight     float32 `json:"gitPanelHeight"`
+	TerminalHeight     float32 `json:"terminalHeight,omitempty"`
 	BranchesWidth      float32 `json:"branchesWidth"`
 	DetailsWidth       float32 `json:"detailsWidth"`
 	DiffUnified        bool    `json:"diffUnified"`
@@ -107,7 +124,7 @@ func Defaults() *Settings {
 		AutoFetch: false, AutoFetchMins: 10, FetchPrune: true, PullMode: "merge",
 		AutoUpdateCheck:  true,
 		Window:           Window{Width: 1440, Height: 900},
-		CommitPanelWidth: 340, ProjectPanelWidth: 300, GitPanelHeight: 330, BranchesWidth: 220, DetailsWidth: 360,
+		CommitPanelWidth: 340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
 		DiffSyncScroll: true, DiffHighlightWords: true, CommitTree: false,
 	}
 }
@@ -207,6 +224,9 @@ func (s *Settings) sanitize() {
 	}
 	if s.GitPanelHeight < 120 {
 		s.GitPanelHeight = d.GitPanelHeight
+	}
+	if s.TerminalHeight < 120 {
+		s.TerminalHeight = d.TerminalHeight
 	}
 	if s.BranchesWidth < 120 {
 		s.BranchesWidth = d.BranchesWidth

@@ -83,6 +83,11 @@ const (
 	WorkspaceTipCommitOptions       = Key("workspace.tip.commitOptions")
 	WorkspaceTipCollapseMessage     = Key("workspace.tip.collapseMessage")
 	WorkspaceTipExpandMessage       = Key("workspace.tip.expandMessage")
+	WorkspaceTipAIGenerate          = Key("workspace.tip.aiGenerate")
+	WorkspaceAIGenerating           = Key("workspace.ai.generating")
+	WorkspaceAIGenerateFailed       = Key("workspace.ai.generateFailed")
+	WorkspaceAINotConfigured        = Key("workspace.ai.notConfigured")
+	WorkspaceAIOpenSettings         = Key("workspace.ai.openSettings")
 
 	WorkspaceHintPush          = Key("workspace.hint.push")
 	WorkspaceHintUpdateProject = Key("workspace.hint.updateProject")
@@ -231,6 +236,11 @@ func init() {
 		WorkspaceTipCommitOptions:       "Commit Options",
 		WorkspaceTipCollapseMessage:     "Collapse the commit message",
 		WorkspaceTipExpandMessage:       "Expand the commit message",
+		WorkspaceTipAIGenerate:          "Write the message with AI",
+		WorkspaceAIGenerating:           "Writing the message…",
+		WorkspaceAIGenerateFailed:       "The AI could not write the message",
+		WorkspaceAINotConfigured:        "Set the AI endpoint and model in the settings first",
+		WorkspaceAIOpenSettings:         "Open settings…",
 
 		WorkspaceHintPush:          "Push",
 		WorkspaceHintUpdateProject: "Update Project",
@@ -370,6 +380,11 @@ func init() {
 		WorkspaceTipCommitOptions:       "提交选项",
 		WorkspaceTipCollapseMessage:     "折叠提交说明",
 		WorkspaceTipExpandMessage:       "展开提交说明",
+		WorkspaceTipAIGenerate:          "用 AI 生成提交说明",
+		WorkspaceAIGenerating:           "正在生成提交说明…",
+		WorkspaceAIGenerateFailed:       "AI 没能生成提交说明",
+		WorkspaceAINotConfigured:        "请先在设置里填写 AI 端点和模型",
+		WorkspaceAIOpenSettings:         "打开设置…",
 
 		WorkspaceHintPush:          "推送",
 		WorkspaceHintUpdateProject: "更新项目",

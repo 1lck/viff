@@ -3,6 +3,7 @@ package gitcli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,6 +34,49 @@ func (r *Runner) Status(ctx context.Context, repo domain.Repo) (domain.Status, e
 		return domain.Status{}, err
 	}
 	return ParseStatus(out), nil
+}
+
+// HeadState is what HEAD names right now: the commit and the branch checked
+// out in this worktree. Both are empty before the first commit; Branch is also
+// empty while HEAD is detached.
+type HeadState struct {
+	Head   string
+	Branch string
+}
+
+// Head reads HEAD's commit and branch without scanning the working tree. It is
+// the identity query behind undo records; Status stays the source for changes.
+// An unborn branch is a state, not a failure: it returns an empty Head.
+func (r *Runner) Head(ctx context.Context, repo domain.Repo) (HeadState, error) {
+	var hs HeadState
+	out, err := r.Run(ctx, repo.Root, "symbolic-ref", "--quiet", "--short", "HEAD")
+	switch {
+	case err == nil:
+		hs.Branch = strings.TrimSpace(string(out))
+	case exitCodeOf(err) != 1:
+		// symbolic-ref exits 1 for a detached HEAD; anything else is real.
+		return HeadState{}, err
+	}
+	sha, err := r.Run(ctx, repo.Root, "rev-parse", "--verify", "--quiet", "HEAD")
+	if err != nil {
+		if hs.Branch != "" && exitCodeOf(err) == 1 {
+			return hs, nil
+		}
+		return HeadState{}, err
+	}
+	hs.Head = strings.TrimSpace(string(sha))
+	return hs, nil
+}
+
+// exitCodeOf is the process exit code of a Git failure, -1 when the error did
+// not come from a exited process. Callers use it for the "no" answers Git
+// signals with exit status 1 (detached HEAD, unborn branch).
+func exitCodeOf(err error) int {
+	var ge *Error
+	if errors.As(err, &ge) {
+		return ge.ExitCode
+	}
+	return -1
 }
 
 // ParseStatus parses NUL-separated porcelain v2 output. Paths are kept as

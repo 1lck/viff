@@ -169,7 +169,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 		if r.Upstream == "" && len(rs.Remotes) > 0 {
 			items = append(items, item{title: w.t(i18n.ChromeMenuSetUpstream), run: func() { w.openSetUpstream(r) }})
 		}
-		return items
+		return w.withBranchLinks(items, r)
 	}
 	items = append(items,
 		item{title: w.t(i18n.ChromeActionCheckout), disabled: busy, run: func() { w.checkoutBranch(r) }},
@@ -211,7 +211,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 			})
 		}})
 	}
-	return items
+	return w.withBranchLinks(items, r)
 }
 
 // checkoutBranch checks a branch out here. A branch can be checked out in one

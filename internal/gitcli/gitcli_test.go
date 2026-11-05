@@ -40,8 +40,8 @@ func newTestRepo(t *testing.T) *testRepo {
 }
 
 // isolatedEnv keeps the user's global configuration out of tests.
-func isolatedEnv(t *testing.T) []string {
-	home := t.TempDir()
+func isolatedEnv(tb testing.TB) []string {
+	home := tb.TempDir()
 	return []string{"HOME=" + home, "XDG_CONFIG_HOME=" + home, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + filepath.Join(home, "gitconfig")}
 }
 
@@ -315,6 +315,42 @@ func TestBranchesTagsRefs(t *testing.T) {
 	}
 	if err := tr.r.DeleteBranch(ctx, tr.repo, "feature/y", true); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The remote's default branch is read from refs/remotes/<remote>/HEAD and
+// nothing else: the query must stay local, so a remote that is unreachable or
+// slow cannot hang a refresh, and a remote without the symbolic ref is simply
+// absent instead of guessed.
+func TestRemoteHeads(t *testing.T) {
+	tr := newTestRepo(t)
+	tr.write("a", "1\n")
+	tr.commitAll("one")
+	heads, err := tr.r.RemoteHeads(ctx, tr.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(heads) != 0 {
+		t.Fatalf("heads without a remote = %v", heads)
+	}
+	tr.git("update-ref", "refs/remotes/origin/main", "HEAD")
+	tr.git("update-ref", "refs/remotes/origin/topic", "HEAD")
+	tr.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	tr.git("update-ref", "refs/remotes/upstream/main", "HEAD")
+	heads, err = tr.r.RemoteHeads(ctx, tr.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if heads["origin"] != "main" {
+		t.Fatalf("heads = %v, want origin -> main", heads)
+	}
+	// A remote branch is not a default branch, and a remote without HEAD stays
+	// out of the map.
+	if _, ok := heads["upstream"]; ok {
+		t.Fatalf("heads = %v, upstream has no HEAD", heads)
+	}
+	if heads["origin"] == "topic" {
+		t.Fatalf("heads = %v, topic is not the default branch", heads)
 	}
 }
 
@@ -624,5 +660,26 @@ func TestReadBinaryAndMissing(t *testing.T) {
 	c, err = tr.r.Read(ctx, tr.repo, RevWorktree, "missing")
 	if err != nil || c.Exists {
 		t.Fatalf("missing worktree = %+v %v", c, err)
+	}
+}
+
+func TestHeadState(t *testing.T) {
+	tr := newTestRepo(t)
+	// An unborn branch has no commit yet but still names the branch.
+	hs, err := tr.r.Head(ctx, tr.repo)
+	if err != nil || hs.Head != "" || hs.Branch != "main" {
+		t.Fatalf("unborn head = %+v %v", hs, err)
+	}
+	tr.write("a", "1\n")
+	tr.commitAll("one")
+	head := tr.git("rev-parse", "HEAD")
+	hs, err = tr.r.Head(ctx, tr.repo)
+	if err != nil || hs.Head != strings.TrimSpace(head) || hs.Branch != "main" {
+		t.Fatalf("head = %+v %v", hs, err)
+	}
+	tr.git("checkout", "-q", "--detach", "HEAD")
+	hs, err = tr.r.Head(ctx, tr.repo)
+	if err != nil || hs.Head != strings.TrimSpace(head) || hs.Branch != "" {
+		t.Fatalf("detached head = %+v %v", hs, err)
 	}
 }

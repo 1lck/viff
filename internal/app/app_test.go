@@ -14,13 +14,13 @@ import (
 )
 
 type fixture struct {
-	t   *testing.T
+	t   testing.TB
 	dir string
 	env []string
 	w   *Workspace
 }
 
-func newFixture(t *testing.T) *fixture {
+func newFixture(t testing.TB) *fixture {
 	t.Helper()
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	home := t.TempDir()
@@ -44,6 +44,19 @@ func (f *fixture) git(args ...string) string {
 		f.t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 	return string(out)
+}
+
+// fastImport seeds the repository through git fast-import. Building hundreds
+// of commits with "git commit" would dominate the test's runtime.
+func (f *fixture) fastImport(stream string) {
+	f.t.Helper()
+	cmd := exec.Command("git", "fast-import", "--done", "--quiet")
+	cmd.Dir = f.dir
+	cmd.Env = append(append(os.Environ(), f.env...), "GIT_EDITOR=true")
+	cmd.Stdin = strings.NewReader(stream)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		f.t.Fatalf("fast-import: %v\n%s", err, out)
+	}
 }
 
 func (f *fixture) write(name, content string) {
@@ -127,7 +140,7 @@ func TestOpenRefreshAndLog(t *testing.T) {
 		t.Fatalf("hash filter = %d", n)
 	}
 	f.w.SelectCommit(head.Hash)
-	f.settle(func() bool { return f.w.Repo.Detail != nil })
+	f.settle(func() bool { return f.w.Repo.Detail != nil && len(f.w.Repo.DetailBranches) > 0 })
 	if f.w.Repo.Detail.Subject != "commit E" || len(f.w.Repo.DetailBranches) == 0 {
 		t.Fatalf("detail = %+v", f.w.Repo.Detail)
 	}

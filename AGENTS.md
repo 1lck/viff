@@ -59,6 +59,7 @@ skill 是必读步骤，不是可选参考。按改动类型加载，跨类型�
 | `cmd/viff` | 启动、装配、退出与资源回收 | 不承载 Git 业务规则 |
 | `internal/domain` | 仓库身份、引用、提交、差异、冲突、操作状态 | 不导入 Viva，不启动进程 |
 | `internal/i18n` | 界面文案表、语言枚举与缺失回退 | 零依赖，不导入 Viva / domain / gitcli / storage |
+| `internal/ai` | 提交信息的模型调用与 Git 上下文组装 | 零内部依赖，只出网到用户配置的端点 |
 | `internal/app` | 用例、查询、调度、状态版本、缓存失效 | 只经窄接口访问外部资源 |
 | `internal/gitcli` | Git 参数构造、机器输出解析、进程生命周期、能力探测 | 不返回 UI 节点，不直接改 UI |
 | `internal/ui` | Viva 视图、视图模型、主题、可复用交互组件 | 不拼 Git 命令，不直接读 `.git` |

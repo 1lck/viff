@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,10 @@ type RepoState struct {
 	Remotes      []domain.Remote
 	Stashes      []domain.Stash
 	RefsLoaded   bool
+	// RemoteHeads maps a remote to the branch its HEAD points at, the default
+	// branch a pull request targets. Git writes refs/remotes/<remote>/HEAD; a
+	// remote without it is absent, and BaseBranch falls back to main/master.
+	RemoteHeads map[string]string
 	// RefsByHash maps a commit to the refs pointing at it, for the log.
 	RefsByHash map[string][]domain.Ref
 
@@ -48,6 +53,17 @@ type RepoState struct {
 	// to fetch the missing history while it is set.
 	Shallow bool
 
+	// LFS is the Git LFS snapshot of this repository. Viff detects LFS but
+	// does not manage it (ADR 0031); the UI shows the marker and warns when
+	// git-lfs is missing.
+	LFS gitcli.LFSStatus
+	// lfsKey and lfsAt throttle LFS detection: the refresh reuses the snapshot
+	// while the root .gitattributes is unchanged and the last check is recent,
+	// because probing git-lfs and listing managed files on every status
+	// refresh would cost a process per file-system event.
+	lfsKey string
+	lfsAt  time.Time
+
 	Log LogState
 
 	// Detail is the selected commit's detail in the log.
@@ -55,6 +71,10 @@ type RepoState struct {
 	DetailHash     string
 	DetailLoading  bool
 	DetailBranches []string
+	// detailSeq stamps each detail load so a late result for the same commit
+	// cannot replace a newer one; detailCancel stops its queries.
+	detailSeq    uint64
+	detailCancel context.CancelFunc
 
 	statusSeq   uint64 // increments for each status query
 	refreshing  bool
@@ -164,8 +184,12 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 	if w.Repo != nil {
 		oldRoot = w.Repo.Repo.Root
 		w.Repo.Log.close()
+		w.Repo.cancelDetail()
 	}
 	w.closeWatcher(oldRoot)
+	// The undo history describes one checkout's HEAD and branches; a switch
+	// makes every record describe a state that is no longer current.
+	w.clearUndo()
 	w.nextGen++
 	w.Repo = &RepoState{Repo: repo, Gen: w.nextGen, rootKey: root}
 	if w.Settings != nil {
@@ -245,8 +269,10 @@ func (w *Workspace) Close() {
 			},
 		})
 		w.Repo.Log.close()
+		w.Repo.cancelDetail()
 	}
 	w.closeWatcher(root)
+	w.clearUndo()
 	w.Repo = nil
 }
 
@@ -290,6 +316,7 @@ func (w *Workspace) Refresh(meta bool) {
 	rs.statusSeq++
 	seq := rs.statusSeq
 	repo := rs.Repo
+	lfsKey, lfsAt, cachedLFS := rs.lfsKey, rs.lfsAt, rs.LFS
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -316,11 +343,28 @@ func (w *Workspace) Refresh(meta bool) {
 			worktrees, worktreesErr = wt.Worktrees(ctx, repo)
 		}
 		shallow, shallowErr := w.Git.IsShallow(ctx, repo)
+		// The remote HEAD names the branch a pull request targets; it is read
+		// with the other refs so a comparison never guesses while it is known.
+		remoteHeads, headsErr := w.Git.RemoteHeads(ctx, repo)
+		// LFS detection runs a probe and a file listing, so it is neither part
+		// of every status refresh nor on the UI thread. A metadata refresh is
+		// the user's refresh button or the end of a write task, which is
+		// exactly when the managed file list can change.
+		key := lfsAttributesKey(repo.Root)
+		lfs, lfsRefreshed := cachedLFS, false
+		if meta || lfsAt.IsZero() || key != lfsKey || time.Since(lfsAt) >= lfsRecheckInterval {
+			lfs = w.Git.LFS(ctx, repo)
+			lfsRefreshed = true
+		}
 		w.post(func() {
 			if w.Repo != rs || rs.statusSeq != seq {
 				return
 			}
 			rs.refreshing = false
+			if lfsRefreshed {
+				rs.LFS = lfs
+				rs.lfsKey, rs.lfsAt = key, w.now()
+			}
 			staged, unstaged, untracked, conflicted := 0, 0, 0, 0
 			if err != nil {
 				w.markRepositoryError(rs.rootKey, err)
@@ -368,6 +412,9 @@ func (w *Workspace) Refresh(meta bool) {
 			if shallowErr == nil {
 				rs.Shallow = shallow
 			}
+			if headsErr == nil {
+				rs.RemoteHeads = remoteHeads
+			}
 			// Keep the workspace overview row of the active repository in
 			// step with the view; a failure keeps the known status.
 			w.syncActiveSummary(err)
@@ -383,6 +430,7 @@ func (w *Workspace) Refresh(meta bool) {
 						"untracked":  untracked,
 						"conflicted": conflicted,
 						"op_state":   operationStateName(op),
+						"lfs":        lfsEventFields(rs.LFS),
 					},
 				})
 			}
@@ -394,12 +442,40 @@ func (w *Workspace) Refresh(meta bool) {
 	}()
 }
 
-// refsFingerprint identifies the state the loaded log was built from.
-//
-// The upstream revision is part of it because a Subversion commit moves the
-// repository's HEAD while leaving both the branch directories and the working
-// copy's own base revision untouched: without it, committing and refreshing
-// would keep showing the revision before the one just made.
+// lfsRecheckInterval bounds how often a plain working-tree refresh re-runs LFS
+// detection. Attribute changes, metadata events and the refresh button still
+// re-run it immediately; the interval only collapses file-system event storms
+// into one probe.
+const lfsRecheckInterval = 30 * time.Second
+
+// lfsAttributesKey is the cheap change detector for LFS rules: the size and
+// modification time of the repository-root .gitattributes, the file `git lfs
+// track` writes. Nested attribute files are not part of the key; a metadata
+// refresh or the interval picks their changes up.
+func lfsAttributesKey(root string) string {
+	st, err := os.Stat(filepath.Join(root, ".gitattributes"))
+	if err != nil {
+		return "missing"
+	}
+	return strconv.FormatInt(st.Size(), 10) + ":" + strconv.FormatInt(st.ModTime().UnixNano(), 10)
+}
+
+// lfsEventFields is the log-safe part of an LFS snapshot: flags and counts
+// only, never a pattern, path or file name. The error is the classified code,
+// matching how git.fail reports failures.
+func lfsEventFields(st gitcli.LFSStatus) map[string]any {
+	fields := map[string]any{
+		"installed": st.Installed,
+		"managed":   st.Managed,
+		"patterns":  len(st.Patterns),
+		"files":     len(st.Files),
+	}
+	if st.Err != nil {
+		fields["error"] = gitcli.CodeOf(st.Err)
+	}
+	return fields
+}
+
 func refsFingerprint(refs []domain.Ref, branch domain.BranchStatus) string {
 	var b strings.Builder
 	b.WriteString(branch.Head)
@@ -446,6 +522,11 @@ func refOrder(r domain.Ref) int {
 
 // CurrentBranch is the checked-out branch name, "" when detached.
 func (rs *RepoState) CurrentBranch() string { return rs.Status.Branch.Branch }
+
+// Refreshing reports whether a status query is still in flight. The window
+// reads it on the UI thread like the rest of the state; the headless fixture
+// waits on it so a test reads the state a write produced, not the one before.
+func (rs *RepoState) Refreshing() bool { return rs.refreshing }
 
 // CurrentRef returns the local ref of the current branch.
 func (rs *RepoState) CurrentRef() (domain.Ref, bool) {

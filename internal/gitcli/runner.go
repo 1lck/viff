@@ -125,6 +125,16 @@ type Runner struct {
 	Env []string
 	// Log, when set, receives one line per finished command.
 	Log func(dir string, args []string, took time.Duration, err error)
+	// LFSCommand runs one git-lfs subcommand; args are those after "lfs". It
+	// is nil in production, where the real executable runs through Path, and
+	// tests set it to simulate a missing or installed git-lfs.
+	LFSCommand func(ctx context.Context, dir string, args ...string) ([]byte, error)
+
+	lfsMu        sync.Mutex
+	lfsProbeKey  string
+	lfsProbed    bool
+	lfsInstalled bool
+	lfsVersion   string
 
 	resolveMu sync.Mutex
 	pathReady bool

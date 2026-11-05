@@ -34,7 +34,23 @@ func (w *Window) paintMain(full ui.Rect) {
 		nr.Width -= islandGap
 		w.paintNotificationsPanel(nr)
 	}
-	if w.gitOpen {
+	// The bottom dock holds one tool window at a time, like IntelliJ's bottom
+	// stripe: the terminal replaces the Git window while it is shown, and
+	// closing it brings Git back if that was open.
+	switch {
+	case w.termOpen:
+		h := clampF(s.TerminalHeight, terminalMinHeight, max(terminalMinHeight, area.Height-160))
+		tr := splitBottom(&area, h)
+		area.Height -= islandGap
+		w.paintTerminal(tr)
+		start := s.TerminalHeight
+		w.splitter(idSplitTerminal, rect(tr.X, tr.Y-islandGap, tr.Width, islandGap), false,
+			func() { start = h },
+			func(d float32) {
+				s.TerminalHeight = clampF(start-d, terminalMinHeight, max(terminalMinHeight, full.Height-toolbarH-statusH-160))
+			},
+			w.saveSettings)
+	case w.gitOpen:
 		h := clampF(s.GitPanelHeight, 120, max(120, area.Height-160))
 		gr := splitBottom(&area, h)
 		area.Height -= islandGap
@@ -82,6 +98,19 @@ func (w *Window) paintMain(full ui.Rect) {
 			}
 		})
 	}
+}
+
+// toggleGitWindow shows or hides the Git tool window. While the terminal has
+// the bottom dock, the first press brings Git back rather than hiding both.
+func (w *Window) toggleGitWindow() {
+	if w.termOpen {
+		w.termOpen = false
+		w.gitOpen = true
+		w.Invalidate()
+		return
+	}
+	w.gitOpen = !w.gitOpen
+	w.Invalidate()
 }
 
 // island paints a rounded tool-window surface and returns it.
@@ -251,12 +280,22 @@ func (w *Window) projectMenu() []item {
 		}
 	}
 	if w.ws.Repo != nil {
-		out = append(out, sep(),
+		// The newest recorded operation, named as the user performed it. The
+		// same action is on Command-Z; the menu is the discoverable copy and
+		// stays disabled while another command is changing the history.
+		undo := item{title: w.t(i18n.ChromeMenuUndo), icon: icons.Undo, shortcut: "⌘Z", disabled: true}
+		if name := w.ws.UndoName(); name != "" {
+			undo.title = w.t(i18n.ChromeMenuUndoOperation, name)
+			undo.disabled = w.ws.Busy()
+			undo.run = w.ws.Undo
+		}
+		out = append(out, sep(), undo,
 			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
 			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, run: func() { revealPath(cur) }},
-			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: func() { openTerminal(cur) }},
+			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: w.openTerminal},
+			item{title: w.t(i18n.ChromeMenuOpenSystemTerm), icon: icons.Shell, run: func() { openTerminal(cur) }},
 			sep(),
-			item{title: w.t(i18n.ChromeMenuCloseProject), run: func() { w.ws.Close() }})
+			item{title: w.t(i18n.ChromeMenuCloseProject), run: w.closeProject})
 	}
 	return out
 }
@@ -300,8 +339,12 @@ func (w *Window) paintStripes(left, rightS ui.Rect) {
 		w.after(w.toggleCommit)
 	}
 	by := bottom(left) - 36
-	if w.stripeButton(idStripeGit, rect(left.X+5, by, 30, 30), icons.Vcs, w.t(i18n.ChromeStripeGit)+"\t⌘9", w.gitOpen) {
-		w.after(func() { w.gitOpen = !w.gitOpen })
+	if w.stripeButton(idStripeGit, rect(left.X+5, by, 30, 30), icons.Vcs, w.t(i18n.ChromeStripeGit)+"\t⌘9", w.gitOpen && !w.termOpen) {
+		w.after(w.toggleGitWindow)
+	}
+	by -= 36
+	if w.stripeButton(idStripeTerm, rect(left.X+5, by, 30, 30), icons.Shell, w.t(i18n.TermStripe), w.termOpen) {
+		w.after(w.toggleTerminal)
 	}
 	unread := w.nt.unread(w.ws)
 	if w.stripeButton(idStripeNotify, rect(rightS.X+5, rightS.Y+6, 30, 30), icons.Notifications, w.t(i18n.ChromeStripeNotifications), w.notifyOpen) {
@@ -344,13 +387,32 @@ func (w *Window) paintStatus(r ui.Rect) {
 	tw = w.p.text(rs.HeadLabel(), rect(x, r.Y, 300, r.Height), fontUI, regular, w.pal.TextMuted)
 	x += tw
 
+	// A repository that uses Git LFS gets a quiet marker with its managed file
+	// count. It turns into a warning colour when the LFS rules exist but
+	// git-lfs is missing, the case the Commit panel and notification explain.
+	x += 20
+	if rs.LFS.Managed {
+		label := w.lfsStatusLabel(rs)
+		lw := w.p.width(label, fontUI, regular)
+		lr := rect(x, r.Y, lw+8, r.Height)
+		color := w.pal.Link
+		if rs.LFS.NeedsInstall() {
+			color = w.pal.Warning
+		}
+		w.p.text(label, lr, fontUI, regular, color)
+		tip := w.lfsStatusTip(rs)
+		w.c.HitWithOptions(idStatusLFS, lr, tip, ui.HitOptions{Role: ui.RoleStatus, SkipFocus: true})
+		w.tip(idStatusLFS, tip)
+		x = right(lr) + 12
+	}
+
 	// Diagnostics recording is a quiet status marker, not a dialog: the user
 	// keeps working while it lasts. Clicking it stops the recording and saves
 	// the bundle, the same as Help > Stop Recording and Save Diagnostics.
 	if w.ws.ProblemRecording() {
 		label := w.t(i18n.ChromeStatusRecording)
 		lw := w.p.width(label, fontUI, regular)
-		rr := rect(x+20, r.Y, lw+10, r.Height)
+		rr := rect(x, r.Y, lw+10, r.Height)
 		w.p.text(label, rr, fontUI, regular, w.pal.Warning)
 		w.c.HitWithOptions(idStatusRecording, rr, w.t(i18n.ChromeStatusRecordingLabel), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
 		w.tip(idStatusRecording, w.t(i18n.ChromeTipRecording))
