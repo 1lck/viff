@@ -318,7 +318,7 @@ func (w *Window) openPushFor(r domain.Ref) {
 			})
 			f.gap(10)
 			if !loading && len(commits) > 0 {
-				f.muted(w.pluralT(len(commits), i18n.DialogWillBePushedOne, i18n.DialogWillBePushedMany, len(commits)))
+				f.muted(w.pluralT(len(commits), i18n.DialogWillBePushedOne, i18n.DialogWillBePushedMany))
 			}
 			f.check(w.t(i18n.DialogPushTags), &tags)
 			f.check(w.t(i18n.DialogPushForce), &force)
@@ -590,7 +590,10 @@ func (w *Window) openAbout() {
 	})
 }
 
-func (w *Window) openSettings() {
+func (w *Window) openSettings() { w.openSettingsAt(0) }
+
+// openSettingsAt opens the settings dialog on one page: 0 General, 1 Git, 2 AI.
+func (w *Window) openSettingsAt(page int) {
 	s := w.ws.Settings
 	theme := s.Theme
 	editorFont := s.EditorFont
@@ -610,7 +613,7 @@ func (w *Window) openSettings() {
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
 	gitDraft := newGitSettingsDraft(s)
-	page := 0
+	aiDraft := newAISettingsDraft(s)
 	themeTitle := map[string]string{
 		"dark":   w.t(i18n.SettingsThemeDark),
 		"light":  w.t(i18n.SettingsThemeLight),
@@ -625,7 +628,12 @@ func (w *Window) openSettings() {
 		title: w.t(i18n.SettingsTitle), ok: w.t(i18n.CommonOK), cancel: w.t(i18n.CommonCancel), width: 600,
 		body: func(f *form) {
 			f.labelW = 170
-			settingsTabs(f, &page, []string{w.t(i18n.SettingsTabGeneral), w.t(i18n.SettingsTabGit)})
+			settingsTabs(f, &page, []string{w.t(i18n.SettingsTabGeneral), w.t(i18n.SettingsTabGit), w.t(i18n.SettingsTabAI)})
+			if page == 2 {
+				f.bold(w.t(i18n.SettingsTabAI))
+				aiDraft.form(f)
+				return
+			}
 			if page == 1 {
 				f.bold(w.t(i18n.SettingsGroupCommands))
 				gitDraft.form(f)
@@ -746,6 +754,7 @@ func (w *Window) openSettings() {
 			w.ws.Git.SetPath(s.GitPath)
 			s.ExternalEditor = strings.TrimSpace(editor.String())
 			gitDraft.commit(s)
+			aiDraft.commit(s)
 			s.AutoFetch, s.FetchPrune, s.PullMode = autoFetch, prune, pull
 			s.AutoUpdateCheck = autoUpdate
 			if m > 0 {

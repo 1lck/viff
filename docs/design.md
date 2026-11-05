@@ -61,6 +61,7 @@ flowchart TB
 | `cmd/viff`          | 启动、依赖组装、退出与资源回收                 | 不承载 Git 业务规则            |
 | `internal/domain`   | 仓库身份、引用、提交、差异、冲突、操作状态     | 不导入 Viva，不启动进程        |
 | `internal/i18n`     | 界面文案表、语言枚举与缺失回退                 | 零依赖，不导入 Viva / domain   |
+| `internal/ai`       | 提交信息的模型调用与 Git 上下文组装            | 零内部依赖，只出网到配置端点   |
 | `internal/app`      | 用例、查询、命令、调度、状态版本、缓存失效     | 通过窄接口访问外部资源         |
 | `internal/gitcli`   | 参数构造、机器输出解析、进程生命周期、能力检测 | 不返回 UI 节点，不直接更新 UI  |
 | `internal/ui`       | Viva 视图、视图模型、主题、可复用交互组件      | 不拼接 Git 命令，不读取 `.git` |

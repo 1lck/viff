@@ -1,6 +1,7 @@
 package viffui
 
 import (
+	"context"
 	"os"
 	"path"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	"viff/internal/ai"
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/i18n"
@@ -34,6 +36,8 @@ type commitView struct {
 	rows         []changeRow
 	msgH         float32
 	msgCollapsed bool
+	aiBusy       bool
+	aiLast       string // last generated message, so a rerun asks for other wording
 	// listID filters the changes tree by change list. "" shows every list,
 	// which keeps the historical behavior; any other value is the selected
 	// list's ID.
@@ -991,6 +995,13 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	if w.checkbox(idCmAmend, top.X, top.Y, top.Height, w.t(i18n.WorkspaceCheckAmend), v.amend, !rs.HasHead()) {
 		w.after(w.toggleAmend)
 	}
+	aiTip := w.t(i18n.WorkspaceTipAIGenerate)
+	if v.aiBusy {
+		aiTip = w.t(i18n.WorkspaceAIGenerating)
+	}
+	if w.action(idCmAI, right(top)-actionSize*3-12, top.Y+1, icons.Bot, aiTip, actOpts{disabled: v.aiBusy}) {
+		w.after(w.generateAICommitMessage)
+	}
 	chevron, chevronTip := icons.ChevronDown, w.t(i18n.WorkspaceTipCollapseMessage)
 	if v.msgCollapsed {
 		chevron, chevronTip = icons.ChevronUp, w.t(i18n.WorkspaceTipExpandMessage)
@@ -1065,6 +1076,41 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
 		w.after(func() { w.doCommit(true) })
 	}
+}
+
+// generateAICommitMessage asks the configured endpoint for a message and puts
+// it in the box. A second run passes the previous one so the wording changes.
+// A missing endpoint or a failed request is reported as a notification, which
+// carries the link to the settings page instead of covering the message box.
+func (w *Window) generateAICommitMessage() {
+	v := &w.cm
+	if v.aiBusy {
+		return
+	}
+	s := w.ws.Settings
+	cfg := ai.Config{
+		Protocol: ai.ParseProtocol(s.AIProtocol),
+		Endpoint: s.AIEndpoint,
+		APIKey:   s.AIKey,
+		Model:    s.AIModel,
+		Language: s.Language,
+	}
+	openSettings := vapp.NoticeAction{Title: w.t(i18n.WorkspaceAIOpenSettings), Run: func() { w.openSettingsAt(2) }}
+	if !cfg.Ready() {
+		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.WorkspaceAINotConfigured), "", openSettings)
+		return
+	}
+	v.aiBusy = true
+	previous := v.aiLast
+	w.ws.GenerateCommitMessage(context.Background(), cfg, previous, func(message string, err error) {
+		v.aiBusy = false
+		if err != nil {
+			w.ws.Notify(vapp.NoticeError, w.t(i18n.WorkspaceAIGenerateFailed), err.Error(), openSettings)
+			return
+		}
+		v.aiLast = message
+		setText(v.msg, message)
+	})
 }
 
 func (w *Window) commitOptionsMenu() []item {

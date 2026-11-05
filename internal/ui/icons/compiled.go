@@ -430,6 +430,36 @@ var DarkBookmarksPart0 = ui.Icon{
 	},
 }
 
+// darkBotPart0 is a compiled vector icon.
+var DarkBotPart0 = ui.Icon{
+	ViewBox: 16.0,
+	Stroke:  1.33,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinRound,
+	Commands: []ui.PathCommand{
+		ui.MoveTo(8.0, 5.33),
+		ui.LineTo(8.0, 2.67),
+		ui.LineTo(5.33, 2.67),
+		ui.MoveTo(12.01, 5.33),
+		ui.CubicTo(12.7445, 5.33, 13.34, 5.92546, 13.34, 6.66),
+		ui.LineTo(13.34, 12.0),
+		ui.CubicTo(13.34, 12.7345, 12.7445, 13.33, 12.01, 13.33),
+		ui.LineTo(4.0, 13.33),
+		ui.CubicTo(3.26546, 13.33, 2.67, 12.7345, 2.67, 12.0),
+		ui.LineTo(2.67, 6.66),
+		ui.CubicTo(2.67, 5.92546, 3.26546, 5.33, 4.0, 5.33),
+		ui.ClosePath(),
+		ui.MoveTo(1.33, 9.33),
+		ui.LineTo(2.66, 9.33),
+		ui.MoveTo(13.33, 9.33),
+		ui.LineTo(14.66, 9.33),
+		ui.MoveTo(10.0, 8.67),
+		ui.LineTo(10.0, 10.0),
+		ui.MoveTo(6.0, 8.67),
+		ui.LineTo(6.0, 10.0),
+	},
+}
+
 // darkBranchLabelPart0 is a compiled vector icon.
 var DarkBranchLabelPart0 = ui.Icon{
 	ViewBox: 16.0,
@@ -2011,6 +2041,106 @@ var DarkExternalToolsPart1 = ui.Icon{
 		ui.LineTo(12.3, 13.7),
 		ui.LineTo(12.29, 13.71),
 		ui.ClosePath(),
+	},
+}
+
+// darkEyeClosedPart0 is a compiled vector icon.
+var DarkEyeClosedPart0 = ui.Icon{
+	ViewBox: 1024.0,
+	Stroke:  0.0,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinRound,
+	Commands: []ui.PathCommand{
+		ui.MoveTo(176.0, 176.0),
+		ui.LineTo(848.0, 848.0),
+	},
+	Layers: []ui.IconLayer{
+		{Fill: ui.Color{Red: 0.807843, Green: 0.815686, Blue: 0.839216, Alpha: 1.0}, Commands: []ui.PathCommand{
+			ui.MoveTo(512.0, 768.0),
+			ui.CubicTo(282.027, 768.0, 102.4, 548.267, 94.72, 538.88),
+			ui.CubicTo(82.0107, 523.213, 82.0107, 500.787, 94.72, 485.12),
+			ui.CubicTo(102.4, 475.733, 282.027, 256.0, 512.0, 256.0),
+			ui.CubicTo(741.973, 256.0, 921.6, 475.733, 929.28, 485.12),
+			ui.CubicTo(941.989, 500.787, 941.989, 523.213, 929.28, 538.88),
+			ui.CubicTo(921.6, 548.267, 741.973, 768.0, 512.0, 768.0),
+			ui.ClosePath(),
+			ui.MoveTo(185.6, 512.0),
+			ui.CubicTo(237.227, 566.187, 366.08, 682.667, 512.0, 682.667),
+			ui.CubicTo(657.92, 682.667, 786.773, 566.187, 838.4, 512.0),
+			ui.CubicTo(786.773, 457.813, 657.92, 341.333, 512.0, 341.333),
+			ui.CubicTo(366.08, 341.333, 237.227, 457.813, 185.6, 512.0),
+			ui.ClosePath(),
+		}},
+		{Fill: ui.Color{Red: 0.807843, Green: 0.815686, Blue: 0.839216, Alpha: 1.0}, Commands: []ui.PathCommand{
+			ui.MoveTo(512.0, 640.0),
+			ui.CubicTo(441.308, 640.0, 384.0, 582.692, 384.0, 512.0),
+			ui.CubicTo(384.0, 441.308, 441.308, 384.0, 512.0, 384.0),
+			ui.CubicTo(582.692, 384.0, 640.0, 441.308, 640.0, 512.0),
+			ui.CubicTo(640.0, 582.692, 582.692, 640.0, 512.0, 640.0),
+			ui.ClosePath(),
+			ui.MoveTo(512.0, 469.333),
+			ui.CubicTo(494.743, 469.333, 479.185, 479.729, 472.581, 495.672),
+			ui.CubicTo(465.977, 511.616, 469.628, 529.967, 481.83, 542.17),
+			ui.CubicTo(494.033, 554.372, 512.384, 558.023, 528.328, 551.419),
+			ui.CubicTo(544.271, 544.815, 554.667, 529.257, 554.667, 512.0),
+			ui.CubicTo(554.667, 500.684, 550.171, 489.832, 542.17, 481.83),
+			ui.CubicTo(534.168, 473.829, 523.316, 469.333, 512.0, 469.333),
+			ui.ClosePath(),
+		}},
+	},
+}
+
+// darkEyeClosedPart1 is a compiled vector icon.
+var DarkEyeClosedPart1 = ui.Icon{
+	ViewBox: 1024.0,
+	Stroke:  96.0,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinMiter,
+	Commands: []ui.PathCommand{
+		ui.MoveTo(176.0, 176.0),
+		ui.LineTo(848.0, 848.0),
+	},
+}
+
+// darkEyePart0 is a compiled vector icon.
+var DarkEyePart0 = ui.Icon{
+	ViewBox: 1024.0,
+	Stroke:  0.0,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinRound,
+	Layers: []ui.IconLayer{
+		{Fill: ui.Color{Red: 0.807843, Green: 0.815686, Blue: 0.839216, Alpha: 1.0}, Commands: []ui.PathCommand{
+			ui.MoveTo(512.0, 768.0),
+			ui.CubicTo(282.027, 768.0, 102.4, 548.267, 94.72, 538.88),
+			ui.CubicTo(82.0107, 523.213, 82.0107, 500.787, 94.72, 485.12),
+			ui.CubicTo(102.4, 475.733, 282.027, 256.0, 512.0, 256.0),
+			ui.CubicTo(741.973, 256.0, 921.6, 475.733, 929.28, 485.12),
+			ui.CubicTo(941.989, 500.787, 941.989, 523.213, 929.28, 538.88),
+			ui.CubicTo(921.6, 548.267, 741.973, 768.0, 512.0, 768.0),
+			ui.ClosePath(),
+			ui.MoveTo(185.6, 512.0),
+			ui.CubicTo(237.227, 566.187, 366.08, 682.667, 512.0, 682.667),
+			ui.CubicTo(657.92, 682.667, 786.773, 566.187, 838.4, 512.0),
+			ui.CubicTo(786.773, 457.813, 657.92, 341.333, 512.0, 341.333),
+			ui.CubicTo(366.08, 341.333, 237.227, 457.813, 185.6, 512.0),
+			ui.ClosePath(),
+		}},
+		{Fill: ui.Color{Red: 0.807843, Green: 0.815686, Blue: 0.839216, Alpha: 1.0}, Commands: []ui.PathCommand{
+			ui.MoveTo(512.0, 640.0),
+			ui.CubicTo(441.308, 640.0, 384.0, 582.692, 384.0, 512.0),
+			ui.CubicTo(384.0, 441.308, 441.308, 384.0, 512.0, 384.0),
+			ui.CubicTo(582.692, 384.0, 640.0, 441.308, 640.0, 512.0),
+			ui.CubicTo(640.0, 582.692, 582.692, 640.0, 512.0, 640.0),
+			ui.ClosePath(),
+			ui.MoveTo(512.0, 469.333),
+			ui.CubicTo(494.743, 469.333, 479.185, 479.729, 472.581, 495.672),
+			ui.CubicTo(465.977, 511.616, 469.628, 529.967, 481.83, 542.17),
+			ui.CubicTo(494.033, 554.372, 512.384, 558.023, 528.328, 551.419),
+			ui.CubicTo(544.271, 544.815, 554.667, 529.257, 554.667, 512.0),
+			ui.CubicTo(554.667, 500.684, 550.171, 489.832, 542.17, 481.83),
+			ui.CubicTo(534.168, 473.829, 523.316, 469.333, 512.0, 469.333),
+			ui.ClosePath(),
+		}},
 	},
 }
 
@@ -7748,6 +7878,36 @@ var LightBookmarksPart0 = ui.Icon{
 	},
 }
 
+// lightBotPart0 is a compiled vector icon.
+var LightBotPart0 = ui.Icon{
+	ViewBox: 16.0,
+	Stroke:  1.33,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinRound,
+	Commands: []ui.PathCommand{
+		ui.MoveTo(8.0, 5.33),
+		ui.LineTo(8.0, 2.67),
+		ui.LineTo(5.33, 2.67),
+		ui.MoveTo(12.01, 5.33),
+		ui.CubicTo(12.7445, 5.33, 13.34, 5.92546, 13.34, 6.66),
+		ui.LineTo(13.34, 12.0),
+		ui.CubicTo(13.34, 12.7345, 12.7445, 13.33, 12.01, 13.33),
+		ui.LineTo(4.0, 13.33),
+		ui.CubicTo(3.26546, 13.33, 2.67, 12.7345, 2.67, 12.0),
+		ui.LineTo(2.67, 6.66),
+		ui.CubicTo(2.67, 5.92546, 3.26546, 5.33, 4.0, 5.33),
+		ui.ClosePath(),
+		ui.MoveTo(1.33, 9.33),
+		ui.LineTo(2.66, 9.33),
+		ui.MoveTo(13.33, 9.33),
+		ui.LineTo(14.66, 9.33),
+		ui.MoveTo(10.0, 8.67),
+		ui.LineTo(10.0, 10.0),
+		ui.MoveTo(6.0, 8.67),
+		ui.LineTo(6.0, 10.0),
+	},
+}
+
 // lightBranchLabelPart0 is a compiled vector icon.
 var LightBranchLabelPart0 = ui.Icon{
 	ViewBox: 16.0,
@@ -9386,6 +9546,106 @@ var LightExternalToolsPart1 = ui.Icon{
 		ui.LineTo(12.3, 13.7),
 		ui.LineTo(12.29, 13.71),
 		ui.ClosePath(),
+	},
+}
+
+// lightEyeClosedPart0 is a compiled vector icon.
+var LightEyeClosedPart0 = ui.Icon{
+	ViewBox: 1024.0,
+	Stroke:  0.0,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinRound,
+	Commands: []ui.PathCommand{
+		ui.MoveTo(176.0, 176.0),
+		ui.LineTo(848.0, 848.0),
+	},
+	Layers: []ui.IconLayer{
+		{Fill: ui.Color{Red: 0.423529, Green: 0.439216, Blue: 0.494118, Alpha: 1.0}, Commands: []ui.PathCommand{
+			ui.MoveTo(512.0, 768.0),
+			ui.CubicTo(282.027, 768.0, 102.4, 548.267, 94.72, 538.88),
+			ui.CubicTo(82.0107, 523.213, 82.0107, 500.787, 94.72, 485.12),
+			ui.CubicTo(102.4, 475.733, 282.027, 256.0, 512.0, 256.0),
+			ui.CubicTo(741.973, 256.0, 921.6, 475.733, 929.28, 485.12),
+			ui.CubicTo(941.989, 500.787, 941.989, 523.213, 929.28, 538.88),
+			ui.CubicTo(921.6, 548.267, 741.973, 768.0, 512.0, 768.0),
+			ui.ClosePath(),
+			ui.MoveTo(185.6, 512.0),
+			ui.CubicTo(237.227, 566.187, 366.08, 682.667, 512.0, 682.667),
+			ui.CubicTo(657.92, 682.667, 786.773, 566.187, 838.4, 512.0),
+			ui.CubicTo(786.773, 457.813, 657.92, 341.333, 512.0, 341.333),
+			ui.CubicTo(366.08, 341.333, 237.227, 457.813, 185.6, 512.0),
+			ui.ClosePath(),
+		}},
+		{Fill: ui.Color{Red: 0.423529, Green: 0.439216, Blue: 0.494118, Alpha: 1.0}, Commands: []ui.PathCommand{
+			ui.MoveTo(512.0, 640.0),
+			ui.CubicTo(441.308, 640.0, 384.0, 582.692, 384.0, 512.0),
+			ui.CubicTo(384.0, 441.308, 441.308, 384.0, 512.0, 384.0),
+			ui.CubicTo(582.692, 384.0, 640.0, 441.308, 640.0, 512.0),
+			ui.CubicTo(640.0, 582.692, 582.692, 640.0, 512.0, 640.0),
+			ui.ClosePath(),
+			ui.MoveTo(512.0, 469.333),
+			ui.CubicTo(494.743, 469.333, 479.185, 479.729, 472.581, 495.672),
+			ui.CubicTo(465.977, 511.616, 469.628, 529.967, 481.83, 542.17),
+			ui.CubicTo(494.033, 554.372, 512.384, 558.023, 528.328, 551.419),
+			ui.CubicTo(544.271, 544.815, 554.667, 529.257, 554.667, 512.0),
+			ui.CubicTo(554.667, 500.684, 550.171, 489.832, 542.17, 481.83),
+			ui.CubicTo(534.168, 473.829, 523.316, 469.333, 512.0, 469.333),
+			ui.ClosePath(),
+		}},
+	},
+}
+
+// lightEyeClosedPart1 is a compiled vector icon.
+var LightEyeClosedPart1 = ui.Icon{
+	ViewBox: 1024.0,
+	Stroke:  96.0,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinMiter,
+	Commands: []ui.PathCommand{
+		ui.MoveTo(176.0, 176.0),
+		ui.LineTo(848.0, 848.0),
+	},
+}
+
+// lightEyePart0 is a compiled vector icon.
+var LightEyePart0 = ui.Icon{
+	ViewBox: 1024.0,
+	Stroke:  0.0,
+	Cap:     ui.CapRound,
+	Join:    ui.JoinRound,
+	Layers: []ui.IconLayer{
+		{Fill: ui.Color{Red: 0.423529, Green: 0.439216, Blue: 0.494118, Alpha: 1.0}, Commands: []ui.PathCommand{
+			ui.MoveTo(512.0, 768.0),
+			ui.CubicTo(282.027, 768.0, 102.4, 548.267, 94.72, 538.88),
+			ui.CubicTo(82.0107, 523.213, 82.0107, 500.787, 94.72, 485.12),
+			ui.CubicTo(102.4, 475.733, 282.027, 256.0, 512.0, 256.0),
+			ui.CubicTo(741.973, 256.0, 921.6, 475.733, 929.28, 485.12),
+			ui.CubicTo(941.989, 500.787, 941.989, 523.213, 929.28, 538.88),
+			ui.CubicTo(921.6, 548.267, 741.973, 768.0, 512.0, 768.0),
+			ui.ClosePath(),
+			ui.MoveTo(185.6, 512.0),
+			ui.CubicTo(237.227, 566.187, 366.08, 682.667, 512.0, 682.667),
+			ui.CubicTo(657.92, 682.667, 786.773, 566.187, 838.4, 512.0),
+			ui.CubicTo(786.773, 457.813, 657.92, 341.333, 512.0, 341.333),
+			ui.CubicTo(366.08, 341.333, 237.227, 457.813, 185.6, 512.0),
+			ui.ClosePath(),
+		}},
+		{Fill: ui.Color{Red: 0.423529, Green: 0.439216, Blue: 0.494118, Alpha: 1.0}, Commands: []ui.PathCommand{
+			ui.MoveTo(512.0, 640.0),
+			ui.CubicTo(441.308, 640.0, 384.0, 582.692, 384.0, 512.0),
+			ui.CubicTo(384.0, 441.308, 441.308, 384.0, 512.0, 384.0),
+			ui.CubicTo(582.692, 384.0, 640.0, 441.308, 640.0, 512.0),
+			ui.CubicTo(640.0, 582.692, 582.692, 640.0, 512.0, 640.0),
+			ui.ClosePath(),
+			ui.MoveTo(512.0, 469.333),
+			ui.CubicTo(494.743, 469.333, 479.185, 479.729, 472.581, 495.672),
+			ui.CubicTo(465.977, 511.616, 469.628, 529.967, 481.83, 542.17),
+			ui.CubicTo(494.033, 554.372, 512.384, 558.023, 528.328, 551.419),
+			ui.CubicTo(544.271, 544.815, 554.667, 529.257, 554.667, 512.0),
+			ui.CubicTo(554.667, 500.684, 550.171, 489.832, 542.17, 481.83),
+			ui.CubicTo(534.168, 473.829, 523.316, 469.333, 512.0, 469.333),
+			ui.ClosePath(),
+		}},
 	},
 }
 

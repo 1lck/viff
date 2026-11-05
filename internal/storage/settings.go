@@ -59,6 +59,22 @@ type Settings struct {
 	CommitSigning    bool   `json:"commitSigning,omitempty"`
 	CredentialHelper string `json:"credentialHelper,omitempty"`
 
+	// AI endpoint for the commit message generator: an OpenAI-compatible base
+	// URL such as https://api.openai.com/v1, the model name, and the key. The
+	// key is stored in plain text on purpose: this is a local single-user
+	// application, and the file already holds SSH and signing settings.
+	// AIProvider is the chosen provider: a built-in id ("openai", "anthropic",
+	// "deepseek", "openrouter", "ollama"), a name typed for a custom endpoint, or
+	// empty for an older settings file that only has endpoint and protocol.
+	AIProvider string `json:"aiProvider,omitempty"`
+	AIEndpoint string `json:"aiEndpoint,omitempty"`
+	AIModel    string `json:"aiModel,omitempty"`
+	AIKey      string `json:"aiKey,omitempty"`
+	// AIProtocol names the wire format of the endpoint: "openai-completions"
+	// (the default when empty, which keeps an older settings file working) or
+	// "anthropic-messages".
+	AIProtocol string `json:"aiProtocol,omitempty"`
+
 	ExternalEditor string `json:"externalEditor"`
 
 	Recent []Recent `json:"recent"`

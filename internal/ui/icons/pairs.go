@@ -15,6 +15,7 @@ var (
 	darkAttach                      = Glyph{{DarkAttachPart0, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}}
 	darkBinaryData                  = Glyph{{DarkBinaryDataPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	darkBookmarks                   = Glyph{{DarkBookmarksPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
+	darkBot                         = Glyph{{DarkBotPart0, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}}
 	darkBranchLabel                 = Glyph{{DarkBranchLabelPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	darkC                           = Glyph{{DarkCPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}, {DarkCPart1, ui.Color{Red: 0.70980394, Green: 0.5372549, Blue: 0.9254902, Alpha: 1}}, {DarkCPart2, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	darkChangelist                  = Glyph{{DarkChangelistPart0, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}, {DarkChangelistPart1, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
@@ -48,6 +49,8 @@ var (
 	darkErrorOutline                = Glyph{{DarkErrorOutlinePart0, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}, {DarkErrorOutlinePart1, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	darkExpandAll                   = Glyph{{DarkExpandAllPart0, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}}
 	darkExternalTools               = Glyph{{DarkExternalToolsPart0, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}, {DarkExternalToolsPart1, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}}
+	darkEye                         = Glyph{{DarkEyePart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
+	darkEyeClosed                   = Glyph{{DarkEyeClosedPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}, {DarkEyeClosedPart1, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}}
 	darkFetch                       = Glyph{{DarkFetchPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	darkFilter                      = Glyph{{DarkFilterPart0, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}}
 	darkFind                        = Glyph{{DarkFindPart0, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}, {DarkFindPart1, ui.Color{Red: 0.80784315, Green: 0.8156863, Blue: 0.8392157, Alpha: 1}}}
@@ -160,6 +163,7 @@ var (
 	lightAttach                     = Glyph{{LightAttachPart0, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}}
 	lightBinaryData                 = Glyph{{LightBinaryDataPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	lightBookmarks                  = Glyph{{LightBookmarksPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
+	lightBot                        = Glyph{{LightBotPart0, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}}
 	lightBranchLabel                = Glyph{{LightBranchLabelPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	lightC                          = Glyph{{LightCPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}, {LightCPart1, ui.Color{Red: 0.5137255, Green: 0.3019608, Blue: 0.9411765, Alpha: 1}}, {LightCPart2, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	lightChangelist                 = Glyph{{LightChangelistPart0, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}, {LightChangelistPart1, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
@@ -195,6 +199,8 @@ var (
 	lightErrorOutline               = Glyph{{LightErrorOutlinePart0, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}, {LightErrorOutlinePart1, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	lightExpandAll                  = Glyph{{LightExpandAllPart0, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}}
 	lightExternalTools              = Glyph{{LightExternalToolsPart0, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}, {LightExternalToolsPart1, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}}
+	lightEye                        = Glyph{{LightEyePart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
+	lightEyeClosed                  = Glyph{{LightEyeClosedPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}, {LightEyeClosedPart1, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}}
 	lightFetch                      = Glyph{{LightFetchPart0, ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1}}}
 	lightFilter                     = Glyph{{LightFilterPart0, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}}
 	lightFind                       = Glyph{{LightFindPart0, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}, {LightFindPart1, ui.Color{Red: 0.42352942, Green: 0.4392157, Blue: 0.49411765, Alpha: 1}}}
@@ -314,6 +320,7 @@ var (
 	Attach                     = Pair{lightAttach, darkAttach}
 	BinaryData                 = Pair{lightBinaryData, darkBinaryData}
 	Bookmarks                  = Pair{lightBookmarks, darkBookmarks}
+	Bot                        = Pair{lightBot, darkBot}
 	BranchLabel                = Pair{lightBranchLabel, darkBranchLabel}
 	C                          = Pair{lightC, darkC}
 	Changelist                 = Pair{lightChangelist, darkChangelist}
@@ -348,6 +355,8 @@ var (
 	ErrorOutline               = Pair{lightErrorOutline, darkErrorOutline}
 	ExpandAll                  = Pair{lightExpandAll, darkExpandAll}
 	ExternalTools              = Pair{lightExternalTools, darkExternalTools}
+	Eye                        = Pair{lightEye, darkEye}
+	EyeClosed                  = Pair{lightEyeClosed, darkEyeClosed}
 	Fetch                      = Pair{lightFetch, darkFetch}
 	Filter                     = Pair{lightFilter, darkFilter}
 	Find                       = Pair{lightFind, darkFind}
