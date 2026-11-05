@@ -4,7 +4,7 @@
 
 # Viff
 
-**轻量、原生的 Git 桌面客户端。**
+**轻量、原生的 Git 客户端，内置只读项目浏览、中英文界面与可选的 AI 提交说明。**
 
 Go + Viva。无需 Electron，无需 WebView，不捆绑浏览器运行时。
 
@@ -22,8 +22,9 @@ Go + Viva。无需 Electron，无需 WebView，不捆绑浏览器运行时。
 
 ## 让工具轻一点，让工作流完整一点
 
-Viff 将工作区、代码差异和提交历史放进一个原生桌面窗口。
-它使用 Go 和 [Viva](https://github.com/vivaui/viva) 编写，不依赖浏览器引擎绘制界面，
+Git 仍是核心。围绕它，Viff 提供只读的项目浏览与 Quick Open、图片 diff、
+中英双语界面，以及可选的 AI 提交说明。它使用 Go 和
+[Viva](https://github.com/vivaui/viva) 编写，不依赖浏览器引擎绘制界面，
 通过本机安装的 Git 执行操作。
 
 - **分发轻量**：一个应用可执行文件，加上许可证文件，不需要安装独立浏览器运行时或本地服务。
