@@ -7,6 +7,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -21,7 +22,7 @@ func (w *Window) openSubmodule(path string) {
 	dir := filepath.Join(rs.Repo.Root, filepath.FromSlash(path))
 	w.ws.Open(dir, func(err error) {
 		if err != nil {
-			w.ws.NotifyError("Cannot open submodule", err)
+			w.ws.NotifyError(w.t(i18n.SubmoduleCannotOpen), err)
 		}
 	})
 }
@@ -67,7 +68,7 @@ func (w *Window) openSubmodules() {
 	}
 	reload()
 	w.openDialog(&dialog{
-		title: "Submodules", ok: "Close", noCancel: true, width: 940,
+		title: w.t(i18n.SubmoduleTitle), ok: w.t(i18n.CommonClose), noCancel: true, width: 940,
 		body: func(f *form) {
 			f.custom(34, func(r ui.Rect) {
 				bw := w.buttonWidth("Add Submodule…")
@@ -90,13 +91,13 @@ func (w *Window) openSubmodules() {
 			f.gap(6)
 			switch {
 			case loading && len(subs) == 0:
-				f.muted("Loading submodules…")
+				f.muted(w.t(i18n.SubmoduleLoading))
 			case loadErr != nil:
 				f.message(vapp.ErrorText(loadErr), w.pal.Error)
 			case len(subs) == 0:
-				f.muted("This repository has no submodules.")
+				f.muted(w.t(i18n.SubmoduleNone))
 				f.gap(4)
-				f.muted("Add one with Add Submodule…; Git records it in .gitmodules and stages the change.")
+				f.muted(w.t(i18n.SubmoduleAddHint))
 			default:
 				const shown = 12
 				nested := 0
@@ -111,15 +112,15 @@ func (w *Window) openSubmodules() {
 					f.custom(submoduleRowH, func(r ui.Rect) { w.paintSubmoduleRow(r, i, sm, direct, reload) })
 				}
 				if extra := len(subs) - shown; extra > 0 {
-					f.muted(itoa(extra) + " more submodules are not shown. Update All still applies to them.")
+					f.muted(w.t(i18n.SubmoduleMore, itoa(extra)))
 				}
 				if nested > 0 || directErr != nil {
 					f.gap(8)
 					switch {
 					case directErr != nil:
-						f.muted("Cannot read .gitmodules (" + vapp.ErrorText(directErr) + "), so Deinit and Remove are unavailable.")
+						f.muted(w.t(i18n.SubmoduleCannotRead, vapp.ErrorText(directErr)))
 					default:
-						f.muted("A nested submodule belongs to the repository that records it; deinit and remove it there, in that repository's own Submodules dialog.")
+						f.muted(w.t(i18n.SubmoduleNestedHint))
 					}
 				}
 			}
@@ -218,10 +219,10 @@ func (w *Window) gitMenu() []item {
 		return nil
 	}
 	items := []item{
-		{title: "Submodules…", icon: icons.Folder, run: w.openSubmodules},
+		{title: w.t(i18n.SubmoduleMenu), icon: icons.Folder, run: w.openSubmodules},
 	}
 	if len(rs.Remotes) > 0 {
-		items = append(items, sep(), item{title: "Fetch", icon: icons.Fetch, run: func() { w.ws.Fetch(false) }})
+		items = append(items, sep(), item{title: w.t(i18n.MenuFetch), icon: icons.Fetch, run: func() { w.ws.Fetch(false) }})
 	}
 	return items
 }

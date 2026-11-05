@@ -10,6 +10,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	"viff/assets/branding"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -51,7 +52,7 @@ func (w *Window) paintWelcome(full ui.Rect) {
 	nav = inset(nav, 0, 0)
 	w.c.DrawBitmap(branding.Bitmap, rect(nav.X+20, nav.Y+16, 36, 36))
 	w.p.text("Viff", rect(nav.X+66, nav.Y+14, 150, 22), 15, semibold, w.pal.Text)
-	w.p.text("Git client", rect(nav.X+66, nav.Y+34, 150, 18), fontSmall, regular, w.pal.TextSecond)
+	w.p.text(w.t(i18n.WelcomeGitClient), rect(nav.X+66, nav.Y+34, 150, 18), fontSmall, regular, w.pal.TextSecond)
 	items := []struct {
 		title string
 		icon  icons.Pair
@@ -134,7 +135,7 @@ func (w *Window) paintWelcome(full ui.Rect) {
 	v.scroll.clamp(content, list.Height)
 	w.onScrollIn(list, func(dx, dy float32) { v.scroll.Y += dy; v.scroll.clamp(content, list.Height) })
 	if len(recent) == 0 {
-		w.p.textCenter("No projects match", rect(list.X, list.Y+40, list.Width, 22), fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.WelcomeNoProjects), rect(list.X, list.Y+40, list.Width, 22), fontUI, regular, w.pal.TextSecond)
 	}
 	w.c.Clip(list)
 	for i, p := range recent {
@@ -176,11 +177,11 @@ func (w *Window) paintWelcome(full ui.Rect) {
 		path := p
 		w.onContext(id, func(x, y float32) {
 			w.openMenu(x, y, []item{
-				{title: "Open", run: func() { w.openRepo(path) }},
-				{title: "Show in Finder", icon: icons.Folder, run: func() { revealPath(path) }},
-				{title: "Copy Path", icon: icons.Copy, run: func() { w.copyText(path) }},
+				{title: w.t(i18n.WelcomeOpen), run: func() { w.openRepo(path) }},
+				{title: w.t(i18n.ShowInFileManager), icon: icons.Folder, run: func() { revealPath(path) }},
+				{title: w.t(i18n.WelcomeCopyPath), icon: icons.Copy, run: func() { w.copyText(path) }},
 				sep(),
-				{title: "Remove from Recent Projects", icon: icons.Close, run: func() { w.ws.Settings.RemoveRecent(path); w.saveSettings() }},
+				{title: w.t(i18n.WelcomeRemoveRecent), icon: icons.Close, run: func() { w.ws.Settings.RemoveRecent(path); w.saveSettings() }},
 			})
 		})
 	}
@@ -218,13 +219,13 @@ func (w *Window) paintWelcomeEmpty(r ui.Rect) {
 		}
 		x += bw + 24
 	}
-	w.p.textCenter("You can also drop a repository folder on this window.", rect(r.X, y+110, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
+	w.p.textCenter(w.t(i18n.WelcomeDropHint), rect(r.X, y+110, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
 }
 
 func (w *Window) paintCustomize(r ui.Rect) {
 	s := w.ws.Settings
 	f := &form{w: w, x: r.X, y: r.Y, width: min(r.Width, 520), labelW: 140}
-	f.bold("Customize")
+	f.bold(w.t(i18n.WelcomeCustomize))
 	themeTitle := map[string]string{"dark": "Islands Dark", "light": "Islands Light", "system": "Sync with OS"}
 	f.combo("Color theme:", themeTitle[s.Theme], func() []item {
 		var items []item

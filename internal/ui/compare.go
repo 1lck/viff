@@ -5,6 +5,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/domain"
+	"viff/internal/i18n"
 )
 
 // openCompareCommits lists the files that differ between two commits. from is
@@ -30,7 +31,7 @@ func (w *Window) openCompareCommits(from, to string) {
 		w.showDiff(vapp.DiffSource{Path: ch.Path, OldPath: ch.OldPath, Commit: to, Parent: from, Kind: ch.Kind}, true)
 	}
 	w.openDialog(&dialog{
-		title: "Compare " + domain.ShortHash(from) + " → " + domain.ShortHash(to),
+		title: w.t(i18n.CompareTitle, domain.ShortHash(from), domain.ShortHash(to)),
 		ok:    "Open Diff", width: 760,
 		body: func(f *form) {
 			f.custom(26, func(r ui.Rect) {
@@ -53,13 +54,13 @@ func (w *Window) openCompareCommits(from, to string) {
 				inner := inset(lr, 1, 1)
 				switch {
 				case loading:
-					w.p.textCenter("Loading changed files…", inner, fontUI, regular, w.pal.TextSecond)
+					w.p.textCenter(w.t(i18n.CompareLoading), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case loadErr != nil:
 					w.p.textCenter(vapp.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
 					return
 				case len(changes) == 0:
-					w.p.textCenter("The commits have no differences", inner, fontUI, regular, w.pal.TextSecond)
+					w.p.textCenter(w.t(i18n.CompareNoDiff), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				}
 				content := float32(len(changes))*rowH + 8
@@ -103,7 +104,7 @@ func (w *Window) openCompareCommits(from, to string) {
 				w.vbar(idCompareScroll, inner, scroll, content)
 			})
 			f.gap(8)
-			f.muted("Double-click a file to open its diff")
+			f.muted(w.t(i18n.CompareHint))
 		},
 		okDisabled: func() bool { return sel < 0 || sel >= len(changes) },
 		onOK:       func() bool { open(); return true },

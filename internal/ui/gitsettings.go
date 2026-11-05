@@ -9,6 +9,7 @@ import (
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
+	"viff/internal/i18n"
 	"viff/internal/storage"
 )
 
@@ -18,7 +19,6 @@ import (
 // signFormatKeys maps the radio buttons of the Git page to the values Git
 // understands; the first entry is "use Git's own setting".
 var signFormatKeys = []string{"", "openpgp", "ssh"}
-var signFormatTitles = []string{"Git default", "OpenPGP", "SSH"}
 
 // gitSettingsDraft holds the editors of the Git page while the dialog is
 // open. Values move into storage.Settings only on OK.
@@ -42,15 +42,15 @@ func newGitSettingsDraft(s *storage.Settings) *gitSettingsDraft {
 // form paints the fields. It runs on every paint, so validation hints follow
 // what the user has typed.
 func (d *gitSettingsDraft) form(f *form) {
-	f.field("SSH command:", d.ssh, "Empty: Git's own core.sshCommand", false)
+	f.field(f.w.t(i18n.GitSSHCommand), d.ssh, f.w.t(i18n.GitSSHPlaceholder), false)
 	f.commandHint(d.ssh.String())
-	f.field("GPG program:", d.gpg, "Empty: gpg from PATH", false)
+	f.field(f.w.t(i18n.GitGPGProgram), d.gpg, f.w.t(i18n.GitGPGPlaceholder), false)
 	f.commandHint(d.gpg.String())
-	f.text("Signing format:")
-	f.radio(signFormatTitles, &d.format)
-	f.field("Signing key:", d.key, "Empty: user.signingkey", false)
-	f.check("Sign commits by default", &d.sign)
-	f.field("Credential helper:", d.helper, "Empty: Git's own credential.helper", false)
+	f.text(f.w.t(i18n.GitSignFormat))
+	f.radio([]string{f.w.t(i18n.GitSignDefault), "OpenPGP", "SSH"}, &d.format)
+	f.field(f.w.t(i18n.GitSigningKey), d.key, f.w.t(i18n.GitSigningKeyHint), false)
+	f.check(f.w.t(i18n.GitSignByDefault), &d.sign)
+	f.field(f.w.t(i18n.GitCredentialHelper), d.helper, f.w.t(i18n.GitCredentialHint), false)
 }
 
 // commandHint warns, without blocking, when the command's program is not on
@@ -62,7 +62,7 @@ func (f *form) commandHint(line string) {
 	}
 	indent := f.labelW
 	f.custom(18, func(r ui.Rect) {
-		f.w.p.text("Not found: "+name, rect(r.X+indent, r.Y, r.Width-indent, 16), fontSmall, regular, f.w.pal.Warning)
+		f.w.p.text(f.w.t(i18n.GitCommandNotFound, name), rect(r.X+indent, r.Y, r.Width-indent, 16), fontSmall, regular, f.w.pal.Warning)
 	})
 }
 

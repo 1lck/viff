@@ -21,6 +21,8 @@ const (
 	DialogPush            = Key("dialog.button.push")
 	DialogCreateStash     = Key("dialog.button.createStash")
 	DialogClone           = Key("dialog.button.clone")
+	DialogDelete          = Key("dialog.button.delete")
+	DialogAdd             = Key("dialog.button.add")
 	DialogRemove          = Key("dialog.remotes.remove")
 	DialogAddRemote       = Key("dialog.remotes.add")
 	DialogAddRemoteButton = Key("dialog.remotes.addButton")
@@ -131,6 +133,8 @@ func init() {
 		DialogPush:            "Push",
 		DialogCreateStash:     "Create Stash",
 		DialogClone:           "Clone",
+		DialogDelete:          "Delete",
+		DialogAdd:             "Add",
 		DialogRemove:          "Remove",
 		DialogAddRemote:       "Add Remote",
 		DialogAddRemoteButton: "Add Remote",
@@ -231,6 +235,8 @@ func init() {
 		DialogPush:            "推送",
 		DialogCreateStash:     "创建暂存",
 		DialogClone:           "克隆",
+		DialogDelete:          "删除",
+		DialogAdd:             "添加",
 		DialogRemove:          "移除",
 		DialogAddRemote:       "添加远程",
 		DialogAddRemoteButton: "添加远程",

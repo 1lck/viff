@@ -211,9 +211,9 @@ func (w *Window) openNewBranchFor(title string, fn func(string)) {
 			n := name.String()
 			p := validRefName(n)
 			if p == "" && w.branchExists(n) {
-				p = "Branch '" + n + "' already exists"
+				p = w.t(i18n.DialogBranchExists, n)
 			}
-			id := f.field("Branch name:", name, "", n != "" && p != "")
+			id := f.field(w.t(i18n.WorkspaceStashBranchName), name, "", n != "" && p != "")
 			f.w.dialog.focus = id
 			if n != "" && p != "" {
 				f.message(p, w.pal.Error)

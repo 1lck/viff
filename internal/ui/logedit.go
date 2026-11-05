@@ -8,6 +8,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	"viff/internal/domain"
+	"viff/internal/i18n"
 )
 
 // Editing one commit of history from the log: reword, squash into the parent
@@ -87,8 +88,8 @@ func (w *Window) openSquashCommit(c domain.Commit) {
 // openDropCommit removes c after a confirmation that names what is lost.
 func (w *Window) openDropCommit(c domain.Commit) {
 	short := domain.ShortHash(c.Hash)
-	w.confirm("Drop Commit", "Drop "+short+" \""+c.Subject+"\"?\n\nIts changes disappear from the branch, and the commits after it are replayed without them. The old commits stay in the reflog until it expires.",
-		"Drop Commit", func() { w.ws.DropCommit(c.Hash) })
+	w.confirm(w.t(i18n.WorkspaceDropCommitTitle), w.t(i18n.WorkspaceDropCommitBody, short, c.Subject),
+		w.t(i18n.WorkspaceDropCommitTitle), func() { w.ws.DropCommit(c.Hash) })
 }
 
 // openCommitMessageDialog shows a commit's message in an editable text area.

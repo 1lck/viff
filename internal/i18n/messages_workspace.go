@@ -36,6 +36,11 @@ const (
 	WorkspaceSmartCheckoutBody   = Key("workspace.smartCheckout.body")
 	WorkspaceSmartCheckoutButton = Key("workspace.smartCheckout.button")
 
+	// Dropping a commit, and the stash-to-branch dialog.
+	WorkspaceDropCommitTitle = Key("workspace.log.dropCommit")
+	WorkspaceDropCommitBody  = Key("workspace.log.dropCommitBody")
+	WorkspaceStashBranchName = Key("workspace.stash.branchName")
+
 	// Labels of the values a panel prints.
 	WorkspaceLabelCommitMessage = Key("workspace.label.commitMessage")
 	WorkspaceLabelSubmodule     = Key("workspace.label.submodule")
@@ -181,6 +186,10 @@ func init() {
 		WorkspaceSmartCheckoutBody:   "Your local changes would be overwritten by checking out %s.\n\nViff can stash them, including untracked files, check out, and restore them afterwards. If restoring them conflicts, they stay in the stash.",
 		WorkspaceSmartCheckoutButton: "Stash and Checkout",
 
+		WorkspaceDropCommitTitle: "Drop Commit",
+		WorkspaceDropCommitBody:  "Drop %s \"%s\"?\n\nIts changes disappear from the branch, and the commits after it are replayed without them. The old commits stay in the reflog until it expires.",
+		WorkspaceStashBranchName: "Branch name:",
+
 		WorkspaceLabelCommitMessage: "Commit message",
 		WorkspaceLabelSubmodule:     "submodule",
 		WorkspaceLabelAndMore:       "and %d more",
@@ -291,7 +300,7 @@ func init() {
 
 		WorkspaceAreaStaged:    "已暂存",
 		WorkspaceAreaChanges:   "变更",
-		WorkspaceAreaUntracked: "未版本化文件",
+		WorkspaceAreaUntracked: "未跟踪文件",
 		WorkspaceAreaConflicts: "合并冲突",
 
 		WorkspaceStashChanges:        "暂存更改…",
@@ -312,6 +321,10 @@ func init() {
 		WorkspaceSmartCheckoutTitle:  "暂存更改并检出",
 		WorkspaceSmartCheckoutBody:   "检出 %s 会覆盖你的本地更改。\n\nViff 可以把这些更改（含未跟踪文件）暂存起来，检出后再恢复；若恢复时冲突，它们会留在暂存里。",
 		WorkspaceSmartCheckoutButton: "暂存并检出",
+
+		WorkspaceDropCommitTitle: "丢弃提交",
+		WorkspaceDropCommitBody:  "丢弃 %s \"%s\"？\n\n它的更改会从分支上消失，其后的提交会在去掉这些更改后重放。旧提交会留在引用日志里直到过期。",
+		WorkspaceStashBranchName: "分支名：",
 
 		WorkspaceLabelCommitMessage: "提交说明",
 		WorkspaceLabelSubmodule:     "子模块",
@@ -412,7 +425,7 @@ func init() {
 		WorkspaceCountConflictsOne:  "%d 处冲突",
 		WorkspaceCountConflictsMany: "%d 处冲突",
 
-		WorkspaceCountUnversionedOne:  "%d 个未纳入版本控制的文件",
-		WorkspaceCountUnversionedMany: "%d 个未纳入版本控制的文件",
+		WorkspaceCountUnversionedOne:  "%d 个未跟踪文件",
+		WorkspaceCountUnversionedMany: "%d 个未跟踪文件",
 	})
 }
