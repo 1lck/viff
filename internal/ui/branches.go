@@ -185,7 +185,6 @@ func (w *Window) refActions(r domain.Ref) []item {
 		item{title: w.t(i18n.ChromeMenuCompareWith, curQ), icon: icons.Diff, disabled: cur == "", run: func() { w.compareBranches(cur, name) }},
 		item{title: w.t(i18n.ChromeMenuShowChanged), icon: icons.Diff, disabled: cur == "" || r.Target == "", run: func() { w.compareBranchFiles(r) }},
 		item{title: w.t(i18n.ChromeMenuShowDiffWorking), icon: icons.Diff, run: func() { w.compareWithWorking(r.Name) }},
-		sep(),
 	)
 	// Rebase and merge rewrite history; a backend without that (Subversion)
 	// does not offer them at all.

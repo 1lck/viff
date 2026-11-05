@@ -341,9 +341,8 @@ func init() {
 		AppErrorLockedHintGit:  "Another Git process is using this repository. Wait for it to finish; remove the .lock file only if no Git process is running.",
 		AppErrorLockedHintSVN:  "The working copy is locked by another Subversion operation. Wait for it to finish, or run \"svn cleanup\" in the working copy.",
 		AppErrorUnsupported:    "This operation is not available for the open repository.",
-
-		AppSideStaged:      "Staged",
-		AppSideYourVersion: "Your version",
+		AppSideStaged:          "Staged",
+		AppSideYourVersion:     "Your version",
 	})
 
 	register(ZHCN, map[Key]string{
@@ -508,8 +507,7 @@ func init() {
 		AppErrorLockedHintGit:  "另一个 Git 进程正在使用此仓库。请等它结束；只有确认没有 Git 进程运行时才删除 .lock 文件。",
 		AppErrorLockedHintSVN:  "工作副本被另一个 Subversion 操作锁定。请等它结束，或在工作副本中执行 \"svn cleanup\"。",
 		AppErrorUnsupported:    "当前仓库不支持此操作。",
-
-		AppSideStaged:      "已暂存",
-		AppSideYourVersion: "你的版本",
+		AppSideStaged:          "已暂存",
+		AppSideYourVersion:     "你的版本",
 	})
 }
