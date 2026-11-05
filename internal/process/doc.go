@@ -6,4 +6,8 @@
 // Git is run for every refresh and repository operation, so each command would
 // flash one console window. HideConsoleWindow suppresses those windows; it is
 // a no-op on platforms where the problem does not exist.
+//
+// The integrated terminal is the one deliberate exception: internal/platform/pty
+// starts a shell on a real pty or a pseudo console and must not hide it. See
+// docs/decisions/0028-integrated-terminal.md.
 package process

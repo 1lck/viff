@@ -31,3 +31,4 @@
 | [0025](0025-svn-support.md) | 增加 Subversion 日常客户端支持 |
 | [0026](0026-i18n.md) | 界面语言与消息表 |
 | [0027](0027-ai-commit-message.md) | 用模型生成提交信息 |
+| [0028](0028-integrated-terminal.md) | 集成终端工具窗 |

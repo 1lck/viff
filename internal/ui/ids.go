@@ -15,6 +15,7 @@ var (
 	fDialog  = tree.Feature("dialog")
 	fNotify  = tree.Feature("notify")
 	fWelcome = tree.Feature("welcome")
+	fTerm    = tree.Feature("terminal")
 
 	// Chrome.
 	idProjectWidget   = tree.ID(fChrome, "project-widget")
@@ -39,6 +40,7 @@ var (
 	idSplitProject    = tree.ID(fChrome, "split-project")
 	idSplitCommit     = tree.ID(fChrome, "split-commit")
 	idSplitGit        = tree.ID(fChrome, "split-git")
+	idSplitTerminal   = tree.ID(fChrome, "split-terminal")
 	idSplitBranches   = tree.ID(fChrome, "split-branches")
 	idSplitDetails    = tree.ID(fChrome, "split-details")
 	idSplitMessage    = tree.ID(fChrome, "split-message")
@@ -49,6 +51,14 @@ var (
 	idOptGit          = tree.ID(fChrome, "options-git")
 	idTooltipLayer    = tree.ID(fChrome, "tooltip")
 	idBanner          = tree.Sub(fChrome, tree.Name("banner"))
+
+	// Terminal tool window.
+	idTerminal        = tree.ID(fTerm, "screen")
+	idTerminalClear   = tree.ID(fTerm, "clear")
+	idTerminalRestart = tree.ID(fTerm, "restart")
+	idTerminalRetry   = tree.ID(fTerm, "retry")
+	idTerminalHide    = tree.ID(fTerm, "hide")
+	idTerminalScroll  = tree.ID(fTerm, "scrollbar")
 
 	// Commit tool window.
 	idChangesList       = tree.ID(fCommit, "changes")

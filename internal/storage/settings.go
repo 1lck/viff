@@ -85,6 +85,7 @@ type Settings struct {
 	CommitPanelWidth   float32 `json:"commitPanelWidth"`
 	ProjectPanelWidth  float32 `json:"projectPanelWidth"`
 	GitPanelHeight     float32 `json:"gitPanelHeight"`
+	TerminalHeight     float32 `json:"terminalHeight,omitempty"`
 	BranchesWidth      float32 `json:"branchesWidth"`
 	DetailsWidth       float32 `json:"detailsWidth"`
 	DiffUnified        bool    `json:"diffUnified"`
@@ -119,7 +120,7 @@ func Defaults() *Settings {
 		AutoFetch: false, AutoFetchMins: 10, FetchPrune: true, PullMode: "merge",
 		AutoUpdateCheck:  true,
 		Window:           Window{Width: 1440, Height: 900},
-		CommitPanelWidth: 340, ProjectPanelWidth: 300, GitPanelHeight: 330, BranchesWidth: 220, DetailsWidth: 360,
+		CommitPanelWidth: 340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
 		DiffSyncScroll: true, DiffHighlightWords: true, CommitTree: false,
 	}
 }
@@ -219,6 +220,9 @@ func (s *Settings) sanitize() {
 	}
 	if s.GitPanelHeight < 120 {
 		s.GitPanelHeight = d.GitPanelHeight
+	}
+	if s.TerminalHeight < 120 {
+		s.TerminalHeight = d.TerminalHeight
 	}
 	if s.BranchesWidth < 120 {
 		s.BranchesWidth = d.BranchesWidth

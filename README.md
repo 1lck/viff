@@ -67,6 +67,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, and explicit mark-as-resolved                                                               |
 | Work across checkouts | Create worktrees from new or existing branches; manage submodules with dirty-work protection                                                                  |
 | Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                                                                        |
+| Run commands          | Integrated terminal in the current repository: scrollback, selection copy, paste, clear, restart, and resize                                                   |
 | Work in your language | English and Simplified Chinese interface, English by default, switchable in Settings                                                                          |
 
 **The interface is English by default; switch it to Simplified Chinese in
