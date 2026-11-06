@@ -38,6 +38,10 @@ type commitView struct {
 	msgCollapsed bool
 	aiBusy       bool
 	aiLast       string // last generated message, so a rerun asks for other wording
+	// aiRect is where the AI button was last painted. The confirmation bubble
+	// opens just above it, so the anchor is the button the user actually
+	// clicked rather than a fixed guess at its position.
+	aiRect ui.Rect
 	// listID filters the changes tree by change list. "" shows every list,
 	// which keeps the historical behavior; any other value is the selected
 	// list's ID.
@@ -1010,13 +1014,18 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	if w.checkbox(idCmAmend, top.X, top.Y, top.Height, w.t(i18n.WorkspaceCheckAmend), v.amend, !rs.HasHead()) {
 		w.after(w.toggleAmend)
 	}
-	aiTip := w.t(i18n.WorkspaceTipAIGenerate)
+	aiTip := w.promptRuleTip()
 	if v.aiBusy {
 		aiTip = w.t(i18n.WorkspaceAIGenerating)
 	}
-	if w.action(idCmAI, right(top)-actionSize*3-12, top.Y+1, icons.Bot, aiTip, actOpts{disabled: v.aiBusy}) {
+	aiRect := rect(right(top)-actionSize*3-12, top.Y+1, actionSize, actionSize)
+	v.aiRect = aiRect
+	if w.action(idCmAI, aiRect.X, aiRect.Y, icons.Bot, aiTip, actOpts{disabled: v.aiBusy}) {
 		w.after(w.generateAICommitMessage)
 	}
+	// The picker hangs off the right click so the Amend row keeps its three
+	// buttons; a left click still generates a message.
+	w.onContext(idCmAI, func(x, y float32) { w.openPromptRulesMenu(x, y) })
 	chevron, chevronTip := icons.ChevronDown, w.t(i18n.WorkspaceTipCollapseMessage)
 	if v.msgCollapsed {
 		chevron, chevronTip = icons.ChevronUp, w.t(i18n.WorkspaceTipExpandMessage)
@@ -1097,6 +1106,9 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 // it in the box. A second run passes the previous one so the wording changes.
 // A missing endpoint or a failed request is reported as a notification, which
 // carries the link to the settings page instead of covering the message box.
+//
+// A generated message leaves the machine, so the click asks first unless the
+// user turned that off in the AI button's context menu.
 func (w *Window) generateAICommitMessage() {
 	v := &w.cm
 	if v.aiBusy {
@@ -1113,6 +1125,42 @@ func (w *Window) generateAICommitMessage() {
 	openSettings := vapp.NoticeAction{Title: w.t(i18n.WorkspaceAIOpenSettings), Run: func() { w.openSettingsAt(2) }}
 	if !cfg.Ready() {
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.WorkspaceAINotConfigured), "", openSettings)
+		return
+	}
+	if w.confirmAIGenerate() {
+		// A modal dialog would cover the commit box the answer is about to fill,
+		// so the question sits in a small bubble just above the button. Both
+		// paths call the same request function, so the two behaviors cannot
+		// drift apart.
+		w.confirmAIAbove(v.aiRect, cfg, openSettings)
+		return
+	}
+	w.requestAICommitMessage(cfg, openSettings)
+}
+
+// confirmAIAbove asks about one generation in a bubble over the AI button.
+func (w *Window) confirmAIAbove(anchor ui.Rect, cfg ai.Config, openSettings vapp.NoticeAction) {
+	items := []item{
+		// The question is a statement, not a command: it has no action of its own.
+		{title: w.t(i18n.WorkspaceAIConfirmAsk), label: true},
+		// Cancel on the left, Generate on the right, matching the button order of
+		// every other dialog. Neither carries an icon: these two are plain text
+		// buttons.
+		{buttons: []item{
+			{title: w.t(i18n.CommonCancel)},
+			{title: w.t(i18n.WorkspaceAIConfirmGenerate), run: func() {
+				w.requestAICommitMessage(cfg, openSettings)
+			}},
+		}},
+	}
+	w.openMenuAbove(anchor, items, 210)
+}
+
+// requestAICommitMessage starts the request and fills the message box. It is
+// reached either directly or after the confirmation.
+func (w *Window) requestAICommitMessage(cfg ai.Config, openSettings vapp.NoticeAction) {
+	v := &w.cm
+	if v.aiBusy {
 		return
 	}
 	v.aiBusy = true
