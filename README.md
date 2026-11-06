@@ -81,7 +81,8 @@ includes **all staged files**, even when a list filter is active. Filtered bulk
 staging only stages visible files.
 
 **AI commit messages are optional and off by default.** When enabled, the changed
-files and their diffs are sent to the endpoint you configure; see the
+files and their diffs are sent to the endpoint you configure, together with the
+commit message rules you wrote or the built-in ones; see the
 [privacy guide](docs/privacy.md).
 
 **Copy for AI puts the conflict context on your clipboard.** It is for whatever

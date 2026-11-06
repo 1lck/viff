@@ -81,7 +81,6 @@ var (
 	idCmOptions         = tree.ID(fCommit, "commit-options")
 	idCmOptionsDropdown = tree.ID(fCommit, "commit-options-dropdown")
 	idCmAI              = tree.ID(fCommit, "commit-ai")
-	idPromptRuleText    = tree.ID(fCommit, "prompt-rule-text")
 	idAIFetchModels     = tree.ID(fCommit, "ai-fetch-models")
 	idAIEye             = tree.ID(fCommit, "ai-eye")
 	idCmCommit          = tree.ID(fCommit, "commit-button")
@@ -175,6 +174,8 @@ var (
 
 	// The Report a Problem dialog's description field.
 	idReportProblemText = tree.ID(fDialog, "problem-description")
+	// The commit message rules editor's text area.
+	idPromptRuleText = tree.ID(fDialog, "prompt-rule-text")
 
 	// Dialogs.
 	idDialogScrim  = tree.ID(fDialog, "scrim")

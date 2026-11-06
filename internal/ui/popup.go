@@ -43,9 +43,28 @@ type item struct {
 func sep() item                { return item{sep: true} }
 func header(title string) item { return item{header: title} }
 func (it item) selectable() bool {
-	return !it.sep && it.header == "" && !it.disabled && !it.label && it.buttons == nil
+	if it.sep || it.header != "" || it.disabled || it.label {
+		return false
+	}
+	if it.buttons != nil {
+		// A button row is one keyboard stop: Enter runs its default button, so a
+		// confirmation built from a menu stays usable without a pointer.
+		return it.defaultButton() >= 0
+	}
+	return true
 }
 func (it item) hasSub() bool { return len(it.sub) > 0 || it.subFn != nil }
+
+// defaultButton is the button Enter and Space activate: the right-most enabled
+// one, which is the default button the row paints last.
+func (it item) defaultButton() int {
+	for n := len(it.buttons) - 1; n >= 0; n-- {
+		if !it.buttons[n].disabled {
+			return n
+		}
+	}
+	return -1
+}
 
 // switchW and switchH are the track of the setting switches in a menu.
 const (
@@ -98,10 +117,15 @@ func (w *Window) openMenuBelow(anchor ui.Rect, items []item, minWidth float32) {
 // short confirmation can sit above the button that raised it instead of
 // covering it. The anchor is kept for the height calculation in paintPopup.
 func (w *Window) openMenuAbove(anchor ui.Rect, items []item, minWidth float32) {
-	w.popups = []*popup{{
+	p := &popup{
 		x: anchor.X, anchor: anchor, above: true,
 		items: items, sel: -1, minWidth: minWidth,
-	}}
+	}
+	// A bubble above a button is a question with a default answer, so its row is
+	// preselected: Enter answers the question instead of doing nothing until the
+	// user walks into the row with the arrow keys.
+	p.sel = firstSelectable(p, -1, 1)
+	w.popups = []*popup{p}
 	w.tipID = ui.ID{}
 }
 
@@ -202,7 +226,10 @@ func (w *Window) popupSize(p *popup) (float32, float32) {
 			width = max(width, tw)
 		case it.label:
 			h += popupRowH
-			width = max(width, float32(2*popupPadX)+w.p.width(it.title, fontUI, regular)+8)
+			// A statement has no icon column, but it is painted inside the row
+			// padding with 8 points on each side, so the popup must reserve both
+			// or the question is elided to "…with…" instead of being asked.
+			width = max(width, float32(2*popupPadX)+w.p.width(it.title, fontUI, regular)+16)
 		default:
 			h += popupRowH
 			tw := 36 + w.p.width(it.title, fontUI, regular) + 24
@@ -537,6 +564,20 @@ func (w *Window) activate(level, i int) {
 		p.items[i].switchOn = on
 		w.c.RequestFrame()
 		w.after(func() { fn(on) })
+		return
+	}
+	if it.buttons != nil {
+		// Enter runs the default button, the same one a click on the right-most
+		// button runs, so a confirmation asks nothing a keyboard cannot answer.
+		n := it.defaultButton()
+		if n < 0 {
+			return
+		}
+		btn := it.buttons[n]
+		w.closePopups()
+		if btn.run != nil {
+			btn.run()
+		}
 		return
 	}
 	if it.hasSub() {

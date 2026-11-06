@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -94,7 +95,7 @@ func TestPromptRulesNewerFormatIsReadOnly(t *testing.T) {
 	if len(doc.Rules) != 1 || doc.Rules[0].Name != "From the future" {
 		t.Fatalf("newer rules were not readable: %+v", doc.Rules)
 	}
-	if err := doc.Save(path); err != ErrPromptRulesReadOnly {
+	if err := doc.Save(path); !errors.Is(err, ErrPromptRulesReadOnly) {
 		t.Fatalf("saving a newer file = %v, want %v", err, ErrPromptRulesReadOnly)
 	}
 	after, err := os.ReadFile(path)
@@ -118,6 +119,7 @@ func TestPromptRulesNormalizeInconsistentEntries(t *testing.T) {
 		{"id": "terse", "name": "Duplicate", "text": "Second definition."},
 		{"id": "", "name": "No id", "text": "text"},
 		{"id": "nameless", "name": "   ", "text": "text"},
+		{"id": "emptytext", "name": "No text", "text": "   \n\t "},
 	}
 	selections := make(map[string]string)
 	selections[root] = "terse"

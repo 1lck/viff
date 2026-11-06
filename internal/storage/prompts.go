@@ -165,21 +165,24 @@ func (p *PromptRules) Save(path string) error {
 	return nil
 }
 
-// normalize repairs a loaded document in memory: it drops rules that have no ID
-// or no name, keeps the first of a repeated ID, trims the label and text, and
-// forgets the repository selections of rules that no longer exist (those
-// repositories fall back to the built-in rules).
+// normalize repairs a loaded document in memory: it drops rules that have no ID,
+// no name or no text, keeps the first of a repeated ID, trims the label and
+// text, and forgets the repository selections of rules that no longer exist
+// (those repositories fall back to the built-in rules). A rule without text is
+// dropped too, because its text is the whole instruction: keeping it would list
+// a rule whose selection silently sends the built-in prompt instead.
 func (p *PromptRules) normalize() {
 	rules := []PromptRule{}
 	seen := make(map[string]bool, len(p.Rules))
 	for _, r := range p.Rules {
 		id := strings.TrimSpace(r.ID)
 		name := strings.TrimSpace(r.Name)
-		if id == "" || name == "" || seen[id] {
+		text := strings.TrimSpace(r.Text)
+		if id == "" || name == "" || text == "" || seen[id] {
 			continue
 		}
 		seen[id] = true
-		rules = append(rules, PromptRule{ID: id, Name: name, Text: strings.TrimSpace(r.Text)})
+		rules = append(rules, PromptRule{ID: id, Name: name, Text: text})
 	}
 	p.Rules = rules
 	if p.Repos == nil {

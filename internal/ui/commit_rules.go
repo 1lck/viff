@@ -165,7 +165,7 @@ func (w *Window) openPromptRuleEditor(rule vapp.PromptRule) {
 	if creating {
 		title, ok = w.t(i18n.WorkspaceAIRulesNewTitle), w.t(i18n.WorkspaceAIRulesCreate)
 	}
-	problem, last := "", ""
+	problem, last, focusedName := "", "", false
 	w.openDialog(&dialog{
 		title: title, ok: ok, width: 620,
 		noClose:  true,
@@ -177,7 +177,20 @@ func (w *Window) openPromptRuleEditor(rule vapp.PromptRule) {
 				last, problem = cur, ""
 			}
 			nameless := strings.TrimSpace(name.String()) == ""
-			f.field(w.t(i18n.WorkspaceAIRulesName), name, w.t(i18n.WorkspaceAIRulesNamePlaceholder), problem != "" && nameless)
+			nameID := f.field(w.t(i18n.WorkspaceAIRulesName), name, w.t(i18n.WorkspaceAIRulesNamePlaceholder), problem != "" && nameless)
+			switch {
+			case creating && !focusedName:
+				// A new rule starts with an empty name and a text that is already
+				// filled in, so the name is the field a keyboard user must reach
+				// first. Editing an existing rule keeps the focus on its text.
+				focusedName = true
+				w.focusNext = nameID
+			case problem != "" && nameless:
+				// The refused attempt is about the empty name, so the focus goes
+				// back to it instead of staying on the button that refused it and
+				// leaving the answer nowhere to be typed.
+				w.focusNext = nameID
+			}
 			f.text(w.t(i18n.WorkspaceAIRulesRules))
 			f.custom(200, func(r ui.Rect) { rules.paint(w, idPromptRuleText, r) })
 			if problem != "" {

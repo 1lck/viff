@@ -223,6 +223,13 @@ func (w *Workspace) promptUpdate(fn func(doc *storage.PromptRules) (bool, error)
 		return err
 	}
 	if !changed {
+		// Publish what was just read even though nothing had to change: the file
+		// may have been edited by another window or by hand, and once this
+		// manager has seen the newer copy a read must not keep serving the older
+		// one. With no path the two documents are the same object.
+		m.doc = doc
+		m.loaded = true
+		m.loadErr = nil
 		return nil
 	}
 	if m.path != "" {
