@@ -189,12 +189,12 @@ func (w *Window) openReset(c domain.Commit) {
 			f.gap(4)
 			for i, m := range modes {
 				id := scDialogRadios.At(i)
-				if w.radio(id, f.x, f.y, 24, m.title, mode == i) {
+				if w.radio(id, f.rowX(), f.y, 24, m.title, mode == i) {
 					i := i
 					w.after(func() { mode = i })
 				}
 				f.y += 24
-				w.p.text(m.desc, rect(f.x+22, f.y, f.width-22, 18), fontSmall, regular, w.pal.TextSecond)
+				w.p.text(m.desc, rect(f.rowX()+22, f.y, f.rowW()-22, 18), fontSmall, regular, w.pal.TextSecond)
 				f.y += 26
 			}
 			if mode == 2 && !rs.Status.Clean() {
@@ -686,9 +686,14 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	w.openDialog(&dialog{
 		title: w.t(i18n.SettingsTitle), ok: w.t(i18n.CommonOK), cancel: w.t(i18n.CommonCancel), width: 600,
 		collapsed: collapsed,
+		// The page tabs sit in the header, outside the scrolling body: they stay
+		// put at any offset, so switching pages never needs a scroll first.
+		// settingsTabs adds its own bottom gap, which becomes the header height.
+		header: func(f *form) {
+			settingsTabs(f, &page, []string{w.t(i18n.SettingsTabGeneral), w.t(i18n.SettingsTabGit), w.t(i18n.SettingsTabAI)})
+		},
 		body: func(f *form) {
 			f.labelW = 170
-			settingsTabs(f, &page, []string{w.t(i18n.SettingsTabGeneral), w.t(i18n.SettingsTabGit), w.t(i18n.SettingsTabAI)})
 			if page == 2 {
 				f.bold(w.t(i18n.SettingsTabAI))
 				aiDraft.form(f)

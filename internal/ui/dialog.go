@@ -40,6 +40,20 @@ type dialog struct {
 	// collapsed holds the folded state of a dialog's collapsible groups by
 	// key. The form is rebuilt on every paint, so the state lives here.
 	collapsed map[string]bool
+	// scroll is the body's vertical offset. The window caps a dialog's height,
+	// so a form taller than the screen scrolls instead of pushing the button
+	// row out of the window. A dialog whose body fits keeps it at zero and
+	// scrollable false.
+	scroll     scroller
+	scrollable bool
+	// header paints above the scrolling body and never scrolls with it: the
+	// settings page tabs stay put while the form under them moves, so the reader
+	// can switch pages at any offset. headerH is its measured height.
+	header  func(f *form)
+	headerH float32
+	// bodyH is the visible height of the scrolling body, recorded by the paint
+	// so key handling can page it without measuring again.
+	bodyH float32
 }
 
 // form lays out dialog content top to bottom.
@@ -56,10 +70,23 @@ type form struct {
 	// collapsed and foldCount belong to collapsibleGroup. The map comes from
 	// the dialog so a fold survives the form being rebuilt on every paint.
 	collapsed map[string]bool
+	// indent shifts the rows that follow. A collapsible group sets it for its
+	// own contents so they read as a level under the group title; the next
+	// group header clears it again.
+	indent    float32
 	foldCount int
 }
 
-const dlgPad = 20
+const (
+	dlgPad = 20
+	// dlgEdge keeps a capped dialog off the window's top and bottom edges, so
+	// it still reads as a floating panel rather than a full-screen sheet.
+	dlgEdge = 80
+	// groupIndent is how far a collapsible group's rows sit in from the form's
+	// left edge. It lines them up under the group title's text rather than
+	// under its chevron, so the rows read as one level below the header.
+	groupIndent = 22
+)
 
 func (w *Window) openDialog(d *dialog) {
 	if d.width == 0 {
@@ -108,8 +135,32 @@ func (w *Window) dialogKey(e ui.KeyEvent) bool {
 		}
 		w.submitDialog()
 		return true
+	case ui.KeyPageUp:
+		// Home and End are left to the text fields: a field consumes them for
+		// its caret before the dialog sees the key, and taking them here would
+		// make the caret jump around instead of the body.
+		return w.scrollDialogBy(-pageScroll(w.dialog), w.dialogBodyH())
+	case ui.KeyPageDown:
+		return w.scrollDialogBy(pageScroll(w.dialog), w.dialogBodyH())
 	}
 	return false
+}
+
+// pageScroll is a page's worth of rows: one screen of body minus one row of
+// overlap, so the reader keeps a line of context.
+func pageScroll(d *dialog) float32 {
+	if d == nil {
+		return 0
+	}
+	return -max(d.bodyH-rowH, rowH)
+}
+
+// dialogBodyH is the visible body height the last paint recorded.
+func (w *Window) dialogBodyH() float32 {
+	if w.dialog == nil {
+		return 0
+	}
+	return w.dialog.bodyH
 }
 
 func (w *Window) paintDialog(full ui.Rect) {
@@ -118,9 +169,22 @@ func (w *Window) paintDialog(full ui.Rect) {
 	defer w.c.PopLayer()
 	w.c.HitWithOptions(idDialogScrim, full, "", ui.HitOptions{Backdrop: true, SkipFocus: true})
 
-	height := 44 + d.contentH + 24 + buttonH + dlgPad
+	// A dialog's height follows its content, but never past the window: the
+	// button row must stay reachable however long the form grows. When the
+	// content does not fit, the body scrolls and the buttons stay put.
+	natural := 44 + d.headerH + d.contentH + 24 + buttonH + dlgPad
+	height := min(natural, max(200, full.Height-dlgEdge))
 	width := min(d.width, full.Width-40)
 	r := rect((full.Width-width)/2, max(40, (full.Height-height)*0.38), width, height)
+	// The header (the settings page tabs) is pinned under the title and stays
+	// out of the scrolling body, so it never moves and its buttons are always
+	// reachable. The body is the room below it, down to the button row.
+	header := rect(r.X+dlgPad, r.Y+44, r.Width-2*dlgPad, d.headerH)
+	body := rect(r.X+dlgPad, bottom(header), r.Width-2*dlgPad, 0)
+	by := bottom(r) - dlgPad - buttonH
+	body.Height = max(by-12-body.Y, 0)
+	d.bodyH = body.Height
+	d.scrollable = natural > height
 	w.c.Shadow(r, islandRadius, ui.ShadowStyle{OffsetY: 8, Blur: 32}, ui.Color{Alpha: 0.45})
 	w.p.outline(r, islandRadius, 1, w.pal.PopupBorder, w.pal.Dialog)
 	w.c.HitWithOptions(idDialogPanel, r, d.title, ui.HitOptions{Role: ui.RoleGroup, SkipFocus: true})
@@ -134,8 +198,37 @@ func (w *Window) paintDialog(full ui.Rect) {
 		w.after(w.closeDialog)
 	}
 
-	f := &form{w: w, x: r.X + dlgPad, y: r.Y + 44, width: r.Width - 2*dlgPad, labelW: 0, collapsed: d.collapsed}
+	// The header is measured and painted first: its height sets where the
+	// scrolling body starts, so it has to settle before the body is laid out.
+	// It is drawn outside any clip, which is what keeps the page tabs still
+	// while the form under them scrolls.
+	if d.header != nil {
+		hf := &form{w: w, x: header.X, y: header.Y, width: header.Width, labelW: 0}
+		hstart := hf.y
+		d.header(hf)
+		if h := hf.y - hstart; h != d.headerH {
+			d.headerH = h
+			w.c.RequestFrame()
+		}
+	}
+
+	// The form lays its rows out in absolute coordinates, so the offset is
+	// applied once here and every row method stays unaware of scrolling. The
+	// measured height is a difference of two offsets, which the shift cancels:
+	// contentH still reports the whole form, not the visible part.
+	f := &form{w: w, x: r.X + dlgPad, y: body.Y - d.scroll.Y, width: r.Width - 2*dlgPad, labelW: 0, collapsed: d.collapsed}
 	start := f.y
+	// The body's scroll region is declared before the form registers its own,
+	// because onScroll tries the most recently added region first: a list or
+	// menu inside the dialog keeps the wheel, and the body takes what falls
+	// outside it.
+	if d.scrollable {
+		w.onScrollIn(body, func(dx, dy float32) {
+			d.scroll.Y += dy
+			d.scroll.clamp(d.contentH, body.Height)
+		})
+		w.c.Clip(body)
+	}
 	if d.body != nil {
 		d.body(f)
 	}
@@ -145,10 +238,21 @@ func (w *Window) paintDialog(full ui.Rect) {
 	}
 	if h := f.y - start; h != d.contentH {
 		d.contentH = h
+		// The first paint measures the form, so a dialog that grew past the
+		// window only becomes scrollable on the next frame.
 		w.c.RequestFrame()
 	}
+	if d.scrollable {
+		w.c.Unclip()
+		d.scroll.clamp(d.contentH, body.Height)
+		// vbar draws and handles its own drag, but it records no area, so the
+		// body rectangle is published here for hit testing and for callers that
+		// need the visible part of the form.
+		w.areas[idDialogBar] = body
+		w.vbar(idDialogBar, rect(body.X, body.Y, r.Width-dlgPad, body.Height), &d.scroll, d.contentH)
+		w.revealDialogFocus(d, body)
+	}
 
-	by := bottom(r) - dlgPad - buttonH
 	bx := right(r) - dlgPad
 	okLabel := d.ok
 	if d.okLabel != nil {
@@ -192,15 +296,75 @@ func (w *Window) paintDialog(full ui.Rect) {
 	w.c.PopFocusScope()
 }
 
+// revealDialogFocus keeps keyboard navigation usable in a scrolling body: the
+// focus ring moves through fields that may sit outside the visible part, so the
+// body scrolls to whatever the keyboard just focused. It runs after the body is
+// painted, once the hits of this frame exist.
+func (w *Window) revealDialogFocus(d *dialog, body ui.Rect) {
+	if !d.scrollable {
+		return
+	}
+	target := w.c.Focused()
+	if target == (ui.ID{}) {
+		return
+	}
+	for _, hit := range w.c.Hits() {
+		if hit.ID != target {
+			continue
+		}
+		// Only a control inside the scrolling body can pull it around. The
+		// pinned header and the button row sit outside it, so they must not:
+		// checking the live rectangle first is what keeps the page tabs from
+		// scrolling the form just because one of them took the focus.
+		if hit.Bounds.Y+hit.Bounds.Height <= body.Y || hit.Bounds.Y >= bottom(body) {
+			return
+		}
+		// Body coordinates: undo the scroll, then stay inside the content. A hit
+		// that is not part of the form (a header button after scrolling) must
+		// never move the body.
+		top := hit.Bounds.Y + d.scroll.Y - body.Y
+		if top < 0 || top >= d.contentH {
+			return
+		}
+		d.scroll.reveal(top, hit.Bounds.Height, body.Height)
+		d.scroll.clamp(d.contentH, body.Height)
+		return
+	}
+}
+
+// scrollDialogBy moves the body by dy pixels and reports whether it consumed
+// the key, so the dialog key handler can fall through when nothing scrolls.
+func (w *Window) scrollDialogBy(dy float32, view float32) bool {
+	d := w.dialog
+	if d == nil || !d.scrollable {
+		return false
+	}
+	before := d.scroll.Y
+	d.scroll.Y += dy
+	d.scroll.clamp(d.contentH, view)
+	if d.scroll.Y == before {
+		return false
+	}
+	w.c.RequestFrame()
+	return true
+}
+
 // ---- form rows --------------------------------------------------------------
 
 func (f *form) gap(h float32) { f.y += h }
 
+// rowX and rowW are the left edge and usable width of a row at the current
+// indent. Group headers reset the indent, their rows set it, so everything
+// under a header reads as one level below it.
+func (f *form) rowX() float32 { return f.x + f.indent }
+
+func (f *form) rowW() float32 { return f.width - f.indent }
+
 // message paints wrapped text.
 func (f *form) message(s string, c ui.Color) {
-	lines := f.w.c.WrapLines(nil, s, fontUI, regular, f.width, 12)
+	lines := f.w.c.WrapLines(nil, s, fontUI, regular, f.rowW(), 12)
 	for _, l := range lines {
-		f.w.p.text(l, rect(f.x, f.y, f.width, 20), fontUI, regular, c)
+		f.w.p.text(l, rect(f.rowX(), f.y, f.rowW(), 20), fontUI, regular, c)
 		f.y += 20
 	}
 	f.y += 4
@@ -211,32 +375,45 @@ func (f *form) muted(s string) { f.message(s, f.w.pal.TextSecond) }
 
 // bold paints a one-line emphasized row.
 func (f *form) bold(s string) {
-	f.w.p.text(s, rect(f.x, f.y, f.width, 22), fontUI, semibold, f.w.pal.Text)
+	f.w.p.text(s, rect(f.rowX(), f.y, f.rowW(), 22), fontUI, semibold, f.w.pal.Text)
 	f.y += 26
 }
 
-// collapsibleGroup paints a settings group header with a disclosure arrow and
+// collapsibleGroup paints a settings group header with a disclosure chevron and
 // reports whether the group is expanded, so the caller can skip its rows. The
 // state lives in the dialog: the form is rebuilt on every paint.
+//
+// The chevron is the same icon pair the tree rows and the commit message's
+// disclosure use, rather than a text arrow: a glyph inherits the font's
+// advances and weight, which never lines up with the 16px icons around it.
 func (f *form) collapsibleGroup(key, title string) bool {
 	open := !f.collapsed[key]
 	id := scDialogGroups.At(f.foldCount)
 	f.foldCount++
+	// A header always sits at the form's own left edge; the indent belongs to
+	// the rows below it. Clearing it here also ends the previous group.
+	f.indent = 0
 	f.custom(26, func(r ui.Rect) {
 		if f.w.hovered(id) {
 			f.w.p.round(r, 4, f.w.pal.Hover)
 		}
-		arrow := "▾"
-		if !open {
-			arrow = "▸"
+		chev := icons.ChevronRight
+		if open {
+			chev = icons.ChevronDown
 		}
-		f.w.p.text(arrow, rect(r.X+2, r.Y, 16, 22), fontUI, regular, f.w.pal.TextSecond)
-		f.w.p.text(title, rect(r.X+20, r.Y, r.Width-20, 22), fontUI, semibold, f.w.pal.Text)
-		f.w.c.HitWithOptions(id, r, title, ui.HitOptions{Role: ui.RoleButton, Cursor: ui.PointerCursorDefault})
+		f.w.p.iconIn(chev, rect(r.X+2, r.Y+3, iconSize, iconSize))
+		f.w.p.text(title, rect(r.X+22, r.Y, r.Width-22, 22), fontUI, semibold, f.w.pal.Text)
+		f.w.c.HitWithOptions(id, r, title, ui.HitOptions{
+			Role: ui.RoleButton, Cursor: ui.PointerCursorDefault,
+			Expandable: true, Expanded: open,
+		})
 		if f.w.c.Clicked(id) {
 			f.w.after(func() { f.collapsed[key] = !f.collapsed[key] })
 		}
 	})
+	if open {
+		f.indent = groupIndent
+	}
 	return open
 }
 
@@ -244,14 +421,14 @@ func (f *form) collapsibleGroup(key, title string) bool {
 func (f *form) field(label string, ed *text.Editor, placeholder string, invalid bool) ui.ID {
 	id := scDialogFields.At(f.fields)
 	f.fields++
-	x, width := f.x, f.width
+	x, width := f.rowX(), f.rowW()
 	if label != "" {
 		if f.labelW > 0 {
-			f.w.p.text(label, rect(f.x, f.y, f.labelW, fieldH), fontUI, regular, f.w.pal.Text)
+			f.w.p.text(label, rect(f.rowX(), f.y, f.labelW, fieldH), fontUI, regular, f.w.pal.Text)
 			x += f.labelW
 			width -= f.labelW
 		} else {
-			f.w.p.text(label, rect(f.x, f.y, f.width, 20), fontUI, regular, f.w.pal.Text)
+			f.w.p.text(label, rect(f.rowX(), f.y, f.rowW(), 20), fontUI, regular, f.w.pal.Text)
 			f.y += 24
 		}
 	}
@@ -266,9 +443,9 @@ func (f *form) field(label string, ed *text.Editor, placeholder string, invalid 
 func (f *form) secretField(label string, ed *text.Editor, shown *bool, placeholder string) ui.ID {
 	id := scDialogFields.At(f.fields)
 	f.fields++
-	x, width := f.x, f.width
+	x, width := f.rowX(), f.rowW()
 	if label != "" && f.labelW > 0 {
-		f.w.p.text(label, rect(f.x, f.y, f.labelW, fieldH), fontUI, regular, f.w.pal.Text)
+		f.w.p.text(label, rect(f.rowX(), f.y, f.labelW, fieldH), fontUI, regular, f.w.pal.Text)
 		x += f.labelW
 		width -= f.labelW
 	}
@@ -295,7 +472,7 @@ func (f *form) secretField(label string, ed *text.Editor, shown *bool, placehold
 func (f *form) check(label string, v *bool) {
 	id := scDialogChecks.At(f.checks)
 	f.checks++
-	if f.w.checkbox(id, f.x+f.labelW, f.y, 24, label, *v, false) {
+	if f.w.checkbox(id, f.rowX()+f.labelW, f.y, 24, label, *v, false) {
 		f.w.after(func() { *v = !*v })
 	}
 	f.y += 28
@@ -304,7 +481,7 @@ func (f *form) check(label string, v *bool) {
 func (f *form) checkDisabled(label string, v bool) {
 	id := scDialogChecks.At(f.checks)
 	f.checks++
-	f.w.checkbox(id, f.x+f.labelW, f.y, 24, label, v, true)
+	f.w.checkbox(id, f.rowX()+f.labelW, f.y, 24, label, v, true)
 	f.y += 28
 }
 
@@ -312,7 +489,7 @@ func (f *form) radio(options []string, v *int) {
 	for i, o := range options {
 		id := scDialogRadios.At(f.radios)
 		f.radios++
-		if f.w.radio(id, f.x+f.labelW, f.y, 24, o, *v == i) {
+		if f.w.radio(id, f.rowX()+f.labelW, f.y, 24, o, *v == i) {
 			i := i
 			f.w.after(func() { *v = i })
 		}
@@ -324,14 +501,14 @@ func (f *form) radio(options []string, v *int) {
 func (f *form) combo(label, value string, choices func() []item) {
 	id := scDialogCombos.At(f.combos)
 	f.combos++
-	x, width := f.x, f.width
+	x, width := f.rowX(), f.rowW()
 	if label != "" {
 		if f.labelW > 0 {
-			f.w.p.text(label, rect(f.x, f.y, f.labelW, fieldH), fontUI, regular, f.w.pal.Text)
+			f.w.p.text(label, rect(f.rowX(), f.y, f.labelW, fieldH), fontUI, regular, f.w.pal.Text)
 			x += f.labelW
 			width -= f.labelW
 		} else {
-			f.w.p.text(label, rect(f.x, f.y, f.width, 20), fontUI, regular, f.w.pal.Text)
+			f.w.p.text(label, rect(f.rowX(), f.y, f.rowW(), 20), fontUI, regular, f.w.pal.Text)
 			f.y += 24
 		}
 	}
@@ -342,9 +519,9 @@ func (f *form) combo(label, value string, choices func() []item) {
 	f.y += fieldH + 12
 }
 
-// custom reserves h pixels for caller drawing.
+// custom reserves h pixels for caller drawing, at the current indent.
 func (f *form) custom(h float32, paint func(r ui.Rect)) {
-	paint(rect(f.x, f.y, f.width, h))
+	paint(rect(f.rowX(), f.y, f.rowW(), h))
 	f.y += h
 }
 

@@ -181,6 +181,7 @@ var (
 	idDialogCancel = tree.ID(fDialog, "cancel")
 	idDialogExtra  = tree.ID(fDialog, "extra")
 	idDialogClose  = tree.ID(fDialog, "close")
+	idDialogBar    = tree.ID(fDialog, "body-scroll")
 	scDialogFields = tree.Sub(fDialog, tree.Name("fields"))
 	scDialogChecks = tree.Sub(fDialog, tree.Name("checks"))
 	scDialogRadios = tree.Sub(fDialog, tree.Name("radios"))

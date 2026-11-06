@@ -45,6 +45,10 @@ func TestSearchSettingsDialog(t *testing.T) {
 		t.Fatalf("the search section is missing; texts: %s", strings.Join(f.s.Texts(), " | "))
 	}
 
+	// The Search group is the last one on the General page, so it starts below
+	// the visible body of a tall dialog; the body clip keeps it unclickable
+	// until it is scrolled into view.
+	scrollDialogTo(t, f, "Auto (ripgrep if installed)")
 	f.click("Auto (ripgrep if installed)")
 	f.s.Settle(40*time.Millisecond, time.Second)
 	clickMenuRow(t, f, "Git grep")
@@ -86,6 +90,10 @@ func TestSearchSettingsMissingRipgrep(t *testing.T) {
 		t.Fatalf("the ripgrep hint is missing; texts: %s", strings.Join(f.s.Texts(), " | "))
 	}
 
+	// The Download button sits in the Search group at the bottom of a tall
+	// page, so it has to be scrolled into view before the clip lets a click
+	// through.
+	scrollDialogTo(t, f, "Download ripgrep")
 	f.click("Download ripgrep")
 	f.s.Settle(40*time.Millisecond, time.Second)
 	if want := "https://github.com/BurntSushi/ripgrep/releases"; opened != want {
