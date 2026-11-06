@@ -2,6 +2,7 @@ package viffui
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -618,9 +619,23 @@ func (w *Window) openAbout() {
 
 func (w *Window) openSettings() { w.openSettingsAt(0) }
 
-// openSettingsAt opens the settings dialog on one page: 0 General, 1 Git, 2 AI.
-func (w *Window) openSettingsAt(page int) {
+// openSettingsSearch opens the General page with every other group folded, so
+// the Search backend and ripgrep path are visible without scrolling. The Find
+// in Files dialog uses it.
+func (w *Window) openSettingsSearch() { w.openSettingsDialog(0, true) }
+
+func (w *Window) openSettingsAt(page int) { w.openSettingsDialog(page, false) }
+
+// openSettingsDialog opens the settings dialog on one page: 0 General, 1 Git,
+// 2 AI. revealSearch folds the other General groups and expands Search.
+func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	s := w.ws.Settings
+	collapsed := map[string]bool{}
+	if revealSearch {
+		for _, key := range []string{"appearance", "gitExec", "tools", "diagnostics", "updates", "fonts", "commands", "remote"} {
+			collapsed[key] = true
+		}
+	}
 	theme := s.Theme
 	editorFont := s.EditorFont
 	diffFont := s.DiffFont
@@ -638,11 +653,30 @@ func (w *Window) openSettingsAt(page int) {
 	debugLog := s.LogLevel == "debug"
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
+	searchTool := s.SearchTool
+	if searchTool != "git" && searchTool != "rg" {
+		searchTool = "auto"
+	}
+	// The resolved path is echoed into the field: a user who never typed one
+	// sees which ripgrep the settings will actually use. It is resolved once
+	// here, not while painting, because exec.LookPath and os.Stat touch the
+	// file system and the dialog body runs on every frame.
+	ripgrepBin := findRipgrepPath(s.RipgrepPath)
+	ripgrepText := s.RipgrepPath
+	if strings.TrimSpace(ripgrepText) == "" && ripgrepBin != "" {
+		ripgrepText = ripgrepBin
+	}
+	ripgrepPath := text.NewEditor(ripgrepText)
 	// askUpdate is the readable form of the stored flag: the settings page names
 	// the behavior people recognize, and the Update Project dialog is what asks.
 	askUpdate := !s.SkipUpdateDialog
 	gitDraft := newGitSettingsDraft(s)
 	aiDraft := newAISettingsDraft(s)
+	searchToolTitle := map[string]string{
+		"auto": w.t(i18n.SettingsSearchAuto),
+		"git":  w.t(i18n.SettingsSearchGit),
+		"rg":   w.t(i18n.SettingsSearchRipgrep),
+	}
 	themeTitle := map[string]string{
 		"dark":   w.t(i18n.SettingsThemeDark),
 		"light":  w.t(i18n.SettingsThemeLight),
@@ -651,6 +685,7 @@ func (w *Window) openSettingsAt(page int) {
 	pullTitle := w.pullTitles()
 	w.openDialog(&dialog{
 		title: w.t(i18n.SettingsTitle), ok: w.t(i18n.CommonOK), cancel: w.t(i18n.CommonCancel), width: 600,
+		collapsed: collapsed,
 		body: func(f *form) {
 			f.labelW = 170
 			settingsTabs(f, &page, []string{w.t(i18n.SettingsTabGeneral), w.t(i18n.SettingsTabGit), w.t(i18n.SettingsTabAI)})
@@ -660,109 +695,165 @@ func (w *Window) openSettingsAt(page int) {
 				return
 			}
 			if page == 1 {
-				f.bold(w.t(i18n.SettingsGroupCommands))
-				gitDraft.form(f)
+				if f.collapsibleGroup("commands", w.t(i18n.SettingsGroupCommands)) {
+					gitDraft.form(f)
+				}
 				f.gap(6)
-				f.bold(w.t(i18n.SettingsGroupRemote))
-				f.combo(w.t(i18n.SettingsLabelUpdateMode), pullTitle[pull], func() []item {
-					var items []item
-					for _, k := range pullModes {
-						k := k
-						items = append(items, item{title: pullTitle[k], checked: pull == k, run: func() { pull = k }})
+				if f.collapsibleGroup("remote", w.t(i18n.SettingsGroupRemote)) {
+					f.combo(w.t(i18n.SettingsLabelUpdateMode), pullTitle[pull], func() []item {
+						var items []item
+						for _, k := range pullModes {
+							k := k
+							items = append(items, item{title: pullTitle[k], checked: pull == k, run: func() { pull = k }})
+						}
+						return items
+					})
+					f.check(w.t(i18n.SettingsCheckAskUpdate), &askUpdate)
+					f.custom(22, func(r ui.Rect) {
+						w.p.text(w.t(i18n.SettingsHintAskUpdate), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+					})
+					f.gap(4)
+					f.check(w.t(i18n.SettingsCheckPrune), &prune)
+					f.check(w.t(i18n.SettingsCheckAutoFetch), &autoFetch)
+					if autoFetch {
+						m, err := strconv.Atoi(strings.TrimSpace(mins.String()))
+						f.field(w.t(i18n.SettingsLabelFetchMins), mins, "10", err != nil || m < 1)
 					}
-					return items
-				})
-				f.check(w.t(i18n.SettingsCheckAskUpdate), &askUpdate)
-				f.custom(22, func(r ui.Rect) {
-					w.p.text(w.t(i18n.SettingsHintAskUpdate), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
-				})
-				f.gap(4)
-				f.check(w.t(i18n.SettingsCheckPrune), &prune)
-				f.check(w.t(i18n.SettingsCheckAutoFetch), &autoFetch)
-				if autoFetch {
-					m, err := strconv.Atoi(strings.TrimSpace(mins.String()))
-					f.field(w.t(i18n.SettingsLabelFetchMins), mins, "10", err != nil || m < 1)
 				}
 				return
 			}
-			f.bold(w.t(i18n.SettingsGroupAppearance))
-			langCurrent := w.t(i18n.SettingsLangEnglish)
-			if language == "zh-CN" {
-				langCurrent = w.t(i18n.SettingsLangChinese)
+			if f.collapsibleGroup("appearance", w.t(i18n.SettingsGroupAppearance)) {
+				langCurrent := w.t(i18n.SettingsLangEnglish)
+				if language == "zh-CN" {
+					langCurrent = w.t(i18n.SettingsLangChinese)
+				}
+				f.combo(w.t(i18n.SettingsLabelLanguage), langCurrent, func() []item {
+					return []item{
+						{title: w.t(i18n.SettingsLangEnglish), checked: language != "zh-CN", run: func() { language = "en" }},
+						{title: w.t(i18n.SettingsLangChinese), checked: language == "zh-CN", run: func() { language = "zh-CN" }},
+					}
+				})
+				f.combo(w.t(i18n.SettingsLabelTheme), themeTitle[theme], func() []item {
+					var items []item
+					for _, k := range []string{"dark", "light", "system"} {
+						k := k
+						items = append(items, item{title: themeTitle[k], checked: theme == k, run: func() { theme = k }})
+					}
+					return items
+				})
+				n, err := strconv.Atoi(strings.TrimSpace(font.String()))
+				f.field(w.t(i18n.SettingsLabelFontSize), font, "13", err != nil || n < 8 || n > 32)
 			}
-			f.combo(w.t(i18n.SettingsLabelLanguage), langCurrent, func() []item {
-				return []item{
-					{title: w.t(i18n.SettingsLangEnglish), checked: language != "zh-CN", run: func() { language = "en" }},
-					{title: w.t(i18n.SettingsLangChinese), checked: language == "zh-CN", run: func() { language = "zh-CN" }},
-				}
-			})
-			f.combo(w.t(i18n.SettingsLabelTheme), themeTitle[theme], func() []item {
-				var items []item
-				for _, k := range []string{"dark", "light", "system"} {
-					k := k
-					items = append(items, item{title: themeTitle[k], checked: theme == k, run: func() { theme = k }})
-				}
-				return items
-			})
-			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
-			f.field(w.t(i18n.SettingsLabelFontSize), font, "13", err != nil || n < 8 || n > 32)
 			f.gap(6)
-			f.bold(w.t(i18n.SettingsGroupGitExec))
-			f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.t(i18n.SettingsPlaceholderAuto), false)
-			f.gap(6)
-			f.bold(w.t(i18n.SettingsGroupTools))
-			f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)
-			f.y -= 8
-			f.custom(22, func(r ui.Rect) {
-				w.p.text(w.t(i18n.SettingsHintEditor), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
-			})
-			f.gap(4)
-			f.custom(22, func(r ui.Rect) {
-				w.p.text(w.t(i18n.SettingsLabelSettingsFile, shortenHome(s.Path())), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
-			})
-			f.gap(6)
-			f.bold(w.t(i18n.SettingsGroupDiagnostics))
-			f.check(w.t(i18n.SettingsCheckDebugLog), &debugLog)
-			f.custom(22, func(r ui.Rect) {
-				w.p.text(w.t(i18n.SettingsHintDebugLog), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
-			})
-			f.gap(6)
-			f.bold(w.t(i18n.SettingsGroupUpdates))
-			f.check(w.t(i18n.SettingsCheckAutoUpdate), &autoUpdate)
-			f.gap(6)
-			f.bold(w.t(i18n.SettingsGroupFonts))
-			interfaceDefault := w.t(i18n.SettingsFontDefaultInterface)
-			current := interfaceDefault
-			if editorFont != "" {
-				current = editorFont
+			if f.collapsibleGroup("gitExec", w.t(i18n.SettingsGroupGitExec)) {
+				f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.t(i18n.SettingsPlaceholderAuto), false)
 			}
-			f.combo(w.t(i18n.SettingsLabelInterface), current, func() []item {
-				items := []item{{title: interfaceDefault, checked: editorFont == "", run: func() { editorFont = "" }}}
-				for _, name := range fonts {
-					name := name
-					items = append(items, item{title: name, checked: editorFont == name, run: func() { editorFont = name }})
-				}
-				return items
-			})
-			f.custom(22, func(r ui.Rect) {
-				w.p.text(w.t(i18n.SettingsHintInterface), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
-			})
-			diffDefault := w.t(i18n.SettingsFontDefaultDiff)
-			diffCurrent := diffDefault
-			if diffFont != "" {
-				diffCurrent = diffFont
+			f.gap(6)
+			if f.collapsibleGroup("tools", w.t(i18n.SettingsGroupTools)) {
+				f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)
+				f.y -= 8
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsHintEditor), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				})
+				f.gap(4)
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsLabelSettingsFile, shortenHome(s.Path())), rect(r.X, r.Y, r.Width, 20), fontSmall, regular, w.pal.TextDisable)
+				})
 			}
-			f.combo(w.t(i18n.SettingsLabelDiffFont), diffCurrent, func() []item {
-				items := []item{{title: diffDefault, checked: diffFont == "", run: func() { diffFont = "" }}}
-				for _, name := range monoFonts {
-					name := name
-					items = append(items, item{title: name, checked: diffFont == name, run: func() { diffFont = name }})
+			f.gap(6)
+			if f.collapsibleGroup("diagnostics", w.t(i18n.SettingsGroupDiagnostics)) {
+				f.check(w.t(i18n.SettingsCheckDebugLog), &debugLog)
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsHintDebugLog), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				})
+			}
+			f.gap(6)
+			if f.collapsibleGroup("updates", w.t(i18n.SettingsGroupUpdates)) {
+				f.check(w.t(i18n.SettingsCheckAutoUpdate), &autoUpdate)
+			}
+			f.gap(6)
+			if f.collapsibleGroup("fonts", w.t(i18n.SettingsGroupFonts)) {
+				interfaceDefault := w.t(i18n.SettingsFontDefaultInterface)
+				current := interfaceDefault
+				if editorFont != "" {
+					current = editorFont
 				}
-				return items
-			})
-			f.custom(22, func(r ui.Rect) {
-				w.p.text(w.t(i18n.SettingsHintDiffFont), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
-			})
+				f.combo(w.t(i18n.SettingsLabelInterface), current, func() []item {
+					items := []item{{title: interfaceDefault, checked: editorFont == "", run: func() { editorFont = "" }}}
+					for _, name := range fonts {
+						name := name
+						items = append(items, item{title: name, checked: editorFont == name, run: func() { editorFont = name }})
+					}
+					return items
+				})
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsHintInterface), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				})
+				diffDefault := w.t(i18n.SettingsFontDefaultDiff)
+				diffCurrent := diffDefault
+				if diffFont != "" {
+					diffCurrent = diffFont
+				}
+				f.combo(w.t(i18n.SettingsLabelDiffFont), diffCurrent, func() []item {
+					items := []item{{title: diffDefault, checked: diffFont == "", run: func() { diffFont = "" }}}
+					for _, name := range monoFonts {
+						name := name
+						items = append(items, item{title: name, checked: diffFont == name, run: func() { diffFont = name }})
+					}
+					return items
+				})
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsHintDiffFont), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				})
+			}
+			f.gap(6)
+			if f.collapsibleGroup("search", w.t(i18n.SettingsGroupSearch)) {
+				f.combo(w.t(i18n.SettingsLabelSearchTool), searchToolTitle[searchTool], func() []item {
+					var items []item
+					for _, k := range []string{"auto", "git", "rg"} {
+						k := k
+						items = append(items, item{title: searchToolTitle[k], checked: searchTool == k, run: func() { searchTool = k }})
+					}
+					return items
+				})
+				f.custom(fieldH+12, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsLabelRipgrepPath), rect(r.X, r.Y, f.labelW, fieldH), fontUI, regular, w.pal.Text)
+					download, browse := w.t(i18n.SettingsRipgrepDownload), w.t(i18n.DialogBrowse)
+					downloadW, browseW := w.buttonWidth(download), w.buttonWidth(browse)
+					id := scDialogFields.At(f.fields)
+					f.fields++
+					x := r.X + f.labelW
+					fieldW := max(120, r.Width-f.labelW-browseW-downloadW-16)
+					if w.field(id, ripgrepPath, rect(x, r.Y, fieldW, fieldH), fieldOpts{label: w.t(i18n.SettingsLabelRipgrepPath)}) {
+						w.submitDialog()
+					}
+					x += fieldW + 8
+					if w.button(idSettingsRipgrepBrowse, rect(x, r.Y, browseW, fieldH), browse, btnNormal, false) {
+						w.after(func() {
+							paths, err := app.OpenFiles(app.OpenFileOptions{Title: w.t(i18n.SettingsLabelRipgrepPath)})
+							if err == nil && len(paths) > 0 {
+								setText(ripgrepPath, paths[0])
+							}
+						})
+					}
+					x += browseW + 8
+					if w.button(idSettingsRipgrepDownload, rect(x, r.Y, downloadW, fieldH), download, btnNormal, false) {
+						w.after(func() { w.openLink(ripgrepDownloadURL) })
+					}
+				})
+				if ripgrepBin == "" {
+					f.custom(22, func(r ui.Rect) {
+						w.p.text(w.t(i18n.SettingsRipgrepMissing), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+					})
+					f.custom(22, func(r ui.Rect) {
+						w.p.text(w.t(i18n.SettingsHintRipgrep), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+					})
+				}
+				f.gap(2)
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsHintSearchTool), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				})
+			}
 		},
 		okDisabled: func() bool {
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
@@ -799,6 +890,8 @@ func (w *Window) openSettingsAt(page int) {
 			s.EditorFont = editorFont
 			s.DiffFont = diffFont
 			s.Language = language
+			s.SearchTool = searchTool
+			s.RipgrepPath = strings.TrimSpace(ripgrepPath.String())
 			w.applyTheme()
 			w.applyFont()
 			w.applyLanguage()
@@ -840,3 +933,31 @@ func (w *Window) addToGitignore(rows []changeRow) {
 }
 
 var _ = icons.Add
+
+// ripgrepDownloadURL is where the Settings dialog sends a user whose machine
+// has no ripgrep. Viff does not bundle it, so the status line never claims a
+// backend the user actually has.
+const ripgrepDownloadURL = "https://github.com/BurntSushi/ripgrep/releases"
+
+// findRipgrepPath resolves the ripgrep executable shown by the Settings status
+// line. An empty path means "rg" from PATH; the extra directories cover a GUI
+// started from Finder, which has no shell PATH. Duplicating the lookup here
+// keeps the dialog off gitcli's search runner: it only needs a path to report,
+// never a search.
+func findRipgrepPath(path string) string {
+	if p := strings.TrimSpace(path); p != "" {
+		if found, err := exec.LookPath(p); err == nil {
+			return found
+		}
+		return ""
+	}
+	if found, err := exec.LookPath("rg"); err == nil {
+		return found
+	}
+	for _, candidate := range []string{"/opt/homebrew/bin/rg", "/usr/local/bin/rg", "/usr/bin/rg"} {
+		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
+			return candidate
+		}
+	}
+	return ""
+}

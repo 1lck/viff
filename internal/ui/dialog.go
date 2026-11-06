@@ -37,6 +37,9 @@ type dialog struct {
 	focus      ui.ID
 	focused    bool
 	noCancel   bool
+	// collapsed holds the folded state of a dialog's collapsible groups by
+	// key. The form is rebuilt on every paint, so the state lives here.
+	collapsed map[string]bool
 }
 
 // form lays out dialog content top to bottom.
@@ -50,6 +53,10 @@ type form struct {
 	combos int
 	radios int
 	links  int
+	// collapsed and foldCount belong to collapsibleGroup. The map comes from
+	// the dialog so a fold survives the form being rebuilt on every paint.
+	collapsed map[string]bool
+	foldCount int
 }
 
 const dlgPad = 20
@@ -127,7 +134,7 @@ func (w *Window) paintDialog(full ui.Rect) {
 		w.after(w.closeDialog)
 	}
 
-	f := &form{w: w, x: r.X + dlgPad, y: r.Y + 44, width: r.Width - 2*dlgPad, labelW: 0}
+	f := &form{w: w, x: r.X + dlgPad, y: r.Y + 44, width: r.Width - 2*dlgPad, labelW: 0, collapsed: d.collapsed}
 	start := f.y
 	if d.body != nil {
 		d.body(f)
@@ -206,6 +213,31 @@ func (f *form) muted(s string) { f.message(s, f.w.pal.TextSecond) }
 func (f *form) bold(s string) {
 	f.w.p.text(s, rect(f.x, f.y, f.width, 22), fontUI, semibold, f.w.pal.Text)
 	f.y += 26
+}
+
+// collapsibleGroup paints a settings group header with a disclosure arrow and
+// reports whether the group is expanded, so the caller can skip its rows. The
+// state lives in the dialog: the form is rebuilt on every paint.
+func (f *form) collapsibleGroup(key, title string) bool {
+	open := !f.collapsed[key]
+	id := scDialogGroups.At(f.foldCount)
+	f.foldCount++
+	f.custom(26, func(r ui.Rect) {
+		if f.w.hovered(id) {
+			f.w.p.round(r, 4, f.w.pal.Hover)
+		}
+		arrow := "▾"
+		if !open {
+			arrow = "▸"
+		}
+		f.w.p.text(arrow, rect(r.X+2, r.Y, 16, 22), fontUI, regular, f.w.pal.TextSecond)
+		f.w.p.text(title, rect(r.X+20, r.Y, r.Width-20, 22), fontUI, semibold, f.w.pal.Text)
+		f.w.c.HitWithOptions(id, r, title, ui.HitOptions{Role: ui.RoleButton, Cursor: ui.PointerCursorDefault})
+		if f.w.c.Clicked(id) {
+			f.w.after(func() { f.collapsed[key] = !f.collapsed[key] })
+		}
+	})
+	return open
 }
 
 // field is a labelled text field. With labelW 0 the label sits above.

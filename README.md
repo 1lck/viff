@@ -87,6 +87,13 @@ files and their diffs are sent to the endpoint you configure; see the
 **Copy for AI puts the conflict context on your clipboard.** It is for whatever
 external tool you choose; Viff calls no model and sends nothing.
 
+**Content search builds no index.** Find in Files reads the working tree on every
+query, so a broad search in a large repository can take seconds; results stop at
+300 and ask you to narrow the query.
+
+**ripgrep is optional and not bundled.** The default `auto` setting uses it when
+it is installed and falls back to Git grep otherwise.
+
 <details>
 <summary>Light theme</summary>
 

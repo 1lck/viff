@@ -105,6 +105,7 @@ var (
 	idDiffWords       = tree.ID(fDiff, "words")
 	idDiffSync        = tree.ID(fDiff, "sync")
 	idDiffOpen        = tree.ID(fDiff, "open-file")
+	idDiffJumpSource  = tree.ID(fDiff, "jump-source")
 	idDiffSettings    = tree.ID(fDiff, "settings")
 	idDiffStageFile   = tree.ID(fDiff, "stage-file")
 	idDiffScrollL     = tree.ID(fDiff, "scroll-left")
@@ -186,6 +187,11 @@ var (
 	scDialogRows   = tree.Sub(fDialog, tree.Name("rows"))
 	scDialogCombos = tree.Sub(fDialog, tree.Name("combos"))
 	scDialogLinks  = tree.Sub(fDialog, tree.Name("links"))
+	scDialogTabs   = tree.Sub(fDialog, tree.Name("tabs"))
+	scDialogGroups = tree.Sub(fDialog, tree.Name("groups"))
+
+	idSettingsRipgrepBrowse   = tree.ID(fDialog, "settings-ripgrep-browse")
+	idSettingsRipgrepDownload = tree.ID(fDialog, "settings-ripgrep-download")
 	// The New Worktree dialog chooses an existing branch from a list inside
 	// the dialog, not a popup: a popup opened from a dialog is painted but
 	// cannot be clicked through the focus trap (0012).
@@ -248,12 +254,17 @@ var (
 var (
 	fQuickOpen = tree.Feature("quick-open")
 
-	idQuickInput = tree.ID(fQuickOpen, "input")
-	scQuickRows  = tree.Sub(fQuickOpen, tree.Name("rows"))
-	idQuickBar   = tree.ID(fQuickOpen, "scroll")
+	idQuickInput     = tree.ID(fQuickOpen, "input")
+	idSearchInput    = tree.ID(fQuickOpen, "content-input")
+	idSearchSettings = tree.ID(fQuickOpen, "settings")
+	scQuickRows      = tree.Sub(fQuickOpen, tree.Name("rows"))
+	idQuickBar       = tree.ID(fQuickOpen, "scroll")
 )
 
-// Text selection in the read-only viewer.
+// Text selection in the read-only viewer and the diff panes. The file view and
+// the unified view use idDiffText; side-by-side keeps one ID per pane, so the
+// new pane does not swallow the old pane's hit region.
 var (
-	idDiffText = tree.ID(fDiff, "text")
+	idDiffText    = tree.ID(fDiff, "text")
+	idDiffTextOld = tree.ID(fDiff, "text-old")
 )

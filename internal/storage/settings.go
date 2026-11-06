@@ -82,6 +82,14 @@ type Settings struct {
 
 	ExternalEditor string `json:"externalEditor"`
 
+	// SearchTool selects the file-content search backend: "auto" (ripgrep
+	// when it is installed, Git grep otherwise), "git", or "rg". Empty keeps
+	// "auto", so an older settings file behaves as before.
+	SearchTool string `json:"searchTool,omitempty"`
+	// RipgrepPath is the ripgrep executable. Empty searches PATH; ripgrep is
+	// not bundled, so the setting exists for installs outside PATH.
+	RipgrepPath string `json:"ripgrepPath,omitempty"`
+
 	Recent []Recent `json:"recent"`
 
 	Window Window `json:"window"`
@@ -261,6 +269,17 @@ func (s *Settings) sanitize() {
 	case "", "info", "debug":
 	default:
 		s.LogLevel = ""
+	}
+	// An unknown or missing search backend keeps "auto": ripgrep when it is
+	// installed, Git grep otherwise.
+	s.RipgrepPath = strings.TrimSpace(s.RipgrepPath)
+	switch strings.TrimSpace(s.SearchTool) {
+	case "", "auto":
+		s.SearchTool = "auto"
+	case "git", "rg":
+		s.SearchTool = strings.TrimSpace(s.SearchTool)
+	default:
+		s.SearchTool = "auto"
 	}
 	if len(s.Recent) > 20 {
 		s.Recent = s.Recent[:20]

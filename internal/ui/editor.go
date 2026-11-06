@@ -35,9 +35,12 @@ type diffTab struct {
 	y, yOld float32 // vertical scroll in pixels (new side; old side when unsynced)
 	x       float32
 	cur     int
-	selOld  map[int]bool
-	selNew  map[int]bool
-	anchor  int
+	// pendingLine, when positive, asks the next paint of the file view to
+	// reveal that 1-based line. openRepoFileAt sets it for a search hit.
+	pendingLine int
+	selOld      map[int]bool
+	selNew      map[int]bool
+	anchor      int
 
 	oldDisp, newDisp []string
 	oldSyn, newSyn   [][]span
