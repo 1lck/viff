@@ -81,7 +81,7 @@ type popup struct {
 	minWidth float32
 	maxRows  int
 	title    string
-	search   *text.Editor // speed search field (branch popup)
+	search   *text.Editor // optional speed search field
 	query    string
 	shown    []int // indexes of items shown (after filtering)
 	scroll   scroller
@@ -108,9 +108,11 @@ func (w *Window) openMenu(x, y float32, items []item) {
 }
 
 // openMenuBelow opens a menu under an anchor rectangle.
-func (w *Window) openMenuBelow(anchor ui.Rect, items []item, minWidth float32) {
-	w.popups = []*popup{{x: anchor.X, y: bottom(anchor) + 4, items: items, sel: -1, minWidth: minWidth}}
+func (w *Window) openMenuBelow(anchor ui.Rect, items []item, minWidth float32) *popup {
+	p := &popup{x: anchor.X, y: bottom(anchor) + 4, items: items, sel: -1, minWidth: minWidth}
+	w.popups = []*popup{p}
 	w.tipID = ui.ID{}
+	return p
 }
 
 // openMenuAbove opens a menu with its bottom edge just over the anchor, so a
@@ -147,6 +149,10 @@ func (p *popup) visible() []int {
 	}
 	if q == p.query && p.shown != nil {
 		return p.shown
+	}
+	if q != p.query {
+		// Show the first matches even if the full list was scrolled down.
+		p.scroll.Y, p.sel, p.byKey = 0, -1, true
 	}
 	p.query = q
 	p.shown = p.shown[:0]
@@ -207,7 +213,8 @@ func (w *Window) popupSize(p *popup) (float32, float32) {
 	if p.search != nil {
 		h += 40
 	}
-	for _, i := range p.visible() {
+	shown := p.visible()
+	for _, i := range shown {
 		it := p.items[i]
 		switch {
 		case it.sep:
@@ -251,7 +258,7 @@ func (w *Window) popupSize(p *popup) (float32, float32) {
 			width = max(width, tw)
 		}
 	}
-	if len(p.items) == 0 {
+	if len(shown) == 0 {
 		h += popupRowH
 	}
 	return min(width, 520), h

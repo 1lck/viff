@@ -87,6 +87,14 @@ type Settings struct {
 
 	ExternalEditor string `json:"externalEditor"`
 
+	// SearchTool selects the file-content search backend: "auto" (ripgrep
+	// when it is installed, Git grep otherwise), "git", or "rg". Empty keeps
+	// "auto", so an older settings file behaves as before.
+	SearchTool string `json:"searchTool,omitempty"`
+	// RipgrepPath is the ripgrep executable. Empty searches PATH; ripgrep is
+	// not bundled, so the setting exists for installs outside PATH.
+	RipgrepPath string `json:"ripgrepPath,omitempty"`
+
 	Recent []Recent `json:"recent"`
 
 	Window Window `json:"window"`
@@ -102,7 +110,13 @@ type Settings struct {
 	DiffWhitespace     int     `json:"diffWhitespace"`
 	DiffSyncScroll     bool    `json:"diffSyncScroll"`
 	DiffHighlightWords bool    `json:"diffHighlightWords"`
-	CommitTree         bool    `json:"commitTree"`
+	// DiffMarks keeps the change ruler on the right edge of the diff, where it
+	// also stands in for the overlay scroll bar. DiffCodemap adds the optional
+	// code minimap next to it. Older files omit both fields, and Load unmarshals
+	// into Defaults, so an absent value keeps its default: marks on, codemap off.
+	DiffMarks   bool `json:"diffMarks"`
+	DiffCodemap bool `json:"diffCodemap"`
+	CommitTree  bool `json:"commitTree"`
 
 	path     string
 	readOnly bool
@@ -139,9 +153,10 @@ func Defaults() *Settings {
 		AutoFetch: false, AutoFetchMins: 10, FetchPrune: true, PullMode: "merge",
 		AutoUpdateCheck:   true,
 		AIConfirmGenerate: true,
+		SearchTool:        "auto",
 		Window:            Window{Width: 1440, Height: 900},
 		CommitPanelWidth:  340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
-		DiffSyncScroll: true, DiffHighlightWords: true, CommitTree: false,
+		DiffSyncScroll: true, DiffHighlightWords: true, DiffMarks: true, CommitTree: false,
 	}
 }
 
@@ -267,6 +282,17 @@ func (s *Settings) sanitize() {
 	case "", "info", "debug":
 	default:
 		s.LogLevel = ""
+	}
+	// An unknown or missing search backend keeps "auto": ripgrep when it is
+	// installed, Git grep otherwise.
+	s.RipgrepPath = strings.TrimSpace(s.RipgrepPath)
+	switch strings.TrimSpace(s.SearchTool) {
+	case "", "auto":
+		s.SearchTool = "auto"
+	case "git", "rg":
+		s.SearchTool = strings.TrimSpace(s.SearchTool)
+	default:
+		s.SearchTool = "auto"
 	}
 	if len(s.Recent) > 20 {
 		s.Recent = s.Recent[:20]

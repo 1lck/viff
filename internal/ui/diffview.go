@@ -91,6 +91,18 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	left := rect(r.X, r.Y, paneW, r.Height)
 	div := rect(r.X+paneW, r.Y, dividerW, r.Height)
 	rightP := rect(right(div), r.Y, r.Width-paneW-dividerW, r.Height)
+	// The right edge belongs to the change ruler, which carries the visible
+	// range and so stands in for the overlay scroll bar. The optional code map
+	// sits inward of it. Both come out of the body, not the whole panel, so the
+	// panes keep their titles.
+	s := w.ws.Settings
+	marksRect, codemapRect := ui.Rect{}, ui.Rect{}
+	if s.DiffMarks {
+		marksRect = splitRight(&rightP, marksWidth)
+	}
+	if s.DiffCodemap {
+		codemapRect = splitRight(&rightP, codemapWidth)
+	}
 	oldPath := ""
 	if t.src.OldPath != "" && t.src.OldPath != t.src.Path {
 		oldPath = t.src.OldPath
@@ -136,7 +148,17 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	w.paintPane(t, left, true, oldY, gutter, idDiffLeft)
 	w.paintPane(t, rightP, false, t.y, gutter, idDiffRight)
 	w.paintDivider(t, div, oldY, t.y, lineH)
-	w.vbar(idDiffScrollR, rightP, &scroller{Y: t.y}, newContent)
+	// Both right-edge parts stand for the new side, which is the one the reader
+	// scrolls; the old side follows it when scrolling is synchronized. When the
+	// ruler is on it replaces the overlay bar, so the two never share the edge.
+	if s.DiffCodemap {
+		w.paintCodemap(t, codemapRect, t.mapNew, t.y, h, lineH)
+	}
+	if s.DiffMarks {
+		w.paintChangeMarks(t, marksRect, t.marksNew, len(t.newDisp), t.y, h, lineH)
+	} else {
+		w.vbar(idDiffScrollR, rightP, &scroller{Y: t.y}, newContent)
+	}
 	if !sync {
 		sc := scroller{Y: t.yOld}
 		w.vbar(idDiffScrollL, left, &sc, oldContent)
@@ -218,9 +240,23 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 	w.c.HitWithOptions(id, r, "Diff", ui.HitOptions{Role: ui.RoleGroup})
 	gr := rect(r.X, r.Y, gutter, r.Height)
 	tr := rect(r.X+gutter, r.Y, r.Width-gutter, r.Height)
-	// The read-only file view shares this painting with the diff panes; only
-	// its single new side gets selectable text (see selection.go).
+	// The read-only file view shares this painting with the diff panes; its
+	// single new side gets selectable text. A diff pane's side also selects:
+	// see selection.go for the separate line lists.
 	view := !old && t.src.View
+	paneKind := selNewPane
+	if old {
+		paneKind = selOldPane
+	} else if view {
+		paneKind = selFile
+	}
+	selecting := t.textSel.kind == paneKind
+	// Each pane keeps its own hit region: a shared ID let the new pane, which
+	// registers later, swallow every press meant for the old pane.
+	textID := idDiffText
+	if old {
+		textID = idDiffTextOld
+	}
 	w.c.Clip(r)
 	first := max(0, int(top/lineH))
 	last := min(len(disp), int((top+r.Height)/lineH)+1)
@@ -254,8 +290,8 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 				}
 			}
 		}
-		if view {
-			w.paintTextSelection(t, i, disp[i], tr, y, cellW, lineH)
+		if selecting {
+			w.paintTextSelection(t, textID, i, disp[i], tr, y, cellW, lineH)
 		}
 		if sel[i] {
 			w.p.fill(rect(gr.X, y, gr.Width, lineH), w.pal.Selection)
@@ -277,8 +313,8 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 			w.c.LabelRuns(s, rect(tr.X+6-t.x, y, cells*cellW+cellW, lineH), style, cellW, runs)
 			w.c.Unclip()
 		}
-		if view {
-			w.paintTextCaret(t, i, disp[i], tr, y, cellW, lineH)
+		if selecting {
+			w.paintTextCaret(t, textID, i, disp[i], tr, y, cellW, lineH)
 		}
 	}
 	// Insertions and deletions show as a line on the side that lacks them.
@@ -301,8 +337,8 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 		w.paintHits(t, tr, top, cellW, lineH)
 	}
 	w.c.Unclip()
-	if view {
-		w.textPointer(t, tr, top, cellW, lineH)
+	if view || !t.src.View {
+		w.textPointer(t, textID, disp, paneKind, tr, top, cellW, lineH)
 	}
 	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
 
@@ -494,6 +530,16 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 	n := len(t.unified)
 	content := float32(n+3) * lineH
 	t.y = clampF(t.y, 0, max(0, content-r.Height))
+	// The right edge is cut the same way as in the side-by-side viewer: marks
+	// outermost, the optional code map inward of them.
+	s := w.ws.Settings
+	marksRect, codemapRect := ui.Rect{}, ui.Rect{}
+	if s.DiffMarks {
+		marksRect = splitRight(&r, marksWidth)
+	}
+	if s.DiffCodemap {
+		codemapRect = splitRight(&r, codemapWidth)
+	}
 	numW := float32(len(itoa(max(max(len(t.oldDisp), len(t.newDisp)), 99))))*cellW + 12
 	gutter := numW*2 + 24
 	gr := rect(r.X, r.Y, gutter, r.Height)
@@ -568,11 +614,17 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 		if u.new >= 0 {
 			w.c.LabelAligned(itoa(u.new+1), rect(gr.X+numW, y, numW, lineH), numStyle, ui.AlignRight)
 		}
+		if t.textSel.kind == selUnified && disp != "" {
+			w.paintTextSelection(t, idDiffText, i, disp, tr, y, cellW, lineH)
+		}
 		if disp != "" {
 			runs = w.runsFor(disp, spans, runs, w.pal.EditorText)
 			w.c.Clip(tr)
 			w.c.LabelRuns(disp, rect(tr.X+6-t.x, y, float32(displayCells(disp)+1)*cellW, lineH), style, cellW, runs)
 			w.c.Unclip()
+			if t.textSel.kind == selUnified {
+				w.paintTextCaret(t, idDiffText, i, disp, tr, y, cellW, lineH)
+			}
 		}
 		// Block actions at the first row of each block.
 		if u.block >= 0 && u.block != prevBlock && w.canApply(t) {
@@ -594,12 +646,34 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 	}
 	w.c.Unclip()
 	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
-	sc := scroller{Y: t.y}
-	w.vbar(idDiffScrollR, r, &sc, content)
+	// Unified rows take selectable text like the file view side does: the
+	// selection copies the row's raw content, context rows included once.
+	w.textPointer(t, idDiffText, t.unifDisp, selUnified, tr, t.y, cellW, lineH)
+	if s.DiffCodemap {
+		w.paintCodemap(t, codemapRect, t.mapUni, t.y, r.Height, lineH)
+	}
+	if s.DiffMarks {
+		w.paintChangeMarks(t, marksRect, t.marksUni, len(t.unified), t.y, r.Height, lineH)
+	} else {
+		sc := scroller{Y: t.y}
+		w.vbar(idDiffScrollR, r, &sc, content)
+	}
 	w.wrapBarDrag(idDiffScrollR, func(y float32) { t.y = y }, func() float32 { return t.y }, content, r.Height)
 }
 
 // ---- toolbar ---------------------------------------------------------------
+
+// whitespaceLabel names a whitespace mode for the diff toolbar. The label lives
+// here rather than on domain.WhitespaceMode so the domain stays free of UI text.
+func (w *Window) whitespaceLabel(m domain.WhitespaceMode) string {
+	switch m {
+	case domain.WhitespaceTrim:
+		return w.t(i18n.DiffWhitespaceTrim)
+	case domain.WhitespaceIgnore:
+		return w.t(i18n.DiffWhitespaceIgnore)
+	}
+	return w.t(i18n.DiffWhitespaceExact)
+}
 
 func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	res := t.res
@@ -615,6 +689,26 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	}
 	x += actionSize + 8
 	w.p.vline(x-4, y+5, actionSize-10, w.pal.Separator)
+	// Jump to Source: open the file this view shows in a new pinned tab. It is
+	// always painted so the toolbar keeps a stable layout, and only greys out
+	// where there is no source (a conflict view, or a tab that is already the
+	// file view).
+	jumpOK := t.src.Area != domain.AreaConflicts && !t.src.View
+	if w.action(idDiffJumpSource, x, y, icons.Edit, w.t(i18n.DiffActionJumpSource), actOpts{disabled: !jumpOK}) {
+		src := t.src
+		w.after(func() {
+			if src.Working {
+				w.showDiffInNewTab(vapp.DiffSource{Path: src.Path, View: true})
+				w.ws.Refresh(false)
+				return
+			}
+			// A commit diff opens that revision of the file, the same tab the
+			// log's "Open Repository Version" action produces.
+			w.showDiffInNewTab(vapp.DiffSource{Path: src.Path, Commit: src.Commit, View: true})
+		})
+	}
+	x += actionSize + 8
+	w.p.vline(x-4, y+5, actionSize-10, w.pal.Separator)
 	mode := w.t(i18n.DiffViewSideBySide)
 	if s.DiffUnified {
 		mode = w.t(i18n.DiffViewUnified)
@@ -624,21 +718,21 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 		ar := rect(x, y, cw, actionSize)
 		w.after(func() {
 			w.openMenuBelow(ar, []item{
-				{title: w.t(i18n.DiffViewSideBySide), icon: icons.SideBySide, checked: !s.DiffUnified, run: func() { s.DiffUnified = false; w.saveSettings() }},
-				{title: w.t(i18n.DiffViewUnified), icon: icons.Unified, checked: s.DiffUnified, run: func() { s.DiffUnified = true; w.saveSettings() }},
+				{title: w.t(i18n.DiffViewSideBySide), icon: icons.SideBySide, checked: !s.DiffUnified, run: func() { s.DiffUnified = false; t.clearTextSel(); w.saveSettings() }},
+				{title: w.t(i18n.DiffViewUnified), icon: icons.Unified, checked: s.DiffUnified, run: func() { s.DiffUnified = true; t.clearTextSel(); w.saveSettings() }},
 			}, 200)
 		})
 	}
 	x += cw + 2
 	ws := domain.WhitespaceMode(s.DiffWhitespace)
-	clicked, cw = w.filterChip(idDiffWS, x, y, actionSize, ws.Title(), "")
+	clicked, cw = w.filterChip(idDiffWS, x, y, actionSize, w.whitespaceLabel(ws), "")
 	if clicked {
 		ar := rect(x, y, cw, actionSize)
 		w.after(func() {
 			var items []item
 			for _, m := range []domain.WhitespaceMode{domain.WhitespaceExact, domain.WhitespaceTrim, domain.WhitespaceIgnore} {
 				m := m
-				items = append(items, item{title: m.Title(), checked: m == ws, run: func() {
+				items = append(items, item{title: w.whitespaceLabel(m), checked: m == ws, run: func() {
 					s.DiffWhitespace = int(m)
 					w.saveSettings()
 					for _, tab := range w.ed.tabs {
@@ -656,6 +750,22 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	x += actionSize + 2
 	if w.action(idDiffSync, x, y, icons.SynchronizeScrolling, w.t(i18n.DiffActionSyncScrolling), actOpts{toggled: s.DiffSyncScroll, disabled: s.DiffUnified}) {
 		w.after(func() { s.DiffSyncScroll = !s.DiffSyncScroll; w.saveSettings() })
+	}
+	x += actionSize + 2
+	if w.action(idDiffMarksBtn, x, y, icons.Layout, w.t(i18n.DiffActionMarks), actOpts{toggled: s.DiffMarks}) {
+		w.after(func() {
+			s.DiffMarks = !s.DiffMarks
+			w.saveSettings()
+			w.rebuildDiffEdge()
+		})
+	}
+	x += actionSize + 2
+	if w.action(idDiffCodemapBtn, x, y, icons.Preview, w.t(i18n.DiffActionCodemap), actOpts{toggled: s.DiffCodemap}) {
+		w.after(func() {
+			s.DiffCodemap = !s.DiffCodemap
+			w.saveSettings()
+			w.rebuildDiffEdge()
+		})
 	}
 	x += actionSize + 2
 

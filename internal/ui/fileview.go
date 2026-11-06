@@ -67,6 +67,9 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	}
 	w.paintTitle(rect(titles.X+10, titles.Y, titles.Width-20, titles.Height), t.src.Path, rev)
 	if res.Notice != "" {
+		// Nothing to position inside: drop the target so a later reload does
+		// not jump to a line this version never showed.
+		t.pendingLine = 0
 		w.paintCentered(r, res.Notice, "", w.pal.TextMuted)
 		return
 	}
@@ -77,6 +80,12 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	}
 
 	cellW, lineH, _ := w.metrics()
+	if t.pendingLine > 0 {
+		// Put the requested line about a third of the viewport down instead of
+		// at its very top; clamping below keeps the scroll offset in range.
+		t.y = max(0, float32(t.pendingLine-1)*lineH-3*lineH)
+		t.pendingLine = 0
+	}
 	content := float32(len(t.newDisp)+3) * lineH
 	t.y = clampF(t.y, 0, max(0, content-r.Height))
 	area := r
@@ -109,8 +118,8 @@ func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
 		w.after(func() { w.toggleAnnotate(t) })
 	}
 	x += bw + 4
-	hw := w.p.width("Show History", fontUI, regular) + 20
-	if w.button(idFileHistory, rect(x, r.Y+(r.Height-26)/2, hw, 26), "Show History", btnBorderless, false) {
+	hw := w.p.width(w.t(i18n.FileviewShowHistory), fontUI, regular) + 20
+	if w.button(idFileHistory, rect(x, r.Y+(r.Height-26)/2, hw, 26), w.t(i18n.FileviewShowHistory), btnBorderless, false) {
 		p := t.src.Path
 		w.after(func() { w.showPathHistory(p) })
 	}

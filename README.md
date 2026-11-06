@@ -58,7 +58,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 
 | Work                  | What Viff provides                                                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, and picture previews                                      |
+| Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, picture previews, change marks on the right edge, and an optional code map   |
 | Build a commit        | Check files, folders, or groups; stage files, hunks, or lines; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
 | Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, named ChangeLists, and discovery of repositories below a parent folder |
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |
@@ -72,6 +72,9 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Work on the web       | Open commits, branches, comparisons, and the pull request form on GitHub, GitLab, Bitbucket, or Gitea                                                        |
 | Run commands          | Integrated terminal in the current repository: scrollback, selection copy, paste, clear, restart, and resize                                                   |
 | Work in your language | English and Simplified Chinese interface, English by default, switchable in Settings                                                                          |
+
+In Log → Branch, type to search local branches, remote branches, and tags.
+Use ↑/↓ and Enter to apply a filter, or Esc to cancel.
 
 **The interface is English by default; switch it to Simplified Chinese in
 Settings → General → Language.**
@@ -87,6 +90,13 @@ commit message rules you wrote or the built-in ones; see the
 
 **Copy for AI puts the conflict context on your clipboard.** It is for whatever
 external tool you choose; Viff calls no model and sends nothing.
+
+**Content search builds no index.** Find in Files reads the working tree on every
+query, so a broad search in a large repository can take seconds; results stop at
+300 and ask you to narrow the query.
+
+**ripgrep is optional and not bundled.** The default `auto` setting uses it when
+it is installed and falls back to Git grep otherwise.
 
 <details>
 <summary>Light theme</summary>

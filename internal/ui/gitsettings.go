@@ -130,6 +130,11 @@ func settingsTabs(f *form, page *int, labels []string) {
 			if f.w.button(scDialogLinks.At(700+i), rect(x, r.Y, bw, 26), label, kind, false) {
 				if *page != i {
 					*page = i
+					// A new page starts at its top: keeping the offset would
+					// land the reader past the end of a shorter page.
+					if d := f.w.dialog; d != nil {
+						d.scroll = scroller{}
+					}
 					f.w.closePopups()
 					f.w.Invalidate()
 				}
