@@ -601,6 +601,18 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 
 // ---- toolbar ---------------------------------------------------------------
 
+// whitespaceLabel names a whitespace mode for the diff toolbar. The label lives
+// here rather than on domain.WhitespaceMode so the domain stays free of UI text.
+func (w *Window) whitespaceLabel(m domain.WhitespaceMode) string {
+	switch m {
+	case domain.WhitespaceTrim:
+		return w.t(i18n.DiffWhitespaceTrim)
+	case domain.WhitespaceIgnore:
+		return w.t(i18n.DiffWhitespaceIgnore)
+	}
+	return w.t(i18n.DiffWhitespaceExact)
+}
+
 func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	res := t.res
 	s := w.ws.Settings
@@ -631,14 +643,14 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	}
 	x += cw + 2
 	ws := domain.WhitespaceMode(s.DiffWhitespace)
-	clicked, cw = w.filterChip(idDiffWS, x, y, actionSize, ws.Title(), "")
+	clicked, cw = w.filterChip(idDiffWS, x, y, actionSize, w.whitespaceLabel(ws), "")
 	if clicked {
 		ar := rect(x, y, cw, actionSize)
 		w.after(func() {
 			var items []item
 			for _, m := range []domain.WhitespaceMode{domain.WhitespaceExact, domain.WhitespaceTrim, domain.WhitespaceIgnore} {
 				m := m
-				items = append(items, item{title: m.Title(), checked: m == ws, run: func() {
+				items = append(items, item{title: w.whitespaceLabel(m), checked: m == ws, run: func() {
 					s.DiffWhitespace = int(m)
 					w.saveSettings()
 					for _, tab := range w.ed.tabs {
