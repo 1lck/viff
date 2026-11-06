@@ -67,9 +67,6 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	}
 	w.paintTitle(rect(titles.X+10, titles.Y, titles.Width-20, titles.Height), t.src.Path, rev)
 	if res.Notice != "" {
-		// Nothing to position inside: drop the target so a later reload does
-		// not jump to a line this version never showed.
-		t.pendingLine = 0
 		w.paintCentered(r, res.Notice, "", w.pal.TextMuted)
 		return
 	}
@@ -80,12 +77,6 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	}
 
 	cellW, lineH, _ := w.metrics()
-	if t.pendingLine > 0 {
-		// Put the requested line about a third of the viewport down instead of
-		// at its very top; clamping below keeps the scroll offset in range.
-		t.y = max(0, float32(t.pendingLine-1)*lineH-3*lineH)
-		t.pendingLine = 0
-	}
 	content := float32(len(t.newDisp)+3) * lineH
 	t.y = clampF(t.y, 0, max(0, content-r.Height))
 	area := r
@@ -93,16 +84,32 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 		ar := splitLeft(&r, w.annotationWidth(t))
 		w.paintAnnotations(t, ar, t.y, lineH)
 	}
+	_ = area
+	// The code map takes its column off the text area's trailing edge, followed by
+	// an independent scrollbar column on the outermost right edge.
+	// Layout (left to right): [Code Editor] | [Codemap 72px] | [Scrollbar 14px]
+	codemapRect := ui.Rect{}
+	scrollRect := ui.Rect{}
+	showMap := w.ws.Settings.DiffCodemap && !t.annotate
+	if showMap {
+		scrollRect = splitRight(&r, codemapBarW)
+		codemapRect = splitRight(&r, codemapWidth)
+	} else {
+		scrollRect = r
+	}
 	gutter := w.gutterWidth(len(t.newDisp), cellW)
 	maxX := max(0, float32(t.maxCells)*cellW+40-(r.Width-gutter))
 	t.x = clampF(t.x, 0, maxX)
-	w.onScrollIn(area, func(dx, dy float32) {
+	w.onScrollIn(r, func(dx, dy float32) {
 		t.x = clampF(t.x+dx, 0, maxX)
 		t.y += dy
 	})
 	w.diffKeys(t, idDiffRight, lineH, r.Height)
 	w.paintPane(t, r, false, t.y, gutter, idDiffRight)
-	w.vbar(idDiffScrollR, r, &scroller{Y: t.y}, content)
+	if showMap {
+		w.paintCodemap(t, codemapRect, t.codeMap, t.y, r.Height, lineH, content)
+	}
+	w.vbar(idDiffScrollR, scrollRect, &scroller{Y: t.y}, content)
 	w.wrapBarDrag(idDiffScrollR, func(y float32) { t.y = y }, func() float32 { return t.y }, content, r.Height)
 }
 
