@@ -189,7 +189,11 @@ func (w *Window) paintLogFilters(r ui.Rect) {
 	clicked, cw := w.filterChip(idLogBranchF, x, cy, 26, w.t(i18n.ChromeLogFilterBranch), branchVal)
 	if clicked {
 		ar := rect(x, cy, cw, 26)
-		w.after(func() { w.openMenuBelow(ar, w.branchFilterMenu(), 240) })
+		w.after(func() {
+			p := w.openMenuBelow(ar, w.branchFilterMenu(), 240)
+			p.title = w.t(i18n.ChromeLogFilterBranch)
+			p.search = text.NewEditor("")
+		})
 	}
 	x += cw + 2
 	clicked, cw = w.filterChip(idLogUserF, x, cy, 26, w.t(i18n.ChromeLogFilterUser), f.Author)
