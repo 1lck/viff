@@ -159,6 +159,86 @@ func TestProjectPanel(t *testing.T) {
 	}
 }
 
+// TestProjectFilterKeepsFoldsWorking covers the Project panel after a filter
+// is entered and submitted: its matches start expanded, and folding still
+// works from there — a directory folds and unfolds, the repository root folds
+// the whole tree, and a new filter reopens the tree so its matches stay
+// visible instead of disappearing into a folded directory.
+func TestProjectFilterKeepsFoldsWorking(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+	if err := f.s.Keys("cmd+1"); err != nil {
+		t.Fatal(err)
+	}
+	v := &f.win.fm
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.win.projectOpen && v.loaded
+	}, 10*time.Second); err != nil {
+		t.Fatalf("Project panel did not load the working tree: %v", err)
+	}
+
+	f.click("Filter files")
+	if err := f.s.Type("internal"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return hasRow(v.rows, "internal/store/store.go")
+	}, 5*time.Second); err != nil {
+		t.Fatalf("filter did not expand its matches: %+v", v.rows)
+	}
+	// Enter submits the filter and opens the first match; the rest stay shown.
+	if err := f.s.Keys("enter"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return hasRow(v.rows, "internal/store/store.go")
+	}, 5*time.Second); err != nil {
+		t.Fatalf("submitted filter dropped its matches: %+v", v.rows)
+	}
+	f.settleTab()
+
+	// A directory folds and unfolds while the filter is applied.
+	if dir := v.rowIndex("internal/"); dir < 0 {
+		t.Fatalf("internal/ row missing: %+v", v.rows)
+	} else {
+		f.win.clickFileRow(dir)
+	}
+	if v.rowIndex("internal/store/store.go") >= 0 {
+		t.Fatalf("clicking a filtered directory did not fold it: %+v", v.rows)
+	}
+	f.win.clickFileRow(v.rowIndex("internal/"))
+	if v.rowIndex("internal/store/store.go") < 0 {
+		t.Fatalf("clicking a filtered directory again did not unfold it: %+v", v.rows)
+	}
+
+	// The repository root still folds the tree it filtered.
+	f.win.clickFileRow(0)
+	if hasRow(v.rows, "internal/") {
+		t.Fatalf("clicking the root did not fold the filtered tree: %+v", v.rows)
+	}
+	f.win.clickFileRow(0)
+	if !hasRow(v.rows, "internal/") {
+		t.Fatalf("clicking the root again did not unfold the filtered tree: %+v", v.rows)
+	}
+
+	// A different filter reopens the tree; a folded directory must not hide
+	// the matches the new filter is looking for.
+	f.win.clickFileRow(v.rowIndex("internal/"))
+	for v.filter.RuneCount() > 0 {
+		v.filter.DeleteBackward()
+	}
+	v.filter.Paste("store")
+	f.win.Invalidate()
+	if err := f.s.WaitFor(func(app.Snapshot) bool { return v.query == "store" }, 5*time.Second); err != nil {
+		t.Fatalf("the new filter was not applied: %q", v.query)
+	}
+	if v.rowIndex("internal/store/store.go") < 0 {
+		t.Fatalf("the new filter left its match folded away: %+v", v.rows)
+	}
+}
+
 // TestFilesMenuOffersReadOnlyActions checks the context menu stays inside the
 // read-only contract: open, annotate, history and external tools.
 func TestFilesMenuOffersReadOnlyActions(t *testing.T) {

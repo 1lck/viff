@@ -188,7 +188,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		rx := rr.X + 8 + float32(row.depth)*fileIndent
 		switch {
 		case row.root:
-			expanded := v.rootOpen || v.query != ""
+			expanded := v.rootOpen
 			chev := icons.ChevronRight
 			if expanded {
 				chev = icons.ChevronDown
@@ -205,7 +205,7 @@ func (w *Window) paintProject(r ui.Rect) {
 			w.c.HitWithOptions(id, rr, row.name+" "+row.hint, ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected, Expandable: true, Expanded: expanded})
 		case row.dir:
 			chev := icons.ChevronRight
-			expanded := v.query != "" || !v.collapsed[row.path]
+			expanded := !v.collapsed[row.path]
 			if expanded {
 				chev = icons.ChevronDown
 			}
