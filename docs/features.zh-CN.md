@@ -18,7 +18,7 @@
   - AI 生成说明：Amend 行右侧的 AI 按钮按 Conventional Commits 生成一条提交说明并填入输入框，不自动提交；端点、密钥与模型在设置的 AI 页配置，默认关闭，见 [0027](decisions/0027-ai-commit-message.md)。
   - 正在进行 merge、rebase 等操作时显示横幅，带 Continue / Abort。
 - **Project 面板（只读）**：左侧 stripe 的文件夹图标或 ⌘1 打开，与 Commit 面板共用停靠区。顶部是仓库根节点（名称 + 路径）、工具条（Refresh、Collapse All、Expand All、Open File、Hide）和过滤框；下面是工作树的索引文件与未跟踪文件（ignored 除外），按目录折叠，按 Git 状态给文件名着色。单击文件在预览页签中只读打开，双击固定；右键可外部编辑、看 blame、看文件历史、复制路径或在 Finder 中显示。⇧⌘O 打开 Quick Open，输入路径片段后回车打开，见 [0024](decisions/0024-file-browser.md)。
-- **Stash 页签**：暂存（可包含未跟踪文件、保留索引）、应用、Pop、删除、转为分支，并可查看 stash 中的文件 diff。
+- **Stash 页签**：储藏（可包含未跟踪文件、保留索引）、应用、Pop、删除、转为分支，并可查看 stash 中的文件 diff。
 - **补丁**：变更列表右键“Create Patch…”把选中的改动保存为 `.patch`（二进制和 CRLF 原样保留，重命名仍是 rename）；Git 工具窗口菜单可以把补丁应用到工作树或只应用到索引，应用失败时文件不变并显示 Git 的原始错误。
 - **Diff**
   - 并排与统一两种视图，同步滚动，曲线连接相同块，词级高亮，按语言语法着色。
