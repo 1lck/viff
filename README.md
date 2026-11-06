@@ -73,6 +73,9 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Run commands          | Integrated terminal in the current repository: scrollback, selection copy, paste, clear, restart, and resize                                                   |
 | Work in your language | English and Simplified Chinese interface, English by default, switchable in Settings                                                                          |
 
+In Log → Branch, type to search local branches, remote branches, and tags.
+Use ↑/↓ and Enter to apply a filter, or Esc to cancel.
+
 **The interface is English by default; switch it to Simplified Chinese in
 Settings → General → Language.**
 
