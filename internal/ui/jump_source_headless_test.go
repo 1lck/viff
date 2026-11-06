@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"viff/internal/domain"
 )
 
 // TestUnifiedDiffTextSelection opens a diff in the unified mode, drags a
@@ -153,5 +155,113 @@ func TestSideBySideDiffTextSelection(t *testing.T) {
 		t.Errorf("selectionText() = %q, want %q", got, want)
 	}
 	f.snap("12-side-by-side-selection")
+	f.assertIdle()
+}
+
+// TestJumpToSourceOpensPinnedTab covers what the toolbar action promises: it
+// opens the file beside the diff the reader is looking at instead of replacing
+// that preview tab, and the new tab is pinned so the next file click does not
+// take it.
+func TestJumpToSourceOpensPinnedTab(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1280, 800)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	f.click("main.go")
+	f.settleTab()
+	diff := f.win.ed.cur()
+	if diff == nil || diff.src.View {
+		t.Fatal("clicking the file did not open a diff tab")
+	}
+	if !diff.preview {
+		t.Fatal("the diff did not open in the preview tab, so the test cannot show it is kept")
+	}
+	hit, ok := f.s.Hit("Jump to Source")
+	if !ok {
+		t.Fatalf("the toolbar has no Jump to Source action: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if hit.Disabled {
+		t.Fatal("Jump to Source is disabled on a working-tree diff")
+	}
+	before := len(f.win.ed.tabs)
+
+	f.click("Jump to Source")
+	f.settleTab()
+
+	if got := len(f.win.ed.tabs); got != before+1 {
+		t.Fatalf("tabs after Jump to Source = %d, want %d: the action replaced a tab instead of adding one", got, before+1)
+	}
+	kept := false
+	for _, tab := range f.win.ed.tabs {
+		if tab == diff {
+			kept = true
+			break
+		}
+	}
+	if !kept {
+		t.Fatal("the preview diff the reader was looking at is gone")
+	}
+	cur := f.win.ed.cur()
+	if cur == nil || !cur.src.View {
+		t.Fatal("the new tab is not the file view")
+	}
+	if cur.preview {
+		t.Fatal("the new tab is a preview tab, so the next file click would replace it")
+	}
+	if cur.src.Path != diff.src.Path {
+		t.Fatalf("the new tab opens %q, want the diff's %q", cur.src.Path, diff.src.Path)
+	}
+	f.assertIdle()
+}
+
+// TestJumpToSourceNotOfferedOnFileView covers the first view with no source to
+// jump to: a file view paints its own toolbar, so the action is not there to
+// press instead of sitting greyed in a toolbar the reader is not looking at.
+func TestJumpToSourceNotOfferedOnFileView(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1280, 800)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	f.click("main.go")
+	f.settleTab()
+	f.click("Jump to Source")
+	f.settleTab()
+
+	view := f.win.ed.cur()
+	if view == nil || !view.src.View {
+		t.Fatal("Jump to Source did not open the file view")
+	}
+	if hit, ok := f.s.Hit("Jump to Source"); ok {
+		t.Fatalf("the file view still offers Jump to Source: %+v", hit)
+	}
+	f.assertIdle()
+}
+
+// TestJumpToSourceNotOfferedInConflict covers the other: a conflict view paints
+// the conflict actions and has no single version of the file to open.
+func TestJumpToSourceNotOfferedInConflict(t *testing.T) {
+	f := newUIFixture(t)
+	// The conflict is made before the window starts, as the other conflict
+	// tests do: the workspace reads the unmerged state when it opens the
+	// repository, so it needs no watcher event to see it.
+	uiMergeConflict(t, f, "conflict.txt", "base\n", "ours\n", "theirs\n")
+	f.start(1280, 800)
+	f.win.openRepo(f.dir)
+	f.settle()
+	uiWaitConflicts(t, f)
+	f.settle()
+
+	f.click("conflict.txt")
+	f.settleTab()
+
+	tab := f.win.ed.cur()
+	if tab == nil || tab.src.Area != domain.AreaConflicts {
+		t.Fatalf("the conflict diff did not open: %+v", tab)
+	}
+	if hit, ok := f.s.Hit("Jump to Source"); ok {
+		t.Fatalf("the conflict view still offers Jump to Source: %+v", hit)
+	}
 	f.assertIdle()
 }
