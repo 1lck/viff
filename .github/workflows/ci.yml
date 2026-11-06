@@ -163,9 +163,11 @@ jobs:
           go test -count=1 -timeout 5m -v ./internal/svncli | tee .viff-test/ci/logs/svn-adapter.txt
           # These tests skip themselves when no client is installed, which is
           # how the adapter had no coverage at all; after the step above a skip
-          # means something is wrong and must fail the build.
-          if grep -q -- '--- SKIP' .viff-test/ci/logs/svn-adapter.txt; then
-            echo '::error::the Subversion tests skipped although subversion is installed'
+          # of one of them means something is wrong and must fail the build.
+          # TestUserDemoRepo skips for its own reason (it needs a scratch
+          # repository outside CI) and is not part of this guard.
+          if grep -qE -- '--- SKIP: (TestAll|TestEndToEnd|TestEdges|TestPaths|TestWrites)' .viff-test/ci/logs/svn-adapter.txt; then
+            echo '::error::a Subversion test skipped although subversion is installed'
             exit 1
           fi
       - name: Test domain, Git, storage, and workspace
