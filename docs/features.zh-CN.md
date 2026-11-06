@@ -43,15 +43,16 @@
 - **Git LFS**：检测仓库的 LFS 规则与受管文件，状态栏显示 LFS 数量；本机缺少 git-lfs 时在提交面板给出警告并提供安装命令（只复制，不执行）。Viff 不管理 LFS 对象，只报告状态。
 - **Smart Checkout**：工作区有未提交改动时切换分支或检出修订不再直接失败——Git 因改动会被覆盖而拒绝后弹出确认，选“Stash and Checkout”会连同未跟踪文件一起 stash，检出后自动恢复；恢复冲突时改动留在 stash 并提示，检出失败则恢复改动、当前分支不变。
 - **工作树（Worktrees）**：分支弹窗底部的“Worktrees…”列出仓库的所有工作树（分支、短 HEAD、路径，当前工作树有标记），可以新建（创建新分支或选择未被占用的已有本地分支，路径按分支名建议）、删除（可强制丢弃改动，分支保留）、打开为当前仓库、复制路径；已被其他工作树检出的分支在分支菜单里标注，检出会打开那个工作树。
-- **推送和更新**：推送对话框列出待推送的提交，可选推送标签和 force-with-lease；更新支持 merge 或 rebase 方式；也支持 Fetch、后台定时 Fetch 和管理远程仓库。
+- **推送和更新**：推送对话框列出待推送的提交，可选推送标签和 force-with-lease；更新支持 merge、rebase 或只允许快进，Update Project 对话框里的“不再询问”勾选后，⌘T 直接用记住的方式更新并以通知反馈（设置 Git 页的“询问更新方式”可改回，恢复每次询问）；也支持 Fetch、后台定时 Fetch 和管理远程仓库。
 - **推送变体**：日志右键“Push Up to Commit…”把某个历史提交及其之前的提交推到远端分支；分支弹窗“Push to Another Remote…”把 HEAD 推到别的远端或分支名；标签菜单可以只删除远端标签（本地标签保留）。非 fast-forward 默认被 Git 拒绝并显示原文，强制推送需显式勾选 force-with-lease。
 - **更新未检出的分支**：分支弹窗里非当前分支的本地分支有“Update from Remote”，快进到远端同名分支并说明前进了几个提交；分叉时拒绝且分支不变。浅克隆时 Git 工具窗口的 ⋯ 菜单会多出“Fetch Full History (Unshallow)”。
-- **Git 设置**：设置对话框的 Git 页可以指定 SSH 命令、GPG 程序、签名格式（Git 默认 / OpenPGP / SSH）、签名密钥、默认签名提交与 credential helper；保存后对下一次 Git 调用立即生效，不改写仓库或全局 Git 配置。
+- **Git 设置**：设置对话框的 Git 页可以指定 SSH 命令、GPG 程序、签名格式（Git 默认 / OpenPGP / SSH）、签名密钥、默认签名提交与 credential helper，也可以关掉“询问更新方式”让更新不再逐次询问；保存后对下一次 Git 调用立即生效，不改写仓库或全局 Git 配置。
 - **终端工具窗**：左侧 stripe 的终端图标或 ⌥F12 在底部打开，当前目录是打开的仓库。支持 5000 行回看、滚轮与滚动条、拖选复制、粘贴（含 bracketed paste）、清屏、重启与拖动高度；隐藏工具窗或切换仓库不结束 shell；重启、关闭项目（有运行中的 shell 时先确认）或关闭窗口才结束进程。实现与边界见 [0028](decisions/0028-integrated-terminal.md)。
 - **通知**：右下角气泡（成功消息 10 秒后自动隐藏），以及通知工具窗口。
 - **应用内更新**：`Help → Check for Updates…` 或启动时自动检查；发现新版本后应用内下载、用 `SHA256SUMS` 校验，点“Restart to Update”自动替换并重启，不需要打开浏览器。Windows 使用便携 ZIP，Linux 便携包使用 tar.gz；DEB 安装需要 `sudo apt install` 完成。
 - **界面语言**：默认英文，设置 → General → Language 可切到简体中文；菜单、对话框、工具窗口与通知随语言切换，Git 命令与输出、路径与哈希、快捷键与日志字段保持英文。
 - **主题**：Islands Dark、Islands Light，或跟随系统。
+- **窗口位置**：记住上次关闭时的位置和尺寸，包括放在副屏上的位置，下次启动就在原处打开；位置对应的显示器不存在时回落到主屏，见 [0034](decisions/0034-window-geometry.md)。
 
 ## 构建与运行
 

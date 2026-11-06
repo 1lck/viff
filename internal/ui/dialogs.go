@@ -354,6 +354,19 @@ func (w *Window) doPush(r domain.Ref, remote, target string, tags, force bool) {
 
 // ---- update -----------------------------------------------------------------
 
+// pullModes lists the pull modes in dialog order, which is also the order of
+// the radio buttons and the values Settings.PullMode stores.
+var pullModes = []string{"merge", "rebase", "ff-only"}
+
+// pullTitles is how each stored pull mode is shown to the user.
+func (w *Window) pullTitles() map[string]string {
+	return map[string]string{
+		"merge":   w.t(i18n.SettingsPullMerge),
+		"rebase":  w.t(i18n.SettingsPullRebase),
+		"ff-only": w.t(i18n.SettingsPullFFOnly),
+	}
+}
+
 func (w *Window) pullMode() gitcli.PullMode {
 	switch w.ws.Settings.PullMode {
 	case "rebase":
@@ -364,7 +377,9 @@ func (w *Window) pullMode() gitcli.PullMode {
 	return gitcli.PullMerge
 }
 
-// openUpdate is IntelliJ's Update Project dialog.
+// openUpdate is IntelliJ's Update Project dialog. Once the user asked not to be
+// prompted, the same shortcut updates with the stored method and reports the
+// choice in a notification instead of interrupting with a modal dialog.
 func (w *Window) openUpdate() {
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
@@ -375,6 +390,14 @@ func (w *Window) openUpdate() {
 		return
 	}
 	mode := int(w.pullMode())
+	if w.ws.Settings.SkipUpdateDialog {
+		w.ws.Notify(vapp.NoticeInfo,
+			w.t(i18n.AppNoticeUpdatingProject, rs.CurrentBranch()),
+			w.t(i18n.AppNoticeUpdatingProjectBody, rs.Status.Branch.Upstream, w.pullTitles()[pullModes[mode]]))
+		w.ws.Pull(gitcli.PullMode(mode))
+		return
+	}
+	skip := false
 	w.openDialog(&dialog{
 		title: w.t(i18n.DialogUpdateTitle), ok: w.t(i18n.CommonOK), width: 460,
 		body: func(f *form) {
@@ -382,9 +405,12 @@ func (w *Window) openUpdate() {
 			f.radio([]string{w.t(i18n.DialogPullMerge), w.t(i18n.DialogPullRebase), w.t(i18n.DialogPullFFOnly)}, &mode)
 			f.gap(4)
 			f.muted(w.t(i18n.DialogUpdateBody, rs.CurrentBranch(), rs.Status.Branch.Upstream))
+			f.gap(4)
+			f.check(w.t(i18n.DialogUpdateDontAsk), &skip)
 		},
 		onOK: func() bool {
-			w.ws.Settings.PullMode = []string{"merge", "rebase", "ff-only"}[mode]
+			w.ws.Settings.PullMode = pullModes[mode]
+			w.ws.Settings.SkipUpdateDialog = skip
 			w.saveSettings()
 			w.ws.Pull(gitcli.PullMode(mode))
 			return true
@@ -612,6 +638,9 @@ func (w *Window) openSettingsAt(page int) {
 	debugLog := s.LogLevel == "debug"
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
+	// askUpdate is the readable form of the stored flag: the settings page names
+	// the behavior people recognize, and the Update Project dialog is what asks.
+	askUpdate := !s.SkipUpdateDialog
 	gitDraft := newGitSettingsDraft(s)
 	aiDraft := newAISettingsDraft(s)
 	themeTitle := map[string]string{
@@ -619,11 +648,7 @@ func (w *Window) openSettingsAt(page int) {
 		"light":  w.t(i18n.SettingsThemeLight),
 		"system": w.t(i18n.SettingsThemeSystem),
 	}
-	pullTitle := map[string]string{
-		"merge":   w.t(i18n.SettingsPullMerge),
-		"rebase":  w.t(i18n.SettingsPullRebase),
-		"ff-only": w.t(i18n.SettingsPullFFOnly),
-	}
+	pullTitle := w.pullTitles()
 	w.openDialog(&dialog{
 		title: w.t(i18n.SettingsTitle), ok: w.t(i18n.CommonOK), cancel: w.t(i18n.CommonCancel), width: 600,
 		body: func(f *form) {
@@ -641,12 +666,17 @@ func (w *Window) openSettingsAt(page int) {
 				f.bold(w.t(i18n.SettingsGroupRemote))
 				f.combo(w.t(i18n.SettingsLabelUpdateMode), pullTitle[pull], func() []item {
 					var items []item
-					for _, k := range []string{"merge", "rebase", "ff-only"} {
+					for _, k := range pullModes {
 						k := k
 						items = append(items, item{title: pullTitle[k], checked: pull == k, run: func() { pull = k }})
 					}
 					return items
 				})
+				f.check(w.t(i18n.SettingsCheckAskUpdate), &askUpdate)
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsHintAskUpdate), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				})
+				f.gap(4)
 				f.check(w.t(i18n.SettingsCheckPrune), &prune)
 				f.check(w.t(i18n.SettingsCheckAutoFetch), &autoFetch)
 				if autoFetch {
@@ -756,6 +786,7 @@ func (w *Window) openSettingsAt(page int) {
 			gitDraft.commit(s)
 			aiDraft.commit(s)
 			s.AutoFetch, s.FetchPrune, s.PullMode = autoFetch, prune, pull
+			s.SkipUpdateDialog = !askUpdate
 			s.AutoUpdateCheck = autoUpdate
 			if m > 0 {
 				s.AutoFetchMins = m
