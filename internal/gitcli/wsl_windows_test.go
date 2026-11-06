@@ -170,7 +170,7 @@ func TestWSLRepositoryRunsDistroGit(t *testing.T) {
 
 	// Identity: every path is the Windows spelling, and the Linux path Git
 	// reported is gone from it.
-	if !wslpath.Is(repo.Root) || !wslpath.Is(repo.GitDir) || !wslpath.Is(repo.CommonDir) {
+	if !wslpath.Is(repo.Root) || !wslpath.Is(repo.MetaDir) || !wslpath.Is(repo.CommonDir) {
 		t.Fatalf("discovery left Linux paths in the identity: %+v", repo)
 	}
 	if strings.Contains(repo.Root, "/tmp") || strings.HasPrefix(repo.Root, "/") {
