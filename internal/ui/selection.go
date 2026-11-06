@@ -30,11 +30,26 @@ type selPoint struct {
 	cell int
 }
 
+// selKind names the line list a textSel indexes: the read-only file view
+// (t.newDisp), the unified view's rows (t.unifDisp), or one side-by-side diff
+// pane (t.oldDisp / t.newDisp). The spaces differ, so a selection is never
+// painted or copied in another one.
+type selKind uint8
+
+const (
+	selFile    selKind = iota // t.newDisp, the file view
+	selUnified                // t.unifDisp, unified rows
+	selOldPane                // t.oldDisp, the old diff pane
+	selNewPane                // t.newDisp, the new diff pane
+)
+
 // textSel is an anchor/focus pair with its focus flag. A click without a drag
-// leaves anchor == focus: an empty range with a caret, as editors do.
+// leaves anchor == focus: an empty range with a caret, as editors do. kind
+// records which line list the selection lives in.
 type textSel struct {
 	anchor, focus selPoint
 	set           bool
+	kind          selKind
 }
 
 // normalize orders the two ends as they are read.
@@ -253,9 +268,22 @@ func moveCaret(lines []string, p selPoint, key ui.Key) selPoint {
 // clearTextSel drops the view's selection and caret.
 func (t *diffTab) clearTextSel() { t.textSel = textSel{} }
 
-// hasTextSelection reports whether the tab is a file view with a copyable
-// range.
-func (t *diffTab) hasTextSelection() bool { return t.src.View && !t.textSel.empty() }
+// selLines returns the line list a selection kind indexes.
+func (t *diffTab) selLines(kind selKind) []string {
+	switch kind {
+	case selUnified:
+		return t.unifDisp
+	case selOldPane:
+		return t.oldDisp
+	default:
+		return t.newDisp
+	}
+}
+
+// hasTextSelection reports whether the tab has a copyable range. A file view
+// (src.View) selects over t.newDisp; a diff in the unified mode selects over
+// its rows (see paintUnified), and a side-by-side diff pane over its side.
+func (t *diffTab) hasTextSelection() bool { return !t.textSel.empty() }
 
 // selectionText returns the selected file-view text; "" when nothing is
 // selected.
@@ -263,20 +291,36 @@ func (t *diffTab) selectionText() string {
 	if !t.hasTextSelection() {
 		return ""
 	}
+	if t.textSel.kind == selUnified {
+		return t.textSel.text(t.unifDisp)
+	}
+	if t.textSel.kind == selOldPane {
+		return t.textSel.text(t.oldDisp)
+	}
 	return t.textSel.text(t.newDisp)
 }
 
-// selectAllText selects the whole file view and reports whether that left a
-// range to copy.
+// selectAllText selects the whole line list the current selection kind indexes
+// and reports whether that left a range to copy. The file view always selects
+// its own text; a diff selects the pane or the unified rows the reader is in.
 func (t *diffTab) selectAllText() bool {
-	if !t.src.View || t.res == nil || len(t.newDisp) == 0 {
+	if t.res == nil {
 		return false
 	}
-	last := len(t.newDisp) - 1
+	kind := t.textSel.kind
+	if t.src.View {
+		kind = selFile
+	}
+	lines := t.selLines(kind)
+	if len(lines) == 0 {
+		return false
+	}
+	last := len(lines) - 1
 	t.textSel = textSel{
 		anchor: selPoint{line: 0, cell: 0},
-		focus:  selPoint{line: last, cell: displayCells(t.newDisp[last])},
+		focus:  selPoint{line: last, cell: displayCells(lines[last])},
 		set:    true,
+		kind:   kind,
 	}
 	return !t.textSel.empty()
 }
@@ -288,7 +332,7 @@ func (t *diffTab) selectAllText() bool {
 // highlight never covers the line numbers or the neighbouring pane. Boundaries
 // snap to whole characters, so the highlight always covers exactly what a copy
 // would put on the clipboard.
-func (w *Window) paintTextSelection(t *diffTab, line int, text string, tr ui.Rect, y, cellW, lineH float32) {
+func (w *Window) paintTextSelection(t *diffTab, id ui.ID, line int, text string, tr ui.Rect, y, cellW, lineH float32) {
 	from, to, ok := t.textSel.span(line, displayCells(text))
 	if !ok {
 		return
@@ -299,7 +343,7 @@ func (w *Window) paintTextSelection(t *diffTab, line int, text string, tr ui.Rec
 		return
 	}
 	c := w.pal.Selection
-	if !w.focused(idDiffText) {
+	if !w.focused(id) {
 		c = w.pal.SelectionInac
 	}
 	x := tr.X + 6 - t.x + float32(from)*cellW
@@ -310,8 +354,8 @@ func (w *Window) paintTextSelection(t *diffTab, line int, text string, tr ui.Rec
 
 // paintTextCaret shows where the caret is while the text area holds the
 // keyboard.
-func (w *Window) paintTextCaret(t *diffTab, line int, text string, tr ui.Rect, y, cellW, lineH float32) {
-	if !t.textSel.set || t.textSel.focus.line != line || !w.focused(idDiffText) {
+func (w *Window) paintTextCaret(t *diffTab, id ui.ID, line int, text string, tr ui.Rect, y, cellW, lineH float32) {
+	if !t.textSel.set || t.textSel.focus.line != line || !w.focused(id) {
 		return
 	}
 	cell := max(0, min(t.textSel.focus.cell, displayCells(text)))
@@ -324,13 +368,15 @@ func (w *Window) paintTextCaret(t *diffTab, line int, text string, tr ui.Rect, y
 
 // ---- input -----------------------------------------------------------------
 
-// textPointer wires the file view's text area: a press anchors the selection, a
+// textPointer wires a text area (the file view's line-indexed text, the
+// unified view's rows, or a diff pane's side): a press anchors the selection, a
 // drag extends it and a double click selects the word under the pointer. A
 // press without a drag clears the selection by collapsing it to the clicked
-// caret. The handler captures the geometry of the paint that registered it, so
-// a drag keeps the coordinates it started with while the view repaints.
-func (w *Window) textPointer(t *diffTab, tr ui.Rect, top, cellW, lineH float32) {
-	disp := t.newDisp
+// caret. disp is the line list the selection indexes; kind selects which
+// coordinate space the selection remembers. The handler captures the geometry
+// of the paint that registered it, so a drag keeps the coordinates it started
+// with while the view repaints.
+func (w *Window) textPointer(t *diffTab, id ui.ID, disp []string, kind selKind, tr ui.Rect, top, cellW, lineH float32) {
 	point := func(x, y float32) selPoint {
 		if len(disp) == 0 {
 			return selPoint{}
@@ -339,19 +385,19 @@ func (w *Window) textPointer(t *diffTab, tr ui.Rect, top, cellW, lineH float32) 
 		cell := int((x - (tr.X + 6 - t.x)) / cellW)
 		return selPoint{line: line, cell: max(0, min(cell, displayCells(disp[line])))}
 	}
-	w.c.HitWithOptions(idDiffText, tr, "File contents", ui.HitOptions{Role: ui.RoleGroup, Cursor: ui.PointerCursorText})
-	w.onDrag(idDiffText, func(e dragEvent) {
+	w.c.HitWithOptions(id, tr, "File contents", ui.HitOptions{Role: ui.RoleGroup, Cursor: ui.PointerCursorText})
+	w.onDrag(id, func(e dragEvent) {
 		p := point(e.X, e.Y)
 		switch e.Phase {
 		case dragBegin:
-			t.textSel = textSel{anchor: p, focus: p, set: true}
+			t.textSel = textSel{anchor: p, focus: p, set: true, kind: kind}
 		case dragMove:
 			if t.textSel.set {
 				t.textSel.focus = p
 			}
 		}
 	})
-	w.onDouble(idDiffText, func() {
+	w.onDouble(id, func() {
 		p := point(w.mouse.X, w.mouse.Y)
 		if p.line < 0 || p.line >= len(disp) {
 			return
@@ -362,17 +408,18 @@ func (w *Window) textPointer(t *diffTab, tr ui.Rect, top, cellW, lineH float32) 
 				anchor: selPoint{line: p.line, cell: from},
 				focus:  selPoint{line: p.line, cell: to},
 				set:    true,
+				kind:   kind,
 			}
 		}
 	})
-	w.onKeys(idDiffText, w.viewKeys(t, lineH, tr.Height))
+	w.onKeys(idDiffText, w.viewKeys(t, kind, lineH, tr.Height))
 }
 
 // viewKeys is the file view's key handler: the caret keys move the selection,
 // everything else keeps the diff panes' scrolling.
-func (w *Window) viewKeys(t *diffTab, lineH, view float32) func(ui.KeyEvent) bool {
+func (w *Window) viewKeys(t *diffTab, kind selKind, lineH, view float32) func(ui.KeyEvent) bool {
 	return func(e ui.KeyEvent) bool {
-		if w.textKey(t, e, lineH) {
+		if w.textKey(t, e, kind, lineH) {
 			return true
 		}
 		return w.scrollKey(t, e, lineH, view)
@@ -382,8 +429,12 @@ func (w *Window) viewKeys(t *diffTab, lineH, view float32) func(ui.KeyEvent) boo
 // textKey handles the caret keys of the file view. Shift extends the selection
 // from its anchor and a bare arrow collapses it to a caret; before the first
 // caret the bare arrows keep scrolling as they always did.
-func (w *Window) textKey(t *diffTab, e ui.KeyEvent, lineH float32) bool {
-	if t.res == nil || len(t.newDisp) == 0 {
+func (w *Window) textKey(t *diffTab, e ui.KeyEvent, kind selKind, lineH float32) bool {
+	if t.res == nil {
+		return false
+	}
+	lines := t.selLines(kind)
+	if len(lines) == 0 {
 		return false
 	}
 	switch e.Key {
@@ -398,10 +449,10 @@ func (w *Window) textKey(t *diffTab, e ui.KeyEvent, lineH float32) bool {
 		}
 		// Start at the top of the viewport, so the extension begins where the
 		// reader is looking.
-		line := max(0, min(int(t.y/lineH), len(t.newDisp)-1))
-		t.textSel = textSel{anchor: selPoint{line: line}, focus: selPoint{line: line}, set: true}
+		line := max(0, min(int(t.y/lineH), len(lines)-1))
+		t.textSel = textSel{anchor: selPoint{line: line}, focus: selPoint{line: line}, set: true, kind: kind}
 	}
-	next := moveCaret(t.newDisp, t.textSel.focus, e.Key)
+	next := moveCaret(lines, t.textSel.focus, e.Key)
 	if extend {
 		t.textSel.focus = next
 	} else {

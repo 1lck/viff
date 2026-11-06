@@ -16,6 +16,7 @@ const (
 	DiffActionHighlightWords = Key("diff.action.highlightWords")
 	DiffActionSyncScrolling  = Key("diff.action.syncScrolling")
 	DiffActionOpenEditor     = Key("diff.action.openEditor")
+	DiffActionJumpSource     = Key("diff.action.jumpToSource")
 	DiffActionStageFile      = Key("diff.action.stageFile")
 	DiffActionUnstageFile    = Key("diff.action.unstageFile")
 
@@ -112,6 +113,7 @@ func init() {
 		DiffActionHighlightWords: "Highlight Words",
 		DiffActionSyncScrolling:  "Synchronize Scrolling",
 		DiffActionOpenEditor:     "Open in External Editor\tF4",
+		DiffActionJumpSource:     "Jump to Source",
 		DiffActionStageFile:      "Stage File",
 		DiffActionUnstageFile:    "Unstage File",
 
@@ -206,6 +208,7 @@ func init() {
 		DiffActionHighlightWords: "高亮单词",
 		DiffActionSyncScrolling:  "同步滚动",
 		DiffActionOpenEditor:     "在外部编辑器中打开\tF4",
+		DiffActionJumpSource:     "跳转到源",
 		DiffActionStageFile:      "暂存文件",
 		DiffActionUnstageFile:    "取消暂存文件",
 
