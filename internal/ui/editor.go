@@ -75,12 +75,13 @@ type diffTab struct {
 	// is meaningful only when src.View.
 	textSel textSel
 
-	// The right edge's two caches, filled once per load by prepareTab. marks
-	// hold one entry per changed stretch; code maps hold the compressed shape
-	// of every display line. The unified viewer interleaves both sides, so it
-	// keeps its own copy of each.
+	// The right edge's caches, filled once per load by prepareTab. marks hold
+	// one entry per changed stretch; codeMap holds the file viewer's character
+	// columns and codemapImg the bitmap rasterized from them. The code map is a
+	// file-view feature: a diff already shows its changes through the marks.
 	marksNew, marksOld, marksUni []miniMark
-	mapNew, mapOld, mapUni       []codemapLine
+	codeMap                      []codemapLine
+	codemapImg                   *codemapImage
 }
 
 // uline is one row of the unified view.
@@ -262,14 +263,10 @@ func (w *Window) prepareTab(t *diffTab) {
 	// scales and draws them. Each is skipped while its part is off.
 	s := w.ws.Settings
 	t.marksOld, t.marksNew, t.marksUni = nil, nil, nil
-	t.mapOld, t.mapNew, t.mapUni = nil, nil, nil
+	t.codeMap, t.codemapImg = nil, nil
 	if s.DiffMarks {
 		t.marksOld = buildMarks(t.oldBlk, res.Blocks)
 		t.marksNew = buildMarks(t.newBlk, res.Blocks)
-	}
-	if s.DiffCodemap {
-		t.mapOld = buildCodemap(t.oldDisp, t.oldSyn, t.oldBlk, t.maxCells)
-		t.mapNew = buildCodemap(t.newDisp, t.newSyn, t.newBlk, t.maxCells)
 	}
 	t.unified = t.unified[:0]
 	o, n := 0, 0
@@ -309,15 +306,18 @@ func (w *Window) prepareTab(t *diffTab) {
 			t.unifDisp[i] = t.oldDisp[u.old]
 		}
 	}
-	// The unified viewer interleaves both sides, so its caches are collected from
-	// the rows rather than from one side's maps; the rows exist by now.
-	if w.ws.Settings.DiffUnified {
-		if w.ws.Settings.DiffMarks {
-			t.marksUni = buildMarksUnified(t)
-		}
-		if w.ws.Settings.DiffCodemap {
-			t.mapUni = buildCodemapUnified(t, t.maxCells)
-		}
+	// The unified viewer's caches are collected from the interleaved rows. They
+	// are built whenever their part of the right edge is on, not only while the
+	// unified viewer happens to be the active mode: switching modes must not
+	// need a rebuild, and a tab opened in one mode must still have them when the
+	// reader switches to the other.
+	if w.ws.Settings.DiffMarks {
+		t.marksUni = buildMarksUnified(t)
+	}
+	if w.ws.Settings.DiffCodemap && t.src.View {
+		// The map belongs to the file viewer, which shows one version of the
+		// file, so its shape comes from that side alone.
+		t.codeMap = buildCodemap(t.newDisp, t.newSyn)
 	}
 }
 

@@ -55,6 +55,23 @@ func openEdgeTab(t *testing.T, f *uiFixture) *diffTab {
 	return f.win.ed.cur()
 }
 
+// openFileViewTab opens a working-tree file in the read-only viewer and waits
+// for it to load. This is the path that shows the code map: the map belongs to
+// the file viewer, not to a diff.
+func openFileViewTab(t *testing.T, f *uiFixture, path string) *diffTab {
+	t.Helper()
+	f.win.openFileView(path, "", false)
+	f.settleTab()
+	f.s.Settle(80*time.Millisecond, time.Second)
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		tab := f.win.ed.cur()
+		return tab != nil && !tab.loading && tab.src.View && tab.src.Path == path
+	}, 10*time.Second); err != nil {
+		t.Fatalf("the file viewer did not open %s: %v", path, err)
+	}
+	return f.win.ed.cur()
+}
+
 // TestChangeMarksCoverOnlyChanges is the point of the ruler: one mark per
 // changed stretch and nothing else. A file of hundreds of lines with one edit
 // must produce a handful of marks, not one per line, and they must cover
@@ -128,8 +145,9 @@ func TestChangeMarksTakeTheScrollBarColumn(t *testing.T) {
 }
 
 // TestCodemapIsOptional checks the second switch: the code map is off by
-// default, its cache appears only when on, and it takes a column of its own
-// inward of the ruler.
+// default, its cache appears only when on, and it draws only in the file viewer
+// — a diff already shows its changes through the ruler, so it claims no width
+// there.
 func TestCodemapIsOptional(t *testing.T) {
 	f := newUIFixture(t)
 	f.start(1440, 900)
@@ -142,47 +160,104 @@ func TestCodemapIsOptional(t *testing.T) {
 	if !f.win.ws.Settings.DiffMarks {
 		t.Fatal("the change marks are off by default")
 	}
+	// A diff first: with the map off nothing is built, and nothing is painted.
 	tab := openEdgeTab(t, f)
-	if len(tab.mapNew) != 0 {
-		t.Fatalf("a code map was built while the setting is off: %d lines", len(tab.mapNew))
+	if len(tab.codeMap) != 0 {
+		t.Fatalf("a code map was built while the setting is off: %d rows", len(tab.codeMap))
 	}
-	marks, ok := f.win.areas[idDiffMarks]
-	if !ok {
+	if _, ok := f.win.areas[idDiffMarks]; !ok {
 		t.Fatal("the ruler was not painted")
 	}
 	if area, drawn := f.win.areas[idDiffCodemap]; drawn && area.Width > 0 {
 		t.Fatalf("the code map is painted while off: %+v", area)
 	}
 
-	// Turn it on: the cache is built from data the tab already holds, and the
-	// column appears inward of the ruler.
+	// On, but still a diff: the map belongs to the file viewer, so a diff must
+	// not give it a column however the setting stands.
 	seq := tab.seq
 	f.win.ws.Settings.DiffCodemap = true
 	f.win.rebuildDiffEdge()
 	f.s.Settle(60*time.Millisecond, time.Second)
-	if len(tab.mapNew) != len(tab.newDisp) {
-		t.Fatalf("code map has %d lines for %d display lines", len(tab.mapNew), len(tab.newDisp))
-	}
 	if tab.seq != seq {
 		t.Fatalf("enabling the code map reloaded the diff: seq %d -> %d", seq, tab.seq)
 	}
+	if area, drawn := f.win.areas[idDiffCodemap]; drawn && area.Width > 0 {
+		t.Fatalf("the code map drew beside a diff: %+v", area)
+	}
+
+	// Open the file itself: now the map appears, and its rows follow that file's
+	// lines. The file viewer has no change ruler, so the map owns the trailing
+	// edge outright.
+	ft := openFileViewTab(t, f, "demo/long.go")
+	if len(ft.codeMap) != len(ft.newDisp) {
+		t.Fatalf("code map has %d rows for %d file lines", len(ft.codeMap), len(ft.newDisp))
+	}
 	area, ok := f.win.areas[idDiffCodemap]
 	if !ok || area.Width <= 0 {
-		t.Fatalf("the code map is not painted after enabling it: %+v (present=%v)", area, ok)
+		t.Fatalf("the code map is not painted in the file viewer: %+v (present=%v)", area, ok)
 	}
-	if right(area) > marks.X+1 {
-		t.Fatalf("the code map overlaps the ruler: map %+v ruler %+v", area, marks)
+	if ruler, drawn := f.win.areas[idDiffMarks]; drawn && ruler.Width > 0 {
+		t.Fatalf("the file viewer drew a change ruler at %+v; the map owns that edge", ruler)
 	}
 	// Its shape carries syntax, which is what makes it a code map and not a
 	// second ruler.
 	kinds := map[tokKind]bool{}
-	for _, ml := range tab.mapNew {
+	for _, ml := range ft.codeMap {
 		for _, r := range ml.runs {
 			kinds[r.kind] = true
 		}
 	}
 	if !kinds[tkKeyword] && !kinds[tkPlain] {
 		t.Fatalf("the code map carries no usable token kinds: %v", kinds)
+	}
+	f.assertIdle()
+}
+
+// TestCodemapDrawsRealTextShape is the point of the rewrite: the map is built
+// from character columns the way VS Code's minimap is, so indentation is blank
+// and a line ends where its text ends instead of stretching across the column.
+func TestCodemapDrawsRealTextShape(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	f.write("demo/shape.go", "package demo\n\nfunc a() {\n\treturn\n}\n")
+	f.git("add", "demo/shape.go")
+	f.gitDated("2026-10-22T10:00:00", "commit", "-q", "-m", "Add a short file")
+	f.win.ws.Settings.DiffCodemap = true
+	tab := openFileViewTab(t, f, "demo/shape.go")
+
+	if len(tab.codeMap) != len(tab.newDisp) {
+		t.Fatalf("code map has %d rows for %d file lines", len(tab.codeMap), len(tab.newDisp))
+	}
+
+	// An indented line must not start at column zero: the indent occupies cells
+	// that paint nothing, so its first run begins after them.
+	indented := -1
+	for i, line := range tab.newDisp {
+		if strings.HasPrefix(line, "    return") {
+			indented = i
+			break
+		}
+	}
+	if indented < 0 {
+		t.Fatalf("the fixture lost its indented line: %q", tab.newDisp)
+	}
+	ml := tab.codeMap[indented]
+	if len(ml.runs) == 0 {
+		t.Fatalf("the indented line painted nothing: %+v", ml)
+	}
+	if ml.runs[0].from == 0 {
+		t.Fatalf("the indent was painted as code: first run starts at column %d", ml.runs[0].from)
+	}
+	// And no run may reach past the column limit instead of stretching.
+	for i, ml := range tab.codeMap {
+		for _, run := range ml.runs {
+			if run.to > codemapMaxCols || run.from < 0 || run.to <= run.from {
+				t.Fatalf("row %d has a run outside the map: %+v", i, run)
+			}
+		}
 	}
 	f.assertIdle()
 }
