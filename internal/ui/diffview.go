@@ -91,6 +91,18 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	left := rect(r.X, r.Y, paneW, r.Height)
 	div := rect(r.X+paneW, r.Y, dividerW, r.Height)
 	rightP := rect(right(div), r.Y, r.Width-paneW-dividerW, r.Height)
+	// The right edge belongs to the change ruler, which carries the visible
+	// range and so stands in for the overlay scroll bar. The optional code map
+	// sits inward of it. Both come out of the body, not the whole panel, so the
+	// panes keep their titles.
+	s := w.ws.Settings
+	marksRect, codemapRect := ui.Rect{}, ui.Rect{}
+	if s.DiffMarks {
+		marksRect = splitRight(&rightP, marksWidth)
+	}
+	if s.DiffCodemap {
+		codemapRect = splitRight(&rightP, codemapWidth)
+	}
 	oldPath := ""
 	if t.src.OldPath != "" && t.src.OldPath != t.src.Path {
 		oldPath = t.src.OldPath
@@ -136,7 +148,17 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	w.paintPane(t, left, true, oldY, gutter, idDiffLeft)
 	w.paintPane(t, rightP, false, t.y, gutter, idDiffRight)
 	w.paintDivider(t, div, oldY, t.y, lineH)
-	w.vbar(idDiffScrollR, rightP, &scroller{Y: t.y}, newContent)
+	// Both right-edge parts stand for the new side, which is the one the reader
+	// scrolls; the old side follows it when scrolling is synchronized. When the
+	// ruler is on it replaces the overlay bar, so the two never share the edge.
+	if s.DiffCodemap {
+		w.paintCodemap(t, codemapRect, t.mapNew, t.y, h, lineH)
+	}
+	if s.DiffMarks {
+		w.paintChangeMarks(t, marksRect, t.marksNew, len(t.newDisp), t.y, h, lineH)
+	} else {
+		w.vbar(idDiffScrollR, rightP, &scroller{Y: t.y}, newContent)
+	}
 	if !sync {
 		sc := scroller{Y: t.yOld}
 		w.vbar(idDiffScrollL, left, &sc, oldContent)
@@ -494,6 +516,16 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 	n := len(t.unified)
 	content := float32(n+3) * lineH
 	t.y = clampF(t.y, 0, max(0, content-r.Height))
+	// The right edge is cut the same way as in the side-by-side viewer: marks
+	// outermost, the optional code map inward of them.
+	s := w.ws.Settings
+	marksRect, codemapRect := ui.Rect{}, ui.Rect{}
+	if s.DiffMarks {
+		marksRect = splitRight(&r, marksWidth)
+	}
+	if s.DiffCodemap {
+		codemapRect = splitRight(&r, codemapWidth)
+	}
 	numW := float32(len(itoa(max(max(len(t.oldDisp), len(t.newDisp)), 99))))*cellW + 12
 	gutter := numW*2 + 24
 	gr := rect(r.X, r.Y, gutter, r.Height)
@@ -594,8 +626,15 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 	}
 	w.c.Unclip()
 	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
-	sc := scroller{Y: t.y}
-	w.vbar(idDiffScrollR, r, &sc, content)
+	if s.DiffCodemap {
+		w.paintCodemap(t, codemapRect, t.mapUni, t.y, r.Height, lineH)
+	}
+	if s.DiffMarks {
+		w.paintChangeMarks(t, marksRect, t.marksUni, len(t.unified), t.y, r.Height, lineH)
+	} else {
+		sc := scroller{Y: t.y}
+		w.vbar(idDiffScrollR, r, &sc, content)
+	}
 	w.wrapBarDrag(idDiffScrollR, func(y float32) { t.y = y }, func() float32 { return t.y }, content, r.Height)
 }
 
@@ -668,6 +707,22 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	x += actionSize + 2
 	if w.action(idDiffSync, x, y, icons.SynchronizeScrolling, w.t(i18n.DiffActionSyncScrolling), actOpts{toggled: s.DiffSyncScroll, disabled: s.DiffUnified}) {
 		w.after(func() { s.DiffSyncScroll = !s.DiffSyncScroll; w.saveSettings() })
+	}
+	x += actionSize + 2
+	if w.action(idDiffMarksBtn, x, y, icons.Layout, w.t(i18n.DiffActionMarks), actOpts{toggled: s.DiffMarks}) {
+		w.after(func() {
+			s.DiffMarks = !s.DiffMarks
+			w.saveSettings()
+			w.rebuildDiffEdge()
+		})
+	}
+	x += actionSize + 2
+	if w.action(idDiffCodemapBtn, x, y, icons.Preview, w.t(i18n.DiffActionCodemap), actOpts{toggled: s.DiffCodemap}) {
+		w.after(func() {
+			s.DiffCodemap = !s.DiffCodemap
+			w.saveSettings()
+			w.rebuildDiffEdge()
+		})
 	}
 	x += actionSize + 2
 
