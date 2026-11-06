@@ -1,6 +1,9 @@
 package i18n
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Every language must define every key with non-empty text. A half-filled table
 // would show a mix of translated and fallback text instead of one language, and
@@ -66,4 +69,43 @@ func TestPercentInMessages(t *testing.T) {
 	if got := New(ZHCN).T(withArg, 42, "3 个文件"); got != "42%，共 3 个文件" {
 		t.Fatalf("ZH with arg = %q", got)
 	}
+}
+
+// Every language must use the same placeholder sequence for a key. The callers
+// pass one argument list, so a translation that reorders "%d" and "%s" would
+// print "%!s(int=…)" instead of a number, as the discovery message once did.
+func TestPlaceholderSequencesMatch(t *testing.T) {
+	for key, text := range tables[EN] {
+		other, ok := tables[ZHCN][key]
+		if !ok {
+			continue // TestTablesAreComplete reports the missing key
+		}
+		if a, b := placeholders(text), placeholders(other); strings.Join(a, ",") != strings.Join(b, ",") {
+			t.Errorf("%s: EN %q uses %v, ZHCN %q uses %v", key, text, a, other, b)
+		}
+	}
+}
+
+// placeholders lists the verbs of a message in order. Doubled percent signs are
+// literal text, and width/precision flags do not change the argument order.
+func placeholders(s string) []string {
+	var out []string
+	for i := 0; i < len(s); i++ {
+		if s[i] != '%' {
+			continue
+		}
+		if i+1 < len(s) && s[i+1] == '%' {
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(s) && strings.ContainsRune("+-# 0.", rune(s[j])) {
+			j++
+		}
+		if j < len(s) {
+			out = append(out, s[j:j+1])
+			i = j
+		}
+	}
+	return out
 }
