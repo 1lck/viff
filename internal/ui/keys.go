@@ -139,7 +139,7 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		// Select All in the read-only file view; a focused text field keeps
 		// Command+A for its own text (Viva consumes the chord before this).
 		t := w.ed.cur()
-		if t == nil || !t.selectAllText() {
+		if t == nil || !t.selectAllText(w.ws.Settings.DiffUnified) {
 			return false
 		}
 	case ch == "c" && !shift && !alt:

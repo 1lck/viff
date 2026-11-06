@@ -300,16 +300,24 @@ func (t *diffTab) selectionText() string {
 	return t.textSel.text(t.newDisp)
 }
 
-// selectAllText selects the whole line list the current selection kind indexes
-// and reports whether that left a range to copy. The file view always selects
-// its own text; a diff selects the pane or the unified rows the reader is in.
-func (t *diffTab) selectAllText() bool {
+// selectAllText selects the whole line list the reader is in and reports
+// whether that left a range to copy. unified says the diff is painted as one
+// column, which selects its rows; otherwise a diff selects a pane. The file
+// view always selects its own text, whatever the diff mode is set to.
+func (t *diffTab) selectAllText(unified bool) bool {
 	if t.res == nil {
 		return false
 	}
 	kind := t.textSel.kind
-	if t.src.View {
+	switch {
+	case t.src.View:
 		kind = selFile
+	case unified:
+		kind = selUnified
+	case kind != selOldPane && kind != selNewPane:
+		// No pane has been clicked yet: Select All starts on the new side,
+		// the side the reader is reading.
+		kind = selNewPane
 	}
 	lines := t.selLines(kind)
 	if len(lines) == 0 {
