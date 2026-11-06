@@ -27,7 +27,7 @@
 | Git 兼容     | 继承用户 Git 配置、credential helper、SSH agent、hooks 和签名工具，显示失败与交互等待     | P1 基础；发布前完成兼容矩阵 |
 | 内置终端     | 当前仓库的本地 shell 工具窗：滚动回看、选择复制、粘贴、缩放、重启；不含 SSH、多标签与鼠标上报 | P3（[0028](decisions/0028-integrated-terminal.md)） |
 
-P3 仍属于目标范围，不能在未交付时宣称已完整支持。第一版不做 IDE、通用代码编辑、语言服务、全项目代码索引、插件市场、内置 AI 编码助手（可选的提交说明生成除外，见 [0027](decisions/0027-ai-commit-message.md)）、托管平台 PR/Issue 工作台；内置终端是本地 shell 工具窗，不是 IDE 的终端替代品，边界见 [0028](decisions/0028-integrated-terminal.md)。提交消息和 rebase 计划的编辑属于 Git 操作。应用内不提供冲突结果编辑、自动 AI 修复或左右版本接受按钮。
+P3 仍属于目标范围，不能在未交付时宣称已完整支持。第一版不做 IDE、通用代码编辑、语言服务、全项目代码索引（不建持久化索引；按需内容搜索见 [0035](decisions/0037-content-search.md)）、插件市场、内置 AI 编码助手（可选的提交说明生成除外，见 [0027](decisions/0027-ai-commit-message.md)）、托管平台 PR/Issue 工作台；内置终端是本地 shell 工具窗，不是 IDE 的终端替代品，边界见 [0028](decisions/0028-integrated-terminal.md)。提交消息和 rebase 计划的编辑属于 Git 操作。应用内不提供冲突结果编辑、自动 AI 修复或左右版本接受按钮。
 
 **冲突展示必须忠实于 Git 状态。**
 

@@ -100,6 +100,8 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		}
 	case ch == "d":
 		w.showDiffForFocus()
+	case ch == "f" && shift:
+		w.openFindInFiles()
 	case ch == "f":
 		if t := w.ed.cur(); t != nil && t.res != nil && !w.focused(idLogTable) && !w.focused(idLogSearch) {
 			w.openDiffSearch()

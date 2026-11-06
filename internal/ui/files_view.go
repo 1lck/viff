@@ -16,6 +16,10 @@ import (
 
 const fileIndent = 14
 
+// idProjectFindFiles identifies the toolbar's Find in Files action. The ID is
+// declared next to its only use because the panel owns it.
+var idProjectFindFiles = tree.ID(fProject, "find-in-files")
+
 // ensureFiles loads the path list when the repository changed or Git reported
 // a newer status. The workspace drops answers for a repository that is no
 // longer active; seq drops answers that a newer request replaced.
@@ -88,7 +92,11 @@ func (w *Window) paintProject(r ui.Rect) {
 		w.after(w.toggleProject)
 	}
 	rx -= actionSize + 2
-	if w.action(idProjectQuick, rx, hr.Y+(hr.Height-actionSize)/2, icons.Search, "Open File…\t⇧⌘O", actOpts{}) {
+	if w.action(idProjectFindFiles, rx, hr.Y+(hr.Height-actionSize)/2, icons.Find, w.t(i18n.SearchMenuFindInFiles)+"\t⇧⌘F", actOpts{}) {
+		w.after(w.openFindInFiles)
+	}
+	rx -= actionSize + 2
+	if w.action(idProjectQuick, rx, hr.Y+(hr.Height-actionSize)/2, icons.Search, w.t(i18n.ChromeMenuOpenFile)+"\t⇧⌘O", actOpts{}) {
 		w.after(w.openQuickOpen)
 	}
 	rx -= actionSize + 2
@@ -285,6 +293,17 @@ func (w *Window) openRepoFile(p string, pin bool) {
 	w.showDiff(vapp.DiffSource{Path: p, View: true}, pin)
 }
 
+// openRepoFileAt opens a working-tree file and asks the viewer to reveal line
+// (1-based), for a content-search result. It reuses the tab of an already open
+// file, so a second result in the same file only moves the viewport.
+func (w *Window) openRepoFileAt(p string, line int, pin bool) {
+	w.showDiff(vapp.DiffSource{Path: p, View: true}, pin)
+	if t := w.ed.cur(); t != nil {
+		t.pendingLine = max(0, line)
+	}
+	w.Invalidate()
+}
+
 // firstFile returns the first file row (directories do not open).
 func (v *filesView) firstFile() int {
 	for i, row := range v.rows {
@@ -399,8 +418,15 @@ func (w *Window) projectKey(e ui.KeyEvent) bool {
 
 // projectWindowMenu is the tool window's own menu, opened from its title.
 func (w *Window) projectWindowMenu() []item {
-	return []item{
-		{title: "Open File…", icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
+	out := []item{
+		{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
+	}
+	// Content search is a backend capability: Subversion has no equivalent,
+	// so the entry is absent rather than failing after being pressed.
+	if w.ws.SupportsContentSearch() {
+		out = append(out, item{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles})
+	}
+	return append(out, []item{
 		sep(),
 		{title: "Expand All", icon: icons.ExpandAll, run: func() {
 			clear(w.fm.collapsed)
@@ -417,7 +443,7 @@ func (w *Window) projectWindowMenu() []item {
 		}},
 		sep(),
 		{title: "Hide Project", shortcut: "⌘1", run: w.toggleProject},
-	}
+	}...)
 }
 
 // filesMenu is the context menu of one Files row.

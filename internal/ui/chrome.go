@@ -298,7 +298,13 @@ func (w *Window) projectMenu() []item {
 			undo.run = w.ws.Undo
 		}
 		out = append(out, sep(), undo,
-			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
+			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen})
+		// Content search is a backend capability; Subversion has no equivalent,
+		// so the entry is absent instead of failing after being pressed.
+		if w.ws.SupportsContentSearch() {
+			out = append(out, item{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles})
+		}
+		out = append(out,
 			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, run: func() { revealPath(cur) }},
 			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: w.openTerminal},
 			item{title: w.t(i18n.ChromeMenuOpenSystemTerm), icon: icons.Shell, run: func() { openTerminal(cur) }},
