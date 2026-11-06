@@ -444,7 +444,7 @@ func (w *Window) projectWindowMenu() []item {
 		}},
 		sep(),
 		{title: w.t(i18n.WorkspaceMenuHideProject), shortcut: "⌘1", run: w.toggleProject},
-	}
+	}...)
 }
 
 // filesMenu is the context menu of one Files row.
