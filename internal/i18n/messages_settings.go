@@ -57,6 +57,12 @@ const (
 	SettingsPlaceholderAuto  = Key("settings.placeholder.auto")
 	SettingsPlaceholderTheme = Key("settings.placeholder.theme")
 
+	// The Git page echoes the executable an empty setting resolved to, so
+	// "Detected automatically" never hides which binary commands run.
+	SettingsHintGitUsing           = Key("settings.hint.git.using")
+	SettingsHintGitMissing         = Key("settings.hint.git.missing")
+	SettingsHintGitWSLDistribution = Key("settings.hint.git.wsl")
+
 	CommonOK     = Key("common.ok")
 	CommonCancel = Key("common.cancel")
 	CommonClose  = Key("common.close")
@@ -121,6 +127,10 @@ func init() {
 		SettingsPlaceholderAuto:  "Detected automatically",
 		SettingsPlaceholderTheme: "Islands Dark",
 
+		SettingsHintGitUsing:           "Using: %s",
+		SettingsHintGitMissing:         "Git was not found. Install it or enter its path above.",
+		SettingsHintGitWSLDistribution: "WSL repositories always use the git inside their distribution.",
+
 		CommonOK:     "OK",
 		CommonCancel: "Cancel",
 		CommonClose:  "Close",
@@ -183,6 +193,10 @@ func init() {
 
 		SettingsPlaceholderAuto:  "自动检测",
 		SettingsPlaceholderTheme: "Islands 深色",
+
+		SettingsHintGitUsing:           "当前使用：%s",
+		SettingsHintGitMissing:         "未找到 Git。请安装，或在上方填写路径。",
+		SettingsHintGitWSLDistribution: "WSL 仓库始终使用其发行版内的 Git。",
 
 		CommonOK:     "确定",
 		CommonCancel: "取消",

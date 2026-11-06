@@ -606,6 +606,9 @@ func (w *Window) openSettingsAt(page int) {
 	monoFonts := app.MonospaceFamilies()
 	font := text.NewEditor(strconv.Itoa(int(s.FontSize)))
 	gitPath := text.NewEditor(s.GitPath)
+	// What an empty Path to Git resolved to, collected once when the dialog
+	// opens: the field must not hide which binary commands actually run.
+	gitExe, gitExeErr := w.ws.Git.Executable()
 	editor := text.NewEditor(s.ExternalEditor)
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
 	autoUpdate, autoUpdateWas := s.AutoUpdateCheck, s.AutoUpdateCheck
@@ -679,6 +682,26 @@ func (w *Window) openSettingsAt(page int) {
 			f.gap(6)
 			f.bold(w.t(i18n.SettingsGroupGitExec))
 			f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.t(i18n.SettingsPlaceholderAuto), false)
+			f.custom(22, func(r ui.Rect) {
+				msg := ""
+				switch {
+				case strings.TrimSpace(gitPath.String()) != "":
+					// The field itself shows the configured path.
+				case gitExeErr != nil:
+					msg = w.t(i18n.SettingsHintGitMissing)
+				default:
+					msg = w.t(i18n.SettingsHintGitUsing, gitExe)
+				}
+				if msg != "" {
+					msg = w.p.truncateMiddle(msg, fontSmall, regular, r.Width-170)
+					w.p.text(msg, rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				}
+			})
+			f.custom(22, func(r ui.Rect) {
+				msg := w.t(i18n.SettingsHintGitWSLDistribution)
+				msg = w.p.truncateMiddle(msg, fontSmall, regular, r.Width-170)
+				w.p.text(msg, rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextDisable)
+			})
 			f.gap(6)
 			f.bold(w.t(i18n.SettingsGroupTools))
 			f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)
