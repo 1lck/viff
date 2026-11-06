@@ -421,7 +421,7 @@ var baseArgs = []string{"-c", "core.quotepath=false", "-c", "color.ui=false", "-
 func (r *Runner) command(ctx context.Context, dir string, args []string) (*exec.Cmd, error) {
 	if wslpath.Is(dir) {
 		// A WSL repository runs the distro's own git through wsl.exe; see
-		// wsl_windows.go and docs/decisions/0037-wsl-repositories.md.
+		// wsl_windows.go and docs/decisions/0038-wsl-repositories.md.
 		return r.wslCommand(ctx, dir, args)
 	}
 	git, err := r.git()

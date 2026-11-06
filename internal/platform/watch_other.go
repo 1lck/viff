@@ -17,7 +17,7 @@ import (
 // A WSL repository is watched more slowly: every poll round-trips the 9P file
 // system behind \\wsl.localhost, where a stat costs orders of magnitude more
 // than on a local disk. Five seconds keeps changes visible while leaving the
-// redirector room; tuning belongs to a measurement, not a guess (ADR 0037).
+// redirector room; tuning belongs to a measurement, not a guess (ADR 0038).
 func Watch(repo domain.Repo, changed func(meta bool)) (Watcher, error) {
 	interval, worktreeEvery := 2*time.Second, 3
 	if wslpath.Is(repo.Root) {

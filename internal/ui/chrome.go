@@ -291,6 +291,7 @@ func (w *Window) projectMenu() []item {
 		}
 		out = append(out, sep(), undo,
 			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
+			item{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles},
 			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, run: func() { revealPath(cur) }},
 			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: w.openTerminal},
 			item{title: w.t(i18n.ChromeMenuOpenSystemTerm), icon: icons.Shell, run: func() { openTerminal(cur) }},

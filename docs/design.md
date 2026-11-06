@@ -27,7 +27,7 @@
 | Git 兼容     | 继承用户 Git 配置、credential helper、SSH agent、hooks 和签名工具，显示失败与交互等待     | P1 基础；发布前完成兼容矩阵 |
 | 内置终端     | 当前仓库的本地 shell 工具窗：滚动回看、选择复制、粘贴、缩放、重启；不含 SSH、多标签与鼠标上报 | P3（[0028](decisions/0028-integrated-terminal.md)） |
 
-P3 仍属于目标范围，不能在未交付时宣称已完整支持。第一版不做 IDE、通用代码编辑、语言服务、全项目代码索引、插件市场、内置 AI 编码助手（可选的提交说明生成除外，见 [0027](decisions/0027-ai-commit-message.md)）、托管平台 PR/Issue 工作台；内置终端是本地 shell 工具窗，不是 IDE 的终端替代品，边界见 [0028](decisions/0028-integrated-terminal.md)。提交消息和 rebase 计划的编辑属于 Git 操作。应用内不提供冲突结果编辑、自动 AI 修复或左右版本接受按钮。
+P3 仍属于目标范围，不能在未交付时宣称已完整支持。第一版不做 IDE、通用代码编辑、语言服务、全项目代码索引（不建持久化索引；按需内容搜索见 [0035](decisions/0037-content-search.md)）、插件市场、内置 AI 编码助手（可选的提交说明生成除外，见 [0027](decisions/0027-ai-commit-message.md)）、托管平台 PR/Issue 工作台；内置终端是本地 shell 工具窗，不是 IDE 的终端替代品，边界见 [0028](decisions/0028-integrated-terminal.md)。提交消息和 rebase 计划的编辑属于 Git 操作。应用内不提供冲突结果编辑、自动 AI 修复或左右版本接受按钮。
 
 **冲突展示必须忠实于 Git 状态。**
 
@@ -74,7 +74,7 @@ flowchart TB
 
 **官方 Git CLI 是首选执行引擎。** 这样可以沿用用户的认证、签名和 hooks 环境；仍需逐项验证 GUI 启动环境与终端的差异。第一阶段发现并允许配置系统 Git，记录版本和能力；最低支持版本在兼容测试后固定。是否随安装包分发 Git 单独决策，不能宣称当前架构无需外部依赖。
 
-**WSL 仓库用发行版内的 Git，而不是 Windows 的。** Windows 版打开 `\\wsl.localhost\<发行版>\...` 时，Git 命令经 `wsl.exe -d <发行版> --cd <Linux 路径> --exec git` 在发行版内执行，于是认证、签名与 hooks 都来自 Linux 侧；文件读取仍走同一个 UNC 路径（9P 重定向器），应用其余部分只看到一种路径形态。取舍与代价见 [ADR 0037](decisions/0037-wsl-repositories.md)。
+**WSL 仓库用发行版内的 Git，而不是 Windows 的。** Windows 版打开 `\\wsl.localhost\<发行版>\...` 时，Git 命令经 `wsl.exe -d <发行版> --cd <Linux 路径> --exec git` 在发行版内执行，于是认证、签名与 hooks 都来自 Linux 侧；文件读取仍走同一个 UNC 路径（9P 重定向器），应用其余部分只看到一种路径形态。取舍与代价见 [ADR 0038](decisions/0038-wsl-repositories.md)。
 
 - 状态优先采用 `status --porcelain=v2 -z` 等机器格式；路径按 NUL 分隔，保留原始路径，显示转义不能反过来修改操作路径。[Git status 文档](https://git-scm.com/docs/git-status)
 - 用参数数组执行进程，避免 shell 拼接。支持空格、换行、Unicode、特殊前缀路径及不同换行符；对象 ID 不写死为 SHA-1 长度。

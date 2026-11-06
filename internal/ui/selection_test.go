@@ -219,25 +219,61 @@ func TestTextSelText(t *testing.T) {
 	}
 }
 
-// TestTabTextSelection checks the tab helpers only act on the file view.
+// TestTabTextSelection checks the tab helpers act on the line list the reader
+// is in: the file view's own text, a diff pane, or the unified view's rows.
 func TestTabTextSelection(t *testing.T) {
 	view := &diffTab{src: vapp.DiffSource{View: true}, res: &vapp.DiffResult{}, newDisp: []string{"alpha   beta", "wide 世界 line"}}
-	if !view.selectAllText() {
+	if !view.selectAllText(false) {
 		t.Fatal("selectAllText() did not select a non-empty file")
 	}
 	if got, want := view.selectionText(), "alpha   beta\nwide 世界 line"; got != want {
 		t.Errorf("select all = %q, want %q", got, want)
 	}
+	if view.textSel.kind != selFile {
+		t.Errorf("file view selection kind = %v, want selFile", view.textSel.kind)
+	}
 	view.clearTextSel()
 	if view.hasTextSelection() || view.selectionText() != "" {
 		t.Error("clearTextSel left a selection")
 	}
-	diff := &diffTab{res: &vapp.DiffResult{}, newDisp: []string{"abc"}}
-	if diff.selectAllText() || diff.hasTextSelection() {
-		t.Error("a diff tab took a text selection")
-	}
 	empty := &diffTab{src: vapp.DiffSource{View: true}, res: &vapp.DiffResult{}, newDisp: []string{""}}
-	if empty.selectAllText() {
+	if empty.selectAllText(false) {
 		t.Error("selectAllText() reports a range for one empty line")
+	}
+
+	// A diff selects text too. Without a clicked pane Select All takes the new
+	// side, and a unified diff takes its rows.
+	diff := &diffTab{res: &vapp.DiffResult{}, newDisp: []string{"abc"}, unifDisp: []string{"abc", "", "abc"}}
+	if !diff.selectAllText(false) {
+		t.Fatal("a side-by-side diff took no selection")
+	}
+	if diff.textSel.kind != selNewPane {
+		t.Errorf("diff selection kind = %v, want selNewPane", diff.textSel.kind)
+	}
+	if got := diff.selectionText(); got != "abc" {
+		t.Errorf("new pane select all = %q, want %q", got, "abc")
+	}
+	diff.clearTextSel()
+	if !diff.selectAllText(true) {
+		t.Fatal("a unified diff took no selection")
+	}
+	if diff.textSel.kind != selUnified {
+		t.Errorf("unified selection kind = %v, want selUnified", diff.textSel.kind)
+	}
+	if got := diff.selectionText(); got != "abc\n\nabc" {
+		t.Errorf("unified select all = %q, want %q", got, "abc\n\nabc")
+	}
+
+	// A pane that was clicked keeps its side.
+	oldOnly := &diffTab{res: &vapp.DiffResult{}, oldDisp: []string{"old"}, newDisp: []string{"new"}}
+	oldOnly.textSel = textSel{anchor: selPoint{}, focus: selPoint{line: 0, cell: 1}, set: true, kind: selOldPane}
+	if !oldOnly.selectAllText(false) {
+		t.Fatal("the old pane took no selection")
+	}
+	if oldOnly.textSel.kind != selOldPane {
+		t.Errorf("old pane selection kind = %v, want selOldPane", oldOnly.textSel.kind)
+	}
+	if got := oldOnly.selectionText(); got != "old" {
+		t.Errorf("old pane select all = %q, want %q", got, "old")
 	}
 }
