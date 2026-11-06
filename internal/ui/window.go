@@ -185,10 +185,11 @@ func (w *Window) windowControlsStyle() app.WindowControlsStyle {
 		Foreground: p.Text,
 		Hover:      p.ToolHover,
 		Pressed:    p.ToolPressed,
-		// The close button keeps the platform's red under the pointer; only the
-		// glyph is fixed to white, which reads on that red in both themes.
-		Close:           p.Error,
-		CloseForeground: ui.Color{Red: 1, Green: 1, Blue: 1, Alpha: 1},
+		// Close keeps Viva's own red and white glyph. Those two are constants, not
+		// derived from the clear color, so the captured-at-creation bug above does
+		// not reach them; p.Error cannot stand in for the fill, because it is the
+		// pale red meant to read as text on a dark background, and white on it
+		// drops to 2.6:1.
 		// Viva's own names are English; the interface language decides these.
 		Minimize:  w.t(i18n.ChromeA11yMinimize),
 		Maximize:  w.t(i18n.ChromeA11yMaximize),
