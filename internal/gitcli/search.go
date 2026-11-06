@@ -92,13 +92,13 @@ func (r *Runner) SearchContent(ctx context.Context, repo domain.Repo, query stri
 	tool := strings.TrimSpace(opts.Tool)
 	if tool == "" || tool == SearchAuto {
 		tool = SearchGit
-		if _, err := findRipgrep(opts.RipgrepPath); err == nil {
+		if _, err := FindRipgrep(opts.RipgrepPath); err == nil {
 			tool = SearchRipgrep
 		}
 	}
 	switch tool {
 	case SearchRipgrep:
-		bin, err := findRipgrep(opts.RipgrepPath)
+		bin, err := FindRipgrep(opts.RipgrepPath)
 		if err != nil {
 			return SearchResult{}, fmt.Errorf("search contents: %w", ErrRipgrepMissing)
 		}
@@ -108,9 +108,12 @@ func (r *Runner) SearchContent(ctx context.Context, repo domain.Repo, query stri
 	}
 }
 
-// findRipgrep resolves the executable. The fallback directories mirror git():
+// FindRipgrep resolves the executable. The fallback directories mirror git():
 // a GUI launched from Finder starts without the user's shell PATH.
-func findRipgrep(path string) (string, error) {
+//
+// It is exported so the Settings dialog can report the executable a search
+// would actually run instead of resolving one of its own.
+func FindRipgrep(path string) (string, error) {
 	if p := strings.TrimSpace(path); p != "" {
 		return exec.LookPath(p)
 	}

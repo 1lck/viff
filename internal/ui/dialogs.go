@@ -2,7 +2,6 @@ package viffui
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -660,9 +659,10 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	}
 	// The resolved path is echoed into the field: a user who never typed one
 	// sees which ripgrep the settings will actually use. It is resolved once
-	// here, not while painting, because exec.LookPath and os.Stat touch the
-	// file system and the dialog body runs on every frame.
-	ripgrepBin := findRipgrepPath(s.RipgrepPath)
+	// here, not while painting, because the lookup touches the file system and
+	// the dialog body runs on every frame. The lookup itself lives in app, so
+	// the status line cannot report a different executable than a search runs.
+	ripgrepBin := vapp.RipgrepPath(s.RipgrepPath)
 	ripgrepText := s.RipgrepPath
 	if strings.TrimSpace(ripgrepText) == "" && ripgrepBin != "" {
 		ripgrepText = ripgrepBin
@@ -955,26 +955,3 @@ var _ = icons.Add
 // has no ripgrep. Viff does not bundle it, so the status line never claims a
 // backend the user actually has.
 const ripgrepDownloadURL = "https://github.com/BurntSushi/ripgrep/releases"
-
-// findRipgrepPath resolves the ripgrep executable shown by the Settings status
-// line. An empty path means "rg" from PATH; the extra directories cover a GUI
-// started from Finder, which has no shell PATH. Duplicating the lookup here
-// keeps the dialog off gitcli's search runner: it only needs a path to report,
-// never a search.
-func findRipgrepPath(path string) string {
-	if p := strings.TrimSpace(path); p != "" {
-		if found, err := exec.LookPath(p); err == nil {
-			return found
-		}
-		return ""
-	}
-	if found, err := exec.LookPath("rg"); err == nil {
-		return found
-	}
-	for _, candidate := range []string{"/opt/homebrew/bin/rg", "/usr/local/bin/rg", "/usr/bin/rg"} {
-		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
-			return candidate
-		}
-	}
-	return ""
-}

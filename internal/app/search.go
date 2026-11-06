@@ -19,6 +19,17 @@ type (
 // dialog turns it into a settings hint instead of an error.
 var ErrRipgrepMissing = gitcli.ErrRipgrepMissing
 
+// RipgrepPath resolves the ripgrep executable a search would run, so the
+// Settings dialog reports that one instead of resolving a path of its own.
+// An empty configured path means "rg" from PATH; "" means it is missing.
+func RipgrepPath(configured string) string {
+	bin, err := gitcli.FindRipgrep(configured)
+	if err != nil {
+		return ""
+	}
+	return bin
+}
+
 // SearchContentOptions selects the backend for one query.
 type SearchContentOptions struct {
 	Tool        string

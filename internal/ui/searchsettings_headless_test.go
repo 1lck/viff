@@ -54,6 +54,12 @@ func TestSearchSettingsDialog(t *testing.T) {
 	clickMenuRow(t, f, "Git grep")
 
 	f.click("ripgrep path:")
+	// The field is prefilled with the path the dialog resolved, which depends on
+	// whether this machine has ripgrep. Clear it so the assertion below tests the
+	// typed value, not the machine.
+	if err := f.s.Keys("cmd+a"); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.s.Type("  /opt/homebrew/bin/rg  "); err != nil {
 		t.Fatal(err)
 	}

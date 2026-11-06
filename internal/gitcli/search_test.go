@@ -98,7 +98,7 @@ func TestSearchContentUntrackedAndLimit(t *testing.T) {
 // ripgrep is optional; when it is installed it must return the same hits as
 // Git grep for the same working tree.
 func TestSearchContentRipgrepMatchesGit(t *testing.T) {
-	if _, err := findRipgrep(""); err != nil {
+	if _, err := FindRipgrep(""); err != nil {
 		t.Skip("ripgrep is not installed")
 	}
 	tr := newTestRepo(t)
