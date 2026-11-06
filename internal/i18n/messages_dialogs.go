@@ -84,12 +84,13 @@ const (
 	DialogForcePushBody    = Key("dialog.push.forceBody")
 
 	// Update project.
-	DialogUpdateTitle = Key("dialog.update.title")
-	DialogUpdateType  = Key("dialog.update.type")
-	DialogPullMerge   = Key("dialog.update.merge")
-	DialogPullRebase  = Key("dialog.update.rebase")
-	DialogPullFFOnly  = Key("dialog.update.ffOnly")
-	DialogUpdateBody  = Key("dialog.update.body")
+	DialogUpdateTitle   = Key("dialog.update.title")
+	DialogUpdateType    = Key("dialog.update.type")
+	DialogPullMerge     = Key("dialog.update.merge")
+	DialogPullRebase    = Key("dialog.update.rebase")
+	DialogPullFFOnly    = Key("dialog.update.ffOnly")
+	DialogUpdateBody    = Key("dialog.update.body")
+	DialogUpdateDontAsk = Key("dialog.update.dontAsk")
 
 	// Stash.
 	DialogStashTitle       = Key("dialog.stash.title")
@@ -190,12 +191,13 @@ func init() {
 		DialogForcePushTitle:   "Force Push",
 		DialogForcePushBody:    "Force-push %s to %s/%s? Commits on the remote that are not in your branch will be removed.",
 
-		DialogUpdateTitle: "Update Project",
-		DialogUpdateType:  "Update Type",
-		DialogPullMerge:   "Merge incoming changes into the current branch",
-		DialogPullRebase:  "Rebase the current branch on top of incoming changes",
-		DialogPullFFOnly:  "Fast-forward only",
-		DialogUpdateBody:  "Updates %s from %s.",
+		DialogUpdateTitle:   "Update Project",
+		DialogUpdateType:    "Update Type",
+		DialogPullMerge:     "Merge incoming changes into the current branch",
+		DialogPullRebase:    "Rebase the current branch on top of incoming changes",
+		DialogPullFFOnly:    "Fast-forward only",
+		DialogUpdateBody:    "Updates %s from %s.",
+		DialogUpdateDontAsk: "Don't ask again",
 
 		DialogStashTitle:       "Stash Changes",
 		DialogBranchLabel:      "Branch: %s",
@@ -292,12 +294,13 @@ func init() {
 		DialogForcePushTitle:   "强制推送",
 		DialogForcePushBody:    "把 %s 强制推送到 %s/%s？远端上不在你分支里的提交会被删除。",
 
-		DialogUpdateTitle: "更新项目",
-		DialogUpdateType:  "更新方式",
-		DialogPullMerge:   "把远端更改合并进当前分支",
-		DialogPullRebase:  "把当前分支变基到远端更改之上",
-		DialogPullFFOnly:  "仅快进",
-		DialogUpdateBody:  "从 %s 更新 %s。",
+		DialogUpdateTitle:   "更新项目",
+		DialogUpdateType:    "更新方式",
+		DialogPullMerge:     "把远端更改合并进当前分支",
+		DialogPullRebase:    "把当前分支变基到远端更改之上",
+		DialogPullFFOnly:    "仅快进",
+		DialogUpdateBody:    "从 %s 更新 %s。",
+		DialogUpdateDontAsk: "不再询问",
 
 		DialogStashTitle:       "暂存更改",
 		DialogBranchLabel:      "分支：%s",

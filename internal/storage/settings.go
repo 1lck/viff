@@ -39,6 +39,11 @@ type Settings struct {
 	FetchPrune    bool   `json:"fetchPrune"`
 	PullMode      string `json:"pullMode"` // "merge", "rebase", "ff-only"
 
+	// SkipUpdateDialog runs the Update Project shortcut with PullMode instead of
+	// opening its dialog. The dialog's "Don't ask again" and the Git settings
+	// page write the same field, so the choice stays reversible.
+	SkipUpdateDialog bool `json:"skipUpdateDialog,omitempty"`
+
 	// AutoUpdateCheck asks GitHub Releases for a newer version at startup. It
 	// defaults to true: Decode keeps the default for an old settings file that
 	// has no field, while an explicit false is stored and respected.
@@ -116,6 +121,15 @@ type Recent struct {
 type Window struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
+	// X and Y are the top-left corner of the content area in screen
+	// coordinates. A display placed left of or above the primary one makes
+	// them negative, and (0,0) is a real position, so Positioned records
+	// whether a frame was ever saved. Viva keeps a restored position on a
+	// screen and falls back to the main one when the saved frame matches no
+	// connected display, so no monitor list is kept here.
+	X          int  `json:"x,omitempty"`
+	Y          int  `json:"y,omitempty"`
+	Positioned bool `json:"positioned,omitempty"`
 }
 
 // Defaults returns the settings of a first start.

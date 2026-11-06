@@ -267,7 +267,7 @@ func (w *Window) Config() app.Config {
 	if height < 600 {
 		height = 900
 	}
-	return app.Config{
+	cfg := app.Config{
 		Title:          "Viff",
 		Class:          "viff",
 		Icon:           branding.Icon,
@@ -286,11 +286,20 @@ func (w *Window) Config() app.Config {
 		OnScroll:       w.onScroll,
 		OnFileDrop:     w.onFileDrop,
 		OnResize:       w.onResize,
+		OnFrameChange:  w.onFrameChange,
 		TextInput:      w.textInput,
 		Invalidator:    &w.inv,
 		OnWake:         w.onWake,
 		OnClosed:       w.onClosed,
 	}
+	// Origin reopens the window where it was left, including on a second
+	// display: Viva places the content area there, keeps it on a connected
+	// screen, and falls back to the main screen when the saved position
+	// matches none. Without a saved frame the system picks the spot.
+	if s.Window.Positioned {
+		cfg.Origin = &ui.Point{X: float32(s.Window.X), Y: float32(s.Window.Y)}
+	}
+	return cfg
 }
 
 func (w *Window) onWake() {
@@ -366,6 +375,21 @@ func (w *Window) onResize(size ui.Size) {
 	w.saveSettings()
 	// The grid's cell count follows the panel, and the pty follows the grid.
 	w.Invalidate()
+}
+
+// onFrameChange records where the content area sits on screen so the next
+// launch reopens there. Only the position is kept here: onResize owns the size,
+// and a live drag reports every intermediate point, so saveSettings debounces
+// the write instead of one per mouse move.
+func (w *Window) onFrameChange(frame ui.Rect) {
+	win := &w.ws.Settings.Window
+	x, y := int(frame.X), int(frame.Y)
+	if win.Positioned && win.X == x && win.Y == y {
+		return
+	}
+	win.X, win.Y = x, y
+	win.Positioned = true
+	w.saveSettings()
 }
 
 // saveSettings writes settings shortly after the last change. Git settings

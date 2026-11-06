@@ -129,7 +129,7 @@ GitHub Issue 的正文和附件对所有人可见，并可能被搜索引擎、�
 - 接收方由你决定：换成别的 Base URL 就是换成别的接收方，Viff 不代理、不记录请求与响应内容；
 - 结果只填进提交输入框，不会自动提交。
 
-规则与项目选择的记录保存在与 `settings.json` 同目录的 `prompts.json` 里（只含你写的规则文本、「哪个仓库用哪条」以及最近一次选中的规则，不含密钥）；端点、模型与密钥保存在 `settings.json` 里（密钥为明文），与 SSH、签名设置同一处理方式；详见 [0027](decisions/0027-ai-commit-message.md) 与 [0034](decisions/0034-ai-prompt-rules.md)。
+规则与项目选择的记录保存在与 `settings.json` 同目录的 `prompts.json` 里（只含你写的规则文本、「哪个仓库用哪条」以及最近一次选中的规则，不含密钥）；端点、模型与密钥保存在 `settings.json` 里（密钥为明文），与 SSH、签名设置同一处理方式；详见 [0027](decisions/0027-ai-commit-message.md) 与 [0035](decisions/0035-ai-prompt-rules.md)。
 
 ## 冲突上下文复制（Copy for AI）
 

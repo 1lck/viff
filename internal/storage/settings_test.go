@@ -185,3 +185,55 @@ func TestLanguageSanitized(t *testing.T) {
 		t.Errorf("unknown language kept: %q", got)
 	}
 }
+
+// The window position survives a round trip even when it is negative, which is
+// where a display left of or above the primary one puts it.
+func TestWindowPositionRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := Load(path)
+	if s.Window.Positioned {
+		t.Fatalf("fresh settings claim a window position: %+v", s.Window)
+	}
+	s.Window.X, s.Window.Y, s.Window.Positioned = -1280, 42, true
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	back := Load(path)
+	if !back.Window.Positioned || back.Window.X != -1280 || back.Window.Y != 42 {
+		t.Fatalf("window position lost: %+v", back.Window)
+	}
+}
+
+// (0,0) is a real place on the primary display, so Positioned rather than the
+// coordinates decides whether a position was saved.
+func TestWindowPositionAtOriginIsKept(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := Load(path)
+	s.Window.X, s.Window.Y, s.Window.Positioned = 0, 0, true
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if back := Load(path); !back.Window.Positioned {
+		t.Fatalf("position at the origin was dropped: %+v", back.Window)
+	}
+}
+
+// An old settings file has no skip field, so updating asks as before; an
+// explicit choice is kept together with the update method it applies.
+func TestSkipUpdateDialogPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"pullMode":"rebase"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Load(path)
+	if s.SkipUpdateDialog {
+		t.Fatal("old settings already skipped the update dialog")
+	}
+	s.SkipUpdateDialog = true
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if back := Load(path); !back.SkipUpdateDialog || back.PullMode != "rebase" {
+		t.Fatalf("skipUpdateDialog was not kept: %+v", back)
+	}
+}
