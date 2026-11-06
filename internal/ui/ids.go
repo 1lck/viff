@@ -92,18 +92,24 @@ var (
 	idCmEmptyCommit     = tree.ID(fCommit, "empty")
 
 	// Editor and diff.
-	scTabs            = tree.Sub(fEditor, tree.Name("tabs"))
-	scTabClose        = tree.Sub(fEditor, tree.Name("tab-close"))
-	idEditorEmpty     = tree.ID(fEditor, "empty")
-	idDiffLeft        = tree.ID(fDiff, "left")
-	idDiffRight       = tree.ID(fDiff, "right")
-	idDiffDivider     = tree.ID(fDiff, "divider")
-	idDiffPrev        = tree.ID(fDiff, "prev")
-	idDiffNext        = tree.ID(fDiff, "next")
-	idDiffMode        = tree.ID(fDiff, "mode")
-	idDiffWS          = tree.ID(fDiff, "whitespace")
-	idDiffWords       = tree.ID(fDiff, "words")
-	idDiffSync        = tree.ID(fDiff, "sync")
+	scTabs        = tree.Sub(fEditor, tree.Name("tabs"))
+	scTabClose    = tree.Sub(fEditor, tree.Name("tab-close"))
+	idEditorEmpty = tree.ID(fEditor, "empty")
+	idDiffLeft    = tree.ID(fDiff, "left")
+	idDiffRight   = tree.ID(fDiff, "right")
+	idDiffDivider = tree.ID(fDiff, "divider")
+	idDiffPrev    = tree.ID(fDiff, "prev")
+	idDiffNext    = tree.ID(fDiff, "next")
+	idDiffMode    = tree.ID(fDiff, "mode")
+	idDiffWS      = tree.ID(fDiff, "whitespace")
+	idDiffWords   = tree.ID(fDiff, "words")
+	idDiffSync    = tree.ID(fDiff, "sync")
+	// The right edge of the diff: the change ruler (which doubles as the
+	// scroll bar) and the optional code map beside it.
+	idDiffMarks       = tree.ID(fDiff, "change-marks")
+	idDiffCodemap     = tree.ID(fDiff, "codemap")
+	idDiffMarksBtn    = tree.ID(fDiff, "change-marks-toggle")
+	idDiffCodemapBtn  = tree.ID(fDiff, "codemap-toggle")
 	idDiffOpen        = tree.ID(fDiff, "open-file")
 	idDiffJumpSource  = tree.ID(fDiff, "jump-source")
 	idDiffSettings    = tree.ID(fDiff, "settings")
@@ -170,9 +176,13 @@ var (
 	scSubItems      = tree.Sub(fPopup, tree.Name("sub-items"))
 	idSubPanel      = tree.ID(fPopup, "sub-panel")
 	scPopupStar     = tree.Sub(fPopup, tree.Name("star"))
+	scPopupSwitch   = tree.Sub(fPopup, tree.Name("switch"))
+	scPopupButtons  = tree.Sub(fPopup, tree.Name("buttons"))
 
 	// The Report a Problem dialog's description field.
 	idReportProblemText = tree.ID(fDialog, "problem-description")
+	// The commit message rules editor's text area.
+	idPromptRuleText = tree.ID(fDialog, "prompt-rule-text")
 
 	// Dialogs.
 	idDialogScrim  = tree.ID(fDialog, "scrim")
@@ -181,12 +191,18 @@ var (
 	idDialogCancel = tree.ID(fDialog, "cancel")
 	idDialogExtra  = tree.ID(fDialog, "extra")
 	idDialogClose  = tree.ID(fDialog, "close")
+	idDialogBar    = tree.ID(fDialog, "body-scroll")
 	scDialogFields = tree.Sub(fDialog, tree.Name("fields"))
 	scDialogChecks = tree.Sub(fDialog, tree.Name("checks"))
 	scDialogRadios = tree.Sub(fDialog, tree.Name("radios"))
 	scDialogRows   = tree.Sub(fDialog, tree.Name("rows"))
 	scDialogCombos = tree.Sub(fDialog, tree.Name("combos"))
 	scDialogLinks  = tree.Sub(fDialog, tree.Name("links"))
+	scDialogTabs   = tree.Sub(fDialog, tree.Name("tabs"))
+	scDialogGroups = tree.Sub(fDialog, tree.Name("groups"))
+
+	idSettingsRipgrepBrowse   = tree.ID(fDialog, "settings-ripgrep-browse")
+	idSettingsRipgrepDownload = tree.ID(fDialog, "settings-ripgrep-download")
 	// The New Worktree dialog chooses an existing branch from a list inside
 	// the dialog, not a popup: a popup opened from a dialog is painted but
 	// cannot be clicked through the focus trap (0012).
@@ -249,9 +265,11 @@ var (
 var (
 	fQuickOpen = tree.Feature("quick-open")
 
-	idQuickInput = tree.ID(fQuickOpen, "input")
-	scQuickRows  = tree.Sub(fQuickOpen, tree.Name("rows"))
-	idQuickBar   = tree.ID(fQuickOpen, "scroll")
+	idQuickInput     = tree.ID(fQuickOpen, "input")
+	idSearchInput    = tree.ID(fQuickOpen, "content-input")
+	idSearchSettings = tree.ID(fQuickOpen, "settings")
+	scQuickRows      = tree.Sub(fQuickOpen, tree.Name("rows"))
+	idQuickBar       = tree.ID(fQuickOpen, "scroll")
 )
 
 // Text selection in the read-only viewer and the diff panes. The file view and

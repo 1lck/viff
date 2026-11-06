@@ -11,6 +11,11 @@ const (
 	DiffViewSideBySide = Key("diff.view.sideBySide")
 	DiffViewUnified    = Key("diff.view.unified")
 
+	// The whitespace chip and the menu behind it.
+	DiffWhitespaceExact  = Key("diff.whitespace.exact")
+	DiffWhitespaceTrim   = Key("diff.whitespace.trim")
+	DiffWhitespaceIgnore = Key("diff.whitespace.ignore")
+
 	DiffActionPrevDifference = Key("diff.action.previousDifference")
 	DiffActionNextDifference = Key("diff.action.nextDifference")
 	DiffActionHighlightWords = Key("diff.action.highlightWords")
@@ -19,6 +24,13 @@ const (
 	DiffActionJumpSource     = Key("diff.action.jumpToSource")
 	DiffActionStageFile      = Key("diff.action.stageFile")
 	DiffActionUnstageFile    = Key("diff.action.unstageFile")
+
+	DiffActionMarks   = Key("diff.action.marks")
+	DiffMarksLabel    = Key("diff.marks.label")
+	DiffMarksTip      = Key("diff.marks.tip")
+	DiffActionCodemap = Key("diff.action.codemap")
+	DiffCodemapLabel  = Key("diff.codemap.label")
+	DiffCodemapTip    = Key("diff.codemap.tip")
 
 	DiffTipStageChange         = Key("diff.tip.stageChange")
 	DiffTipStageSelectedOne    = Key("diff.tip.stageSelectedLine")
@@ -108,6 +120,10 @@ func init() {
 		DiffViewSideBySide: "Side-by-side viewer",
 		DiffViewUnified:    "Unified viewer",
 
+		DiffWhitespaceExact:  "Do not ignore",
+		DiffWhitespaceTrim:   "Trim whitespaces",
+		DiffWhitespaceIgnore: "Ignore whitespaces",
+
 		DiffActionPrevDifference: "Previous Difference\t⇧F7",
 		DiffActionNextDifference: "Next Difference\tF7",
 		DiffActionHighlightWords: "Highlight Words",
@@ -116,6 +132,13 @@ func init() {
 		DiffActionJumpSource:     "Jump to Source",
 		DiffActionStageFile:      "Stage File",
 		DiffActionUnstageFile:    "Unstage File",
+
+		DiffActionMarks:   "Change Marks",
+		DiffMarksLabel:    "Change marks",
+		DiffMarksTip:      "Every change in this file on one ruler; drag to scroll",
+		DiffActionCodemap: "Code Map",
+		DiffCodemapLabel:  "Code map",
+		DiffCodemapTip:    "The whole file at a glance; drag to scroll",
 
 		DiffTipStageChange:         "Stage Change",
 		DiffTipStageSelectedOne:    "Stage %d Selected Line",
@@ -203,6 +226,10 @@ func init() {
 		DiffViewSideBySide: "并排视图",
 		DiffViewUnified:    "统一视图",
 
+		DiffWhitespaceExact:  "不忽略",
+		DiffWhitespaceTrim:   "忽略行尾空白",
+		DiffWhitespaceIgnore: "忽略空白",
+
 		DiffActionPrevDifference: "上一处差异\t⇧F7",
 		DiffActionNextDifference: "下一处差异\tF7",
 		DiffActionHighlightWords: "高亮单词",
@@ -211,6 +238,13 @@ func init() {
 		DiffActionJumpSource:     "跳转到源",
 		DiffActionStageFile:      "暂存文件",
 		DiffActionUnstageFile:    "取消暂存文件",
+
+		DiffActionMarks:   "改动标记",
+		DiffMarksLabel:    "改动标记",
+		DiffMarksTip:      "整份文件的改动都在这一条上；拖动可滚动",
+		DiffActionCodemap: "代码缩略图",
+		DiffCodemapLabel:  "代码缩略图",
+		DiffCodemapTip:    "整份文件一览；拖动可滚动",
 
 		DiffTipStageChange:         "暂存此更改",
 		DiffTipStageSelectedOne:    "暂存所选 %d 行",

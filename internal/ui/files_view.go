@@ -7,6 +7,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -14,6 +15,10 @@ import (
 // read-only in the existing single-version viewer. See files.go for the model.
 
 const fileIndent = 14
+
+// idProjectFindFiles identifies the toolbar's Find in Files action. The ID is
+// declared next to its only use because the panel owns it.
+var idProjectFindFiles = tree.ID(fProject, "find-in-files")
 
 // ensureFiles loads the path list when the repository changed or Git reported
 // a newer status. The workspace drops answers for a repository that is no
@@ -87,7 +92,11 @@ func (w *Window) paintProject(r ui.Rect) {
 		w.after(w.toggleProject)
 	}
 	rx -= actionSize + 2
-	if w.action(idProjectQuick, rx, hr.Y+(hr.Height-actionSize)/2, icons.Search, "Open File…\t⇧⌘O", actOpts{}) {
+	if w.action(idProjectFindFiles, rx, hr.Y+(hr.Height-actionSize)/2, icons.Find, w.t(i18n.SearchMenuFindInFiles)+"\t⇧⌘F", actOpts{}) {
+		w.after(w.openFindInFiles)
+	}
+	rx -= actionSize + 2
+	if w.action(idProjectQuick, rx, hr.Y+(hr.Height-actionSize)/2, icons.Search, w.t(i18n.ChromeMenuOpenFile)+"\t⇧⌘O", actOpts{}) {
 		w.after(w.openQuickOpen)
 	}
 	rx -= actionSize + 2
@@ -188,7 +197,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		rx := rr.X + 8 + float32(row.depth)*fileIndent
 		switch {
 		case row.root:
-			expanded := v.rootOpen || v.query != ""
+			expanded := v.rootOpen
 			chev := icons.ChevronRight
 			if expanded {
 				chev = icons.ChevronDown
@@ -205,7 +214,7 @@ func (w *Window) paintProject(r ui.Rect) {
 			w.c.HitWithOptions(id, rr, row.name+" "+row.hint, ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected, Expandable: true, Expanded: expanded})
 		case row.dir:
 			chev := icons.ChevronRight
-			expanded := v.query != "" || !v.collapsed[row.path]
+			expanded := !v.collapsed[row.path]
 			if expanded {
 				chev = icons.ChevronDown
 			}
@@ -282,6 +291,17 @@ func (w *Window) clickFileRow(i int) {
 // follows the selection until the tab is pinned.
 func (w *Window) openRepoFile(p string, pin bool) {
 	w.showDiff(vapp.DiffSource{Path: p, View: true}, pin)
+}
+
+// openRepoFileAt opens a working-tree file and asks the viewer to reveal line
+// (1-based), for a content-search result. It reuses the tab of an already open
+// file, so a second result in the same file only moves the viewport.
+func (w *Window) openRepoFileAt(p string, line int, pin bool) {
+	w.showDiff(vapp.DiffSource{Path: p, View: true}, pin)
+	if t := w.ed.cur(); t != nil {
+		t.pendingLine = max(0, line)
+	}
+	w.Invalidate()
 }
 
 // firstFile returns the first file row (directories do not open).
@@ -399,7 +419,8 @@ func (w *Window) projectKey(e ui.KeyEvent) bool {
 // projectWindowMenu is the tool window's own menu, opened from its title.
 func (w *Window) projectWindowMenu() []item {
 	return []item{
-		{title: "Open File…", icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
+		{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
+		{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles},
 		sep(),
 		{title: "Expand All", icon: icons.ExpandAll, run: func() {
 			clear(w.fm.collapsed)
@@ -463,7 +484,7 @@ func (w *Window) filesMenu(row fileRow) []item {
 		{title: "Open in External Editor", icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(row.path, 0) }},
 		sep(),
 		{title: "Annotate with Git Blame", icon: icons.Vcs, run: func() { w.openFileView(row.path, "", true) }},
-		{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(row.path) }},
+		{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(row.path) }},
 		sep(),
 		{title: "Copy Path", icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
 		{title: "Copy Relative Path", run: func() { w.copyText(row.path) }},

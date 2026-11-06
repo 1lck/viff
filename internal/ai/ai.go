@@ -46,13 +46,15 @@ func ParseProtocol(name string) Protocol {
 
 // Config names where to send the request and how to talk to it. Endpoint is a
 // base URL such as https://api.openai.com/v1 or https://api.anthropic.com;
-// the protocol appends its own path.
+// the protocol appends its own path. Rules is the user's own commit message
+// rules text; empty means the built-in Conventional Commits rules.
 type Config struct {
 	Protocol Protocol
 	Endpoint string
 	APIKey   string
 	Model    string
 	Language string
+	Rules    string
 }
 
 // Ready reports whether the config has what a request needs.
@@ -67,38 +69,13 @@ type Client struct {
 
 const requestTimeout = 45 * time.Second
 
-const systemPrompt = `You write Git commit messages that follow the Conventional Commits format.
-
-Format: <type>[optional scope]: <description>
-An optional body follows one blank line after the description; footers such as
-BREAKING CHANGE: follow one blank line after the body.
-
-Rules:
-- type is one of feat, fix, docs, style, refactor, perf, test, build, ci, chore,
-  revert, chosen by what the change actually does.
-- scope is optional, lowercase, and names the area touched (a package, module or
-  directory). Omit it when the change is broad.
-- description is imperative mood ("add", not "added"), lowercase, without a
-  trailing period, and at most 72 characters.
-- Add a body only when the diff needs explaining beyond the description.
-- Mark incompatible changes with "BREAKING CHANGE:" in a footer.
-- Read the diff: ignore formatting noise, machine-generated files and lock
-  files when choosing the type.
-
-Return only the commit message, with no quotes, no code fences and no
-explanation.`
-
 // CommitMessage asks the endpoint for a message for user, the assembled Git
 // context, and returns it cleaned for pasting into the commit box.
 func (c *Client) CommitMessage(ctx context.Context, cfg Config, user string) (string, error) {
 	if !cfg.Ready() {
 		return "", fmt.Errorf("ai: endpoint and model are required")
 	}
-	system := systemPrompt
-	if lang := strings.TrimSpace(cfg.Language); lang != "" && !strings.HasPrefix(lang, "en") {
-		system += "\n\nWrite the whole message in the language named by the BCP 47 tag " + lang +
-			"; keep the Conventional Commits tokens (type, scope, BREAKING CHANGE) in English."
-	}
+	system := SystemPrompt(cfg.Rules, cfg.Language)
 	switch cfg.Protocol {
 	case ProtocolAnthropic:
 		return c.anthropicMessage(ctx, cfg, system, user)
