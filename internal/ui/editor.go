@@ -46,6 +46,7 @@ type diffTab struct {
 	oldSyn, newSyn   [][]span
 	oldBlk, newBlk   []int32
 	unified          []uline
+	unifDisp         []string // display text of each unified row, indexed like unified
 	maxCells         int
 
 	searchOpen bool
@@ -153,6 +154,19 @@ func (w *Window) showDiff(src vapp.DiffSource, pin bool) {
 	v.tabs = append(v.tabs, t)
 	v.activate(len(v.tabs) - 1)
 	w.loadTab(t)
+}
+
+// showDiffInNewTab opens a source in a new pinned tab without touching the
+// current one. showDiff would reuse an existing tab with the same key and
+// replace the preview tab, which is exactly the tab a reader is looking at
+// when they jump to a file's source; this keeps that tab and adds the file
+// beside it.
+func (w *Window) showDiffInNewTab(src vapp.DiffSource) *diffTab {
+	t := &diffTab{src: src, selOld: map[int]bool{}, selNew: map[int]bool{}, search: text.NewEditor(""), anchor: -1}
+	w.ed.tabs = append(w.ed.tabs, t)
+	w.ed.activate(len(w.ed.tabs) - 1)
+	w.loadTab(t)
+	return t
 }
 
 func (w *Window) closeTab(i int) {
@@ -283,6 +297,17 @@ func (w *Window) prepareTab(t *diffTab) {
 	}
 	for ; o < len(oldLines); o++ {
 		t.unified = append(t.unified, uline{old: o, new: -1, block: -1})
+	}
+	// The unified view's selectable text, indexed like t.unified: context rows
+	// appear once and copy their shared content; rows outside both files copy "".
+	t.unifDisp = make([]string, len(t.unified))
+	for i, u := range t.unified {
+		switch {
+		case u.new >= 0 && (u.old < 0 || u.block < 0):
+			t.unifDisp[i] = t.newDisp[u.new]
+		case u.old >= 0:
+			t.unifDisp[i] = t.oldDisp[u.old]
+		}
 	}
 	// The unified viewer interleaves both sides, so its caches are collected from
 	// the rows rather than from one side's maps; the rows exist by now.

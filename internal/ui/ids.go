@@ -111,6 +111,7 @@ var (
 	idDiffMarksBtn    = tree.ID(fDiff, "change-marks-toggle")
 	idDiffCodemapBtn  = tree.ID(fDiff, "codemap-toggle")
 	idDiffOpen        = tree.ID(fDiff, "open-file")
+	idDiffJumpSource  = tree.ID(fDiff, "jump-source")
 	idDiffSettings    = tree.ID(fDiff, "settings")
 	idDiffStageFile   = tree.ID(fDiff, "stage-file")
 	idDiffScrollL     = tree.ID(fDiff, "scroll-left")
@@ -271,7 +272,10 @@ var (
 	idQuickBar       = tree.ID(fQuickOpen, "scroll")
 )
 
-// Text selection in the read-only viewer.
+// Text selection in the read-only viewer and the diff panes. The file view and
+// the unified view use idDiffText; side-by-side keeps one ID per pane, so the
+// new pane does not swallow the old pane's hit region.
 var (
-	idDiffText = tree.ID(fDiff, "text")
+	idDiffText    = tree.ID(fDiff, "text")
+	idDiffTextOld = tree.ID(fDiff, "text-old")
 )
