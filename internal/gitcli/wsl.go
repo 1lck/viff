@@ -14,7 +14,7 @@ import (
 // the process boundary do paths cross into the Linux execution domain, and
 // only here: cwd goes through wsl.exe --cd, absolute paths Git reports come
 // back through toWinPath, absolute paths handed to Git go through toGitPath.
-// See docs/decisions/0036-wsl-repositories.md.
+// See docs/decisions/0037-wsl-repositories.md.
 
 // wslDistroOf names the distro a Git process running in dir executes in, ""
 // when dir is not a WSL repository.
@@ -97,7 +97,7 @@ func looksUTF16LE(b []byte) bool {
 // match keys are the locale-independent Wsl/Service/... tokens and the relay
 // diagnostic execvpe reports, never localized text: a Chinese or German WSL
 // must classify the same way. Measured against WSL2 on Windows 11 (see ADR
-// 0036 for the exact outputs).
+// 0037 for the exact outputs).
 func classifyWSLError(stderr string) ErrorKind {
 	s := strings.ToLower(stderr)
 	switch {

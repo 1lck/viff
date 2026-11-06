@@ -92,18 +92,24 @@ var (
 	idCmEmptyCommit     = tree.ID(fCommit, "empty")
 
 	// Editor and diff.
-	scTabs            = tree.Sub(fEditor, tree.Name("tabs"))
-	scTabClose        = tree.Sub(fEditor, tree.Name("tab-close"))
-	idEditorEmpty     = tree.ID(fEditor, "empty")
-	idDiffLeft        = tree.ID(fDiff, "left")
-	idDiffRight       = tree.ID(fDiff, "right")
-	idDiffDivider     = tree.ID(fDiff, "divider")
-	idDiffPrev        = tree.ID(fDiff, "prev")
-	idDiffNext        = tree.ID(fDiff, "next")
-	idDiffMode        = tree.ID(fDiff, "mode")
-	idDiffWS          = tree.ID(fDiff, "whitespace")
-	idDiffWords       = tree.ID(fDiff, "words")
-	idDiffSync        = tree.ID(fDiff, "sync")
+	scTabs        = tree.Sub(fEditor, tree.Name("tabs"))
+	scTabClose    = tree.Sub(fEditor, tree.Name("tab-close"))
+	idEditorEmpty = tree.ID(fEditor, "empty")
+	idDiffLeft    = tree.ID(fDiff, "left")
+	idDiffRight   = tree.ID(fDiff, "right")
+	idDiffDivider = tree.ID(fDiff, "divider")
+	idDiffPrev    = tree.ID(fDiff, "prev")
+	idDiffNext    = tree.ID(fDiff, "next")
+	idDiffMode    = tree.ID(fDiff, "mode")
+	idDiffWS      = tree.ID(fDiff, "whitespace")
+	idDiffWords   = tree.ID(fDiff, "words")
+	idDiffSync    = tree.ID(fDiff, "sync")
+	// The right edge of the diff: the change ruler (which doubles as the
+	// scroll bar) and the optional code map beside it.
+	idDiffMarks       = tree.ID(fDiff, "change-marks")
+	idDiffCodemap     = tree.ID(fDiff, "codemap")
+	idDiffMarksBtn    = tree.ID(fDiff, "change-marks-toggle")
+	idDiffCodemapBtn  = tree.ID(fDiff, "codemap-toggle")
 	idDiffOpen        = tree.ID(fDiff, "open-file")
 	idDiffSettings    = tree.ID(fDiff, "settings")
 	idDiffStageFile   = tree.ID(fDiff, "stage-file")
@@ -169,9 +175,13 @@ var (
 	scSubItems      = tree.Sub(fPopup, tree.Name("sub-items"))
 	idSubPanel      = tree.ID(fPopup, "sub-panel")
 	scPopupStar     = tree.Sub(fPopup, tree.Name("star"))
+	scPopupSwitch   = tree.Sub(fPopup, tree.Name("switch"))
+	scPopupButtons  = tree.Sub(fPopup, tree.Name("buttons"))
 
 	// The Report a Problem dialog's description field.
 	idReportProblemText = tree.ID(fDialog, "problem-description")
+	// The commit message rules editor's text area.
+	idPromptRuleText = tree.ID(fDialog, "prompt-rule-text")
 
 	// Dialogs.
 	idDialogScrim  = tree.ID(fDialog, "scrim")

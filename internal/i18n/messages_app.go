@@ -113,6 +113,7 @@ const (
 
 	AppNoticeChangeListsUnavailable = Key("app.notice.changeListsUnavailable")
 	AppNoticeChangeLists            = Key("app.notice.changeLists")
+	AppNoticePromptRulesUnavailable = Key("app.notice.promptRulesUnavailable")
 	AppNoticeCancelled              = Key("app.notice.cancelled")
 
 	AppNoticeRepositoryGone   = Key("app.notice.repositoryGone")
@@ -132,6 +133,9 @@ const (
 
 	AppNoticeUpdateAvailable     = Key("app.notice.updateAvailable")
 	AppNoticeUpdateAvailableBody = Key("app.notice.updateAvailableBody")
+
+	AppNoticeUpdatingProject     = Key("app.notice.updatingProject")
+	AppNoticeUpdatingProjectBody = Key("app.notice.updatingProjectBody")
 
 	AppNoticeResolveConflictFailed = Key("app.notice.resolveConflictFailed")
 
@@ -311,6 +315,7 @@ func init() {
 		AppNoticeEditHitConflictBody:  "The edit hit a conflict. Viff aborted the rebase and left the branch as it was.",
 
 		AppNoticeChangeListsUnavailable: "Change lists are unavailable",
+		AppNoticePromptRulesUnavailable: "Commit message rules are unavailable",
 		AppNoticeChangeLists:            "Change lists",
 		AppNoticeCancelled:              "Cancelled",
 
@@ -331,6 +336,9 @@ func init() {
 
 		AppNoticeUpdateAvailable:     "Update available",
 		AppNoticeUpdateAvailableBody: "Viff %s is available (you have %s).",
+
+		AppNoticeUpdatingProject:     "Updating %s",
+		AppNoticeUpdatingProjectBody: "Updating from %s (%s).",
 
 		AppNoticeResolveConflictFailed: "Resolve conflict failed",
 
@@ -469,7 +477,7 @@ func init() {
 		AppNoticeResetTo:   "已重置到 %s",
 		AppNoticeResetBody: "该分支此前指向 %s；它仍保留在 reflog 中。",
 
-		AppNoticeChangesStashed:   "更改已贮藏",
+		AppNoticeChangesStashed:   "更改已储藏",
 		AppNoticeStashSucceeded:   "%s 成功",
 		AppNoticeStashDropped:     "已丢弃 %s",
 		AppNoticeStashDroppedBody: "它曾是提交 %s；只要该对象还在，git stash store 就能恢复它。",
@@ -506,6 +514,7 @@ func init() {
 		AppNoticeEditHitConflictBody:  "该编辑遇到冲突。Viff 已中止变基，分支保持原状。",
 
 		AppNoticeChangeListsUnavailable: "变更列表不可用",
+		AppNoticePromptRulesUnavailable: "提交信息规则不可用",
 		AppNoticeChangeLists:            "变更列表",
 		AppNoticeCancelled:              "已取消",
 
@@ -517,15 +526,18 @@ func init() {
 		AppNoticeWorkspaceSaveFailed: "无法保存工作区列表：%s",
 
 		AppNoticeCheckoutFailed:              "检出失败",
-		AppNoticeCheckoutBlockedBody:         "%s\n\n请先提交、贮藏或回滚你的更改。",
-		AppNoticeCheckoutStashNotCreatedBody: "%s\n\n没有贮藏任何内容。",
-		AppNoticeCheckoutRestoreFailedBody:   "%s\n\n恢复更改也失败了；更改仍在贮藏中，分支没有变化。",
-		AppNoticeCheckoutStashKeptBody:       "你的本地更改与目标冲突。它们仍在贮藏中；准备好后再应用。",
+		AppNoticeCheckoutBlockedBody:         "%s\n\n请先提交、储藏或回滚你的更改。",
+		AppNoticeCheckoutStashNotCreatedBody: "%s\n\n没有储藏任何内容。",
+		AppNoticeCheckoutRestoreFailedBody:   "%s\n\n恢复更改也失败了；更改仍在储藏中，分支没有变化。",
+		AppNoticeCheckoutStashKeptBody:       "你的本地更改与目标冲突。它们仍在储藏中；准备好后再应用。",
 		AppNoticeCheckoutRestoredBody:        "%s\n\n你的本地更改已恢复，分支没有变化。",
-		AppNoticeCheckoutStashedBody:         "本地更改已贮藏并恢复。",
+		AppNoticeCheckoutStashedBody:         "本地更改已储藏并恢复。",
 
 		AppNoticeUpdateAvailable:     "有可用更新",
 		AppNoticeUpdateAvailableBody: "Viff %s 已发布（当前为 %s）。",
+
+		AppNoticeUpdatingProject:     "正在更新 %s",
+		AppNoticeUpdatingProjectBody: "从 %s 更新（%s）。",
 
 		AppNoticeResolveConflictFailed: "解决冲突失败",
 
@@ -562,7 +574,7 @@ func init() {
 		AppUndoBlockedRepository:    "仓库已变化，该操作的历史不再可用。",
 		AppUndoBlockedOperation:     "请先完成或中止进行中的%s。",
 		AppUndoBlockedMoved:         "该操作之后 HEAD 或当前分支已变化；现在撤销会覆盖更新的工作。",
-		AppUndoBlockedDirty:         "请先提交、贮藏或回滚你的更改：这次撤销会替换工作区。",
+		AppUndoBlockedDirty:         "请先提交、储藏或回滚你的更改：这次撤销会替换工作区。",
 		AppUndoBlockedBranch:        "分支 %s 在该操作之后已变化。",
 		AppUndoBlockedBranchExists:  "分支 %s 又被创建了；请先删除或重命名它。",
 		AppUndoResetBody:            "分支已回到 %s。",

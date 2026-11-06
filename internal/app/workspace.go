@@ -102,6 +102,10 @@ type Workspace struct {
 	// lazily by the change-list backend (changelists.go); a workspace that never
 	// shows change lists keeps it nil.
 	ChangeLists *ChangeListManager
+	// Prompts is the per-repository choice of AI commit-message rules plus the
+	// rules the user wrote. Like ChangeLists it is created lazily (prompts.go),
+	// so a workspace that never generates a message keeps it nil.
+	Prompts *PromptManager
 	// changeListSyncWarned keeps a failing rename sync from notifying on every
 	// status refresh; the next success clears it.
 	changeListSyncWarned bool

@@ -37,17 +37,28 @@ type commitSnapshot struct {
 // GenerateCommitMessage collects the Git context, asks the configured endpoint
 // for a message and reports it on the workspace goroutine. previous carries the
 // last message so a second run asks for a different wording.
+//
+// The rule the repository uses is resolved here, on the UI thread, and copied
+// into cfg: reading it inside the goroutine would race a repository switch or a
+// rule change, and the request would then be documented by one rule while the
+// user had already picked another.
 func (w *Workspace) GenerateCommitMessage(ctx context.Context, cfg ai.Config, previous string, done func(string, error)) {
 	snap, rs, err := w.snapshotCommit()
 	if err != nil {
 		w.post(func() { done("", err) })
 		return
 	}
+	rule := w.SelectedPromptRule()
+	cfg.Rules = promptRuleText(rule)
+	// A user rule may describe a format that is not Conventional Commits, so the
+	// context assembled below must not keep teaching the built-in one. It is
+	// resolved once, next to the rule text, so the two cannot disagree.
+	customRules := cfg.Rules != ""
 	go func() {
 		ctx, cancel := context.WithTimeout(ctx, aiTimeout)
 		defer cancel()
 		var message string
-		user, err := w.commitPrompt(ctx, snap, previous)
+		user, err := w.commitPrompt(ctx, snap, previous, customRules)
 		if err == nil {
 			message, err = (&ai.Client{}).CommitMessage(ctx, cfg, user)
 		}
@@ -118,22 +129,30 @@ func (w *Workspace) snapshotCommit() (*commitSnapshot, *RepoState, error) {
 
 // commitPrompt renders the snapshot and its patch as one user message. Only the
 // files in the snapshot are diffed, so a lock file kept out of the list cannot
-// slip into the request through the patch.
-func (w *Workspace) commitPrompt(ctx context.Context, snap *commitSnapshot, previous string) (string, error) {
+// slip into the request through the patch. customRules makes the wording
+// neutral: a user rule may forbid the format the built-in examples show.
+func (w *Workspace) commitPrompt(ctx context.Context, snap *commitSnapshot, previous string, customRules bool) (string, error) {
 	patch, err := w.Git.CreatePatch(ctx, snap.repo, snap.paths, snap.staged)
 	if err != nil {
 		return "", err
 	}
-	return buildCommitPrompt(snap, string(patch), previous), nil
+	return buildCommitPrompt(snap, string(patch), previous, customRules), nil
 }
 
 // buildCommitPrompt is the pure half of commitPrompt, so the wording can be
-// tested without a repository or a network.
-func buildCommitPrompt(snap *commitSnapshot, patch, previous string) string {
+// tested without a repository or a network. customRules labels the recent
+// commits as reference material instead of examples and drops the built-in
+// format from the rerun instruction: both are read as format instructions by
+// the model, and a user rule may ask for a different shape.
+func buildCommitPrompt(snap *commitSnapshot, patch, previous string, customRules bool) string {
 	var b strings.Builder
 	b.WriteString("Generate a commit message for the following changes:\n\n")
 	fmt.Fprintf(&b, "Branch: %s\n", snap.branch)
-	b.WriteString("Recent commits:\n")
+	if customRules {
+		b.WriteString("Recent commits (for naming reference only — do not copy their format):\n")
+	} else {
+		b.WriteString("Recent commits:\n")
+	}
 	if len(snap.recent) == 0 {
 		b.WriteString("(no commits yet)\n")
 	}
@@ -147,11 +166,16 @@ func buildCommitPrompt(snap *commitSnapshot, patch, previous string) string {
 	}
 	b.WriteString("\nDiffs:\n")
 	b.WriteString(trimmedDiff(patch))
-	user := b.String()
+	body := b.String()
+	user := body
 	if strings.TrimSpace(previous) != "" {
+		instruction := "Use a different type, scope or description approach."
+		if customRules {
+			instruction = "Use different wording and structure."
+		}
 		user = "IMPORTANT: Generate a COMPLETELY DIFFERENT commit message from the previous one.\n" +
 			"The previous message was: " + strconv.Quote(previous) + "\n" +
-			"Use a different type, scope or description approach.\n\n" + user
+			instruction + "\n\n" + body
 	}
 	return user
 }

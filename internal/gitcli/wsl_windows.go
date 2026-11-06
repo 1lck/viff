@@ -24,7 +24,7 @@ import (
 //
 // The Windows git path (Runner.Path) does not participate: a WSL repository is
 // served by the distro's own git, whose configuration, credentials and hooks
-// live on the Linux side (ADR 0036).
+// live on the Linux side (ADR 0037).
 func (r *Runner) wslCommand(ctx context.Context, dir string, args []string) (*exec.Cmd, error) {
 	distro, linuxDir, ok := wslpath.Split(dir)
 	if !ok {
