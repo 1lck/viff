@@ -197,6 +197,9 @@ LogLevel string `json:"logLevel,omitempty"` // "", "info", "debug"
 | ErrNothingToCommit | `commit.empty` |
 | ErrHookFailed | `hook.failed` |
 | ErrNoGit | `git.missing` |
+| ErrNoWSL | `wsl.unavailable` |
+| ErrNoDistro | `wsl.distro_missing` |
+| ErrNoWSLGit | `wsl.git_missing` |
 | ErrCancelled | `git.cancelled` |
 | ErrOther | `git.failed` |
 

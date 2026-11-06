@@ -759,32 +759,38 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 
 	// Right side: counts and file actions.
 	rx := right(r) - 8
+	// Staging needs an index. Without one the only meaningful action is
+	// scheduling an untracked file; a modified versioned file is committed as
+	// it stands, and offering "Stage" for it would only produce an svn error.
+	staging := w.ws.Caps.Index || t.src.Area == domain.AreaUntracked
 	if t.src.Working && t.src.Area != domain.AreaConflicts {
 		if w.action(idDiffOpen, rx-actionSize, y, icons.Edit, w.t(i18n.DiffActionOpenEditor), actOpts{}) {
 			p := t.src.Path
 			w.after(func() { w.openExternal(p, w.currentLine(t)) })
 		}
 		rx -= actionSize + 6
-		label := w.t(i18n.DiffActionStageFile)
-		if t.src.Area == domain.AreaStaged {
-			label = w.t(i18n.DiffActionUnstageFile)
-		}
-		bw := w.p.width(label, fontUI, regular) + 20
-		if w.button(idDiffStageFile, rect(rx-bw, r.Y+(r.Height-26)/2, bw, 26), label, btnBorderless, t.busy) {
-			src := t.src
-			w.after(func() {
-				paths := []string{src.Path}
-				if src.Area == domain.AreaStaged {
-					if src.OldPath != "" {
-						paths = append(paths, src.OldPath)
+		if staging {
+			label := w.t(i18n.DiffActionStageFile)
+			if t.src.Area == domain.AreaStaged {
+				label = w.t(i18n.DiffActionUnstageFile)
+			}
+			bw := w.p.width(label, fontUI, regular) + 20
+			if w.button(idDiffStageFile, rect(rx-bw, r.Y+(r.Height-26)/2, bw, 26), label, btnBorderless, t.busy) {
+				src := t.src
+				w.after(func() {
+					paths := []string{src.Path}
+					if src.Area == domain.AreaStaged {
+						if src.OldPath != "" {
+							paths = append(paths, src.OldPath)
+						}
+						w.ws.UnstagePaths(paths)
+					} else {
+						w.ws.StagePaths(paths)
 					}
-					w.ws.UnstagePaths(paths)
-				} else {
-					w.ws.StagePaths(paths)
-				}
-			})
+				})
+			}
+			rx -= bw + 10
 		}
-		rx -= bw + 10
 	}
 	count := w.t(i18n.DiffCountNone)
 	if nb > 0 {

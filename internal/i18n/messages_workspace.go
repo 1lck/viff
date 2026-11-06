@@ -52,8 +52,18 @@ const (
 	WorkspaceEmptyNoChanges        = Key("workspace.empty.noChanges")
 	WorkspaceEmptyWorkingTreeClean = Key("workspace.empty.workingTreeClean")
 	WorkspaceEmptyEditorHint       = Key("workspace.empty.editorHint")
+	WorkspaceEmptyNoFiles          = Key("workspace.empty.noFiles")
+	WorkspaceLoadingFiles          = Key("workspace.loading.files")
 	WorkspaceHintProject           = Key("workspace.hint.project")
 	WorkspaceHintOpenFile          = Key("workspace.hint.openFile")
+
+	// The Project tool window's own menu and tooltips, where the wording differs
+	// from the toolbar action it repeats.
+	WorkspaceMenuOpen          = Key("workspace.menu.open")
+	WorkspaceMenuExpand        = Key("workspace.menu.expand")
+	WorkspaceMenuCollapse      = Key("workspace.menu.collapse")
+	WorkspaceMenuHideProject   = Key("workspace.menu.hideProject")
+	WorkspaceTipProjectOptions = Key("workspace.tip.projectOptions")
 
 	// Toolbar actions and the menu items that repeat them.
 	WorkspaceActionRefresh  = Key("workspace.action.refresh")
@@ -78,6 +88,7 @@ const (
 	WorkspaceTipResolveFirst        = Key("workspace.tip.resolveFirst")
 	WorkspaceTipResolveBeforeCommit = Key("workspace.tip.resolveBeforeCommit")
 	WorkspaceTipStageToCommit       = Key("workspace.tip.stageToCommit")
+	WorkspaceTipNoChangesToCommit   = Key("workspace.tip.noChangesToCommit")
 	WorkspaceTipEnterMessage        = Key("workspace.tip.enterMessage")
 	WorkspaceTipCommitOptions       = Key("workspace.tip.commitOptions")
 	WorkspaceTipCollapseMessage     = Key("workspace.tip.collapseMessage")
@@ -236,8 +247,16 @@ func init() {
 		WorkspaceEmptyNoChanges:        "No changes",
 		WorkspaceEmptyWorkingTreeClean: "Working tree is clean",
 		WorkspaceEmptyEditorHint:       "Select a file in the Project panel, the Commit tool window or the Git log to see its changes",
+		WorkspaceEmptyNoFiles:          "No files in the working tree",
+		WorkspaceLoadingFiles:          "Loading files…",
 		WorkspaceHintProject:           "Project",
 		WorkspaceHintOpenFile:          "Open File",
+
+		WorkspaceMenuOpen:          "Open",
+		WorkspaceMenuExpand:        "Expand",
+		WorkspaceMenuCollapse:      "Collapse",
+		WorkspaceMenuHideProject:   "Hide Project",
+		WorkspaceTipProjectOptions: "Project options",
 
 		WorkspaceActionRefresh:  "Refresh",
 		WorkspaceActionHide:     "Hide",
@@ -260,6 +279,7 @@ func init() {
 		WorkspaceTipResolveFirst:        "Resolve and stage all conflicts first",
 		WorkspaceTipResolveBeforeCommit: "Resolve conflicts before committing",
 		WorkspaceTipStageToCommit:       "Stage changes to commit",
+		WorkspaceTipNoChangesToCommit:   "There are no changes to commit",
 		WorkspaceTipEnterMessage:        "Enter a commit message",
 		WorkspaceTipCommitOptions:       "Commit Options",
 		WorkspaceTipCollapseMessage:     "Collapse the commit message",
@@ -407,8 +427,16 @@ func init() {
 		WorkspaceEmptyNoChanges:        "没有变更",
 		WorkspaceEmptyWorkingTreeClean: "工作树是干净的",
 		WorkspaceEmptyEditorHint:       "在项目面板、提交工具窗口或 Git 日志中选择一个文件，即可查看它的改动",
+		WorkspaceEmptyNoFiles:          "工作树里没有文件",
+		WorkspaceLoadingFiles:          "正在加载文件…",
 		WorkspaceHintProject:           "项目",
 		WorkspaceHintOpenFile:          "打开文件",
+
+		WorkspaceMenuOpen:          "打开",
+		WorkspaceMenuExpand:        "展开",
+		WorkspaceMenuCollapse:      "折叠",
+		WorkspaceMenuHideProject:   "隐藏项目",
+		WorkspaceTipProjectOptions: "项目选项",
 
 		WorkspaceActionRefresh:  "刷新",
 		WorkspaceActionHide:     "隐藏",
@@ -431,6 +459,7 @@ func init() {
 		WorkspaceTipResolveFirst:        "请先解决并暂存全部冲突",
 		WorkspaceTipResolveBeforeCommit: "提交前请先解决冲突",
 		WorkspaceTipStageToCommit:       "暂存改动后再提交",
+		WorkspaceTipNoChangesToCommit:   "没有可提交的改动",
 		WorkspaceTipEnterMessage:        "请输入提交说明",
 		WorkspaceTipCommitOptions:       "提交选项",
 		WorkspaceTipCollapseMessage:     "折叠提交说明",

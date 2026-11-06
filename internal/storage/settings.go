@@ -33,7 +33,11 @@ type Settings struct {
 	// default, English, so an older settings file keeps working.
 	Language string `json:"language,omitempty"`
 
-	GitPath       string `json:"gitPath"`
+	GitPath string `json:"gitPath"`
+	// SVNPath is the svn executable; empty means PATH. It exists so a user
+	// whose Subversion lives outside PATH (a common case on Windows) can point
+	// Viff at it, the same way GitPath does for Git.
+	SVNPath       string `json:"svnPath,omitempty"`
 	AutoFetch     bool   `json:"autoFetch"`
 	AutoFetchMins int    `json:"autoFetchMinutes"`
 	FetchPrune    bool   `json:"fetchPrune"`

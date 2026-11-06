@@ -41,3 +41,4 @@
 | [0035](0035-ai-prompt-rules.md) | 可自定义的提交信息规则 |
 | [0036](0036-repository-discovery.md) | 从父目录发现并批量导入仓库 |
 | [0037](0037-content-search.md) | 在文件中查找：按需内容搜索 |
+| [0038](0038-wsl-repositories.md) | 在 Windows 版直接打开 WSL 仓库 |

@@ -86,14 +86,23 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	// complete blocks. Anything else stays read-only here: a binary file, a
 	// symlink or a submodule has no sides to accept as text, and markers the
 	// parser cannot trust would make "block 2" mean the wrong lines.
-	resolvable := cv.Conflict.Kind.Textual() && cv.Current.Content.Exists && cv.Current.Text &&
+	// Rewriting a conflict block in place is a capability, not a given: a
+	// Subversion working copy has no in-app resolution at all (its conflict
+	// view stays read-only, and "Mark as Resolved" runs svn resolve instead).
+	// Offering the accept buttons there would draw controls that do nothing.
+	canResolve := w.ws.Caps.Conflicts != nil
+	resolvable := canResolve && cv.Conflict.Kind.Textual() && cv.Current.Content.Exists && cv.Current.Text &&
 		!cv.Current.Content.Binary && !cv.Current.Content.TooLarge &&
 		!cv.Current.Content.Submodule && !cv.Current.Content.Symlink &&
 		cv.Markers.Reliable && len(cv.Markers.Blocks) > 0
 	// The copied context is built from the same marker parse the accept
 	// controls rely on: without a reliable parse a block would name the wrong
-	// lines, so neither action is offered.
-	canCopy := resolvable
+	// lines. It does not need the resolver, only a trustworthy parse, because
+	// the clipboard path sends text to the user's own assistant.
+	canCopy := cv.Conflict.Kind.Textual() && cv.Current.Content.Exists && cv.Current.Text &&
+		!cv.Current.Content.Binary && !cv.Current.Content.TooLarge &&
+		!cv.Current.Content.Submodule && !cv.Current.Content.Symlink &&
+		cv.Markers.Reliable && len(cv.Markers.Blocks) > 0
 	// Banner.
 	bh := float32(88)
 	if resolvable {

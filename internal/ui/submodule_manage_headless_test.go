@@ -12,7 +12,26 @@ import (
 	"github.com/vivaui/viva/app"
 
 	vapp "viff/internal/app"
+	"viff/internal/gitcli"
 )
+
+// clickWhenReady presses label once the rendered frame carries a hit for it.
+// A slow CI runner can paint a dialog's content before its controls take part
+// in hit testing; clicking on the fixed settle was a source of flakes.
+func clickWhenReady(t *testing.T, f *uiFixture, label string) {
+	t.Helper()
+	if err := f.s.WaitFor(func(s app.Snapshot) bool {
+		for _, h := range s.Hits {
+			if h.Label == label {
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second); err != nil {
+		t.Fatalf("control %q never became clickable: %v\ntexts: %s", label, err, strings.Join(f.s.Texts(), " | "))
+	}
+	f.click(label)
+}
 
 // waitSubmoduleDialog waits for a dialog with the given title that also shows
 // every wanted text.
@@ -78,7 +97,10 @@ func TestSubmoduleAddDialog(t *testing.T) {
 	}
 	f.gitIn(child, "add", "-A")
 	f.gitIn(child, "commit", "-q", "-m", "Add lib")
-	f.ws.Git.Env = append(f.ws.Git.Env, "GIT_ALLOW_PROTOCOL=file")
+	// The workspace holds the backend contract, so the Git runner is addressed
+	// directly here: the test is about Git's own transport policy.
+	runner := f.ws.Git.(*gitcli.Runner)
+	runner.Env = append(runner.Env, "GIT_ALLOW_PROTOCOL=file")
 
 	f.start(1440, 900)
 	f.win.openRepo(f.dir)
@@ -109,7 +131,8 @@ func TestSubmoduleAddDialog(t *testing.T) {
 	}
 
 	// A URL Git cannot reach leaves the dialog open with Git's own message.
-	f.ws.Git.Env = append(f.ws.Git.Env, "GIT_ALLOW_PROTOCOL=file")
+	runner2 := f.ws.Git.(*gitcli.Runner)
+	runner2.Env = append(runner2.Env, "GIT_ALLOW_PROTOCOL=file")
 	missing := filepath.Join(root, "missing repo")
 	f.click("Add Submodule…")
 	waitSubmoduleDialog(t, f, "Add Submodule")
@@ -171,7 +194,8 @@ func TestSubmoduleRemoveDialog(t *testing.T) {
 	f.settle()
 
 	openSubmodulesDialog(t, f)
-	f.ws.Git.Env = append(f.ws.Git.Env, "GIT_ALLOW_PROTOCOL=file")
+	runner3 := f.ws.Git.(*gitcli.Runner)
+	runner3.Env = append(runner3.Env, "GIT_ALLOW_PROTOCOL=file")
 	f.snap("submodule-management-actions")
 	f.click("Deinit")
 	waitSubmoduleDialog(t, f, "Deinit Submodule")
@@ -187,7 +211,7 @@ func TestSubmoduleRemoveDialog(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(f.dir, "deps/lib/lib.go")); err != nil {
 		t.Fatal("update did not restore submodule:", err)
 	}
-	f.click("Remove…")
+	clickWhenReady(t, f, "Remove…")
 	waitSubmoduleDialog(t, f, "Remove Submodule", "deps/lib")
 	f.click("Remove")
 	waitSubmoduleDialog(t, f, "Submodules")
@@ -212,7 +236,7 @@ func TestSubmoduleRemoveDialog(t *testing.T) {
 	f.ws.Refresh(true)
 	f.settle()
 	openSubmodulesDialog(t, f)
-	f.click("Remove…")
+	clickWhenReady(t, f, "Remove…")
 	waitSubmoduleDialog(t, f, "Remove Submodule", "Force Remove", "local changes")
 	f.snap("submodule-force-confirmation")
 	f.click("Force Remove")
@@ -237,7 +261,7 @@ func TestSubmoduleRemoveDialog(t *testing.T) {
 	f.ws.Refresh(true)
 	f.settle()
 	openSubmodulesDialog(t, f)
-	f.click("Remove…")
+	clickWhenReady(t, f, "Remove…")
 	waitSubmoduleDialog(t, f, "Remove Submodule", "deps/lib")
 	beforeFailure := len(f.ws.Notifications)
 	f.click("Remove")

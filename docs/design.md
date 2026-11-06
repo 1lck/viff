@@ -45,9 +45,13 @@ flowchart TB
     accTitle: Viff Desktop Architecture Overview
     accDescr: Viva 界面通过应用层访问 Git；外部变化触发重新查询，缓存不作为仓库事实来源。
     desktop_ui["Viva 界面与视图模型"] --> application["应用用例与任务调度"]
-    application --> domain["Git 领域模型与状态规则"]
-    application --> git_adapter["Git CLI 适配器"]
+    application --> vcs_contract["VCS 契约层（internal/vcs）"]
+    vcs_contract --> domain["Git 领域模型与状态规则"]
     application --> storage["设置与有界缓存"]
+    git_adapter["Git CLI 适配器"] --> vcs_contract
+    svn_adapter["Subversion CLI 适配器"] --> vcs_contract
+    bootstrap["cmd/viff 组合根：探测后选择后端"] --> git_adapter
+    bootstrap --> svn_adapter
     git_adapter --> repository["Git 与工作区"]
     platform["系统事件与文件监听"] --> application
     external_ai["外部 AI 工具"] --> repository
@@ -57,10 +61,13 @@ flowchart TB
 
 图中的箭头表示运行时调用或数据通知；源码依赖由应用层定义的小接口约束，具体适配器在启动入口组装。初期使用单 Go module 和模块化单体，不创建微服务、通用消息总线或自研组件框架。
 
+自 Subversion 支持起，`app` 不再直接依赖具体适配器，而是依赖 `internal/vcs` 里的契约：依赖方向为 `ui → app → vcs → domain`，`gitcli` 与 `svncli` 都实现 `vcs` 的接口，`cmd/viff` 探测仓库类型后选择后端。`internal/vcs` 只依赖 `domain` 与标准库，不导入 Viva、不起子进程、也不读 `.git`/`.svn`。详见 [0025](decisions/0025-svn-support.md)。
+
 | 建议目录            | 职责                                           | 依赖约束                       |
 | ------------------- | ---------------------------------------------- | ------------------------------ |
 | `cmd/viff`          | 启动、依赖组装、退出与资源回收                 | 不承载 Git 业务规则            |
 | `internal/domain`   | 仓库身份、引用、提交、差异、冲突、操作状态     | 不导入 Viva，不启动进程        |
+| `internal/vcs`      | 后端契约：必备接口、可选能力、共享值类型与错误分类 | 只依赖 `domain` 与标准库，不导入 Viva，不起进程，不读 `.git`/`.svn` |
 | `internal/i18n`     | 界面文案表、语言枚举与缺失回退                 | 零依赖，不导入 Viva / domain   |
 | `internal/ai`       | 提交信息的模型调用与 Git 上下文组装            | 零内部依赖，只出网到配置端点   |
 | `internal/app`      | 用例、查询、命令、调度、状态版本、缓存失效     | 通过窄接口访问外部资源         |
@@ -73,6 +80,8 @@ flowchart TB
 这些是实现时的目录建议，本次只创建文档。接口围绕实际用例划分，避免一个覆盖所有 Git 命令的巨型接口，也不为每个结构体创建接口。领域层保留可测试的状态规则即可，不建设泛化的领域框架。
 
 **官方 Git CLI 是首选执行引擎。** 这样可以沿用用户的认证、签名和 hooks 环境；仍需逐项验证 GUI 启动环境与终端的差异。第一阶段发现并允许配置系统 Git，记录版本和能力；最低支持版本在兼容测试后固定。是否随安装包分发 Git 单独决策，不能宣称当前架构无需外部依赖。
+
+**WSL 仓库用发行版内的 Git，而不是 Windows 的。** Windows 版打开 `\\wsl.localhost\<发行版>\...` 时，Git 命令经 `wsl.exe -d <发行版> --cd <Linux 路径> --exec git` 在发行版内执行，于是认证、签名与 hooks 都来自 Linux 侧；文件读取仍走同一个 UNC 路径（9P 重定向器），应用其余部分只看到一种路径形态。取舍与代价见 [ADR 0038](decisions/0038-wsl-repositories.md)。
 
 - 状态优先采用 `status --porcelain=v2 -z` 等机器格式；路径按 NUL 分隔，保留原始路径，显示转义不能反过来修改操作路径。[Git status 文档](https://git-scm.com/docs/git-status)
 - 用参数数组执行进程，避免 shell 拼接。支持空格、换行、Unicode、特殊前缀路径及不同换行符；对象 ID 不写死为 SHA-1 长度。

@@ -281,7 +281,7 @@ func (w *Window) openPushFor(r domain.Ref) {
 					w.p.textCenter(w.t(i18n.DialogLoadingCommits), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case loadErr != nil:
-					w.p.textCenter(vapp.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
+					w.p.textCenter(w.ws.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
 					return
 				case len(commits) == 0:
 					w.p.textCenter(w.t(i18n.DialogNothingToPush), inner, fontUI, regular, w.pal.TextSecond)
@@ -625,6 +625,34 @@ func (w *Window) openSettingsSearch() { w.openSettingsDialog(0, true) }
 
 func (w *Window) openSettingsAt(page int) { w.openSettingsDialog(page, false) }
 
+// gitExecutableFor reports the git the settings page echoes: the one the open
+// repository's commands run, or the machine default when no repository is open.
+// A WSL repository answers with the git inside its distribution, which is what
+// makes the echo true for the repository in front of the user.
+//
+// The answer is read from what the runner already resolved, never by probing
+// here: opening a repository runs its commands, so the distro's git is recorded
+// by then, while probing on this thread would start wsl.exe — a round trip that
+// can wait on the distribution booting — inside the paint path.
+func gitExecutableFor(w *Window) (string, error) {
+	root := ""
+	if rs := w.repo(); rs != nil {
+		root = rs.Repo.Root
+	}
+	return w.ws.CachedExecutableIn(root)
+}
+
+// gitPathPlaceholder is the text an empty Path to Git shows: the resolved
+// binary itself, so "automatic" never hides which one runs.
+func (w *Window) gitPathPlaceholder(exe string) string {
+	if exe != "" {
+		return exe
+	}
+	// Nothing resolved yet: a WSL repository whose distro this process has not
+	// probed still runs git, so the field must not claim git is missing.
+	return w.t(i18n.SettingsPlaceholderAuto)
+}
+
 // openSettingsDialog opens the settings dialog on one page: 0 General, 1 Git,
 // 2 AI. revealSearch folds the other General groups and expands Search.
 func (w *Window) openSettingsDialog(page int, revealSearch bool) {
@@ -646,6 +674,11 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	monoFonts := app.MonospaceFamilies()
 	font := text.NewEditor(strconv.Itoa(int(s.FontSize)))
 	gitPath := text.NewEditor(s.GitPath)
+	// The path the open repository's commands run, shown inside the empty
+	// field: a WSL repository runs the git inside its distribution, so the
+	// echo must not name the Windows default there.
+	gitExe, _ := gitExecutableFor(w)
+	svnPath := text.NewEditor(s.SVNPath)
 	editor := text.NewEditor(s.ExternalEditor)
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
 	autoUpdate, autoUpdateWas := s.AutoUpdateCheck, s.AutoUpdateCheck
@@ -752,9 +785,19 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			}
 			f.gap(6)
 			if f.collapsibleGroup("gitExec", w.t(i18n.SettingsGroupGitExec)) {
-				f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.t(i18n.SettingsPlaceholderAuto), false)
+				f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.gitPathPlaceholder(gitExe), false)
 			}
 			f.gap(6)
+			// The svn path only appears for a Subversion working copy: the
+			// settings page is a fixed-height dialog, and one extra group on
+			// every backend pushed the font and search controls below the
+			// visible area, where they could not be clicked at all.
+			if !w.ws.Caps.Index {
+				if f.collapsibleGroup("svnExec", w.t(i18n.SettingsGroupSVNExec)) {
+					f.field(w.t(i18n.SettingsLabelSVNPath), svnPath, w.t(i18n.SettingsPlaceholderAuto), false)
+				}
+				f.gap(6)
+			}
 			if f.collapsibleGroup("tools", w.t(i18n.SettingsGroupTools)) {
 				f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)
 				f.y -= 8
@@ -883,7 +926,9 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			s.Theme = theme
 			s.FontSize = float32(n)
 			s.GitPath = strings.TrimSpace(gitPath.String())
-			w.ws.Git.SetPath(s.GitPath)
+			w.ws.SetGitPath(s.GitPath)
+			s.SVNPath = strings.TrimSpace(svnPath.String())
+			w.ws.SetSVNPath(s.SVNPath)
 			s.ExternalEditor = strings.TrimSpace(editor.String())
 			gitDraft.commit(s)
 			aiDraft.commit(s)

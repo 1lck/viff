@@ -9,35 +9,28 @@ import (
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/vcs"
 )
 
-// RebaseAction is the verb of one interactive-rebase step.
-type RebaseAction string
+// RebaseAction, RebaseStep and RebaseCommit are shared with every backend and
+// live in internal/vcs. They stay aliased here so existing call sites keep
+// compiling.
+type (
+	// RebaseAction is the verb of one interactive-rebase step.
+	RebaseAction = vcs.RebaseAction
+	// RebaseStep is one line of the rebase plan.
+	RebaseStep = vcs.RebaseStep
+	// RebaseCommit is a commit an interactive rebase would replay.
+	RebaseCommit = vcs.RebaseCommit
+)
 
 const (
-	RebasePick   RebaseAction = "pick"
-	RebaseReword RebaseAction = "reword"
-	RebaseSquash RebaseAction = "squash"
-	RebaseFixup  RebaseAction = "fixup"
-	RebaseDrop   RebaseAction = "drop"
+	RebasePick   = vcs.RebasePick
+	RebaseReword = vcs.RebaseReword
+	RebaseSquash = vcs.RebaseSquash
+	RebaseFixup  = vcs.RebaseFixup
+	RebaseDrop   = vcs.RebaseDrop
 )
-
-// RebaseStep is one line of the rebase plan.
-type RebaseStep struct {
-	Action RebaseAction
-	Hash   string
-	// Message replaces the commit message for RebaseReword.
-	Message string
-}
-
-// RebaseCommit is a commit an interactive rebase would replay.
-type RebaseCommit struct {
-	Hash    string
-	Subject string
-	Message string
-	Author  string
-	Merge   bool
-}
 
 // ErrRebaseMerges is returned when the range holds merge commits, which a
 // plain interactive rebase would silently flatten.
@@ -112,7 +105,7 @@ func (r *Runner) InteractiveRebase(ctx context.Context, repo domain.Repo, base s
 	if err := ValidateRebasePlan(steps); err != nil {
 		return Output{}, err
 	}
-	dir := filepath.Join(repo.GitDir, "viff-rebase")
+	dir := filepath.Join(repo.MetaDir, "viff-rebase")
 	os.RemoveAll(dir) // files of an earlier, finished or aborted rebase
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Output{}, err
@@ -125,7 +118,11 @@ func (r *Runner) InteractiveRebase(ctx context.Context, repo domain.Repo, base s
 			if err := os.WriteFile(msg, []byte(strings.TrimRight(s.Message, "\n")+"\n"), 0o644); err != nil {
 				return Output{}, err
 			}
-			fmt.Fprintf(&todo, "pick %s\nexec git commit --amend --allow-empty --quiet -F %s\n", s.Hash, shellQuote(filepath.ToSlash(msg)))
+			msgArg, err := toGitPath(repo.Root, msg)
+			if err != nil {
+				return Output{}, err
+			}
+			fmt.Fprintf(&todo, "pick %s\nexec git commit --amend --allow-empty --quiet -F %s\n", s.Hash, shellQuote(filepath.ToSlash(msgArg)))
 		default:
 			fmt.Fprintf(&todo, "%s %s\n", s.Action, s.Hash)
 		}
@@ -134,8 +131,15 @@ func (r *Runner) InteractiveRebase(ctx context.Context, repo domain.Repo, base s
 	if err := os.WriteFile(todoPath, []byte(todo.String()), 0o644); err != nil {
 		return Output{}, err
 	}
+	todoArg, err := toGitPath(repo.Root, todoPath)
+	if err != nil {
+		return Output{}, err
+	}
 	args := []string{
-		"-c", "sequence.editor=cp " + shellQuote(filepath.ToSlash(todoPath)),
+		// The todo file was written through the Windows identity domain; the
+		// editor runs in Git's file system, so the path it copies from has to
+		// be spelled for that side (toGitPath; wsl.go).
+		"-c", "sequence.editor=cp " + shellQuote(filepath.ToSlash(todoArg)),
 		"-c", "core.editor=true",
 		"-c", "rebase.missingCommitsCheck=ignore",
 		"rebase", "-i", "--autostash", "--no-autosquash",

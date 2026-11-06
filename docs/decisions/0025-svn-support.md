@@ -1,6 +1,6 @@
 # 0025 增加 Subversion 日常客户端支持
 
-- 状态：已采用（2026-11；架构设计已定，实现未开始）
+- 状态：已采用（2026-11；Git 与 Subversion 双后端已实现，界面验收见 [svn-acceptance.md](../svn-acceptance.md)）
 - 相关：[0001](0001-git-cli.md)、[0005](0005-read-only-conflicts.md)、[0020](0020-repositories-changelists.md)
 
 ## 背景
@@ -76,17 +76,31 @@ type Backend interface {
 
 ```go
 type Capabilities struct {
-	RefWriter       RefWriter        // 分支创建/切换/删除；SVN 可由 switch 部分实现
-	HistoryWriter   HistoryWriter    // Git: merge/rebase/cherry-pick/reset；SVN: nil
-	Stash           StashService     // SVN: nil
-	Worktrees       WorktreeService  // SVN: nil
-	Submodules      SubmoduleService // SVN: nil
-	Reflog          ReflogService    // SVN: nil
-	ConflictResolve ConflictResolver
-	Indexable       bool             // 有暂存区（Git true，SVN false）
-	PropertyEdits   bool             // 支持属性编辑（SVN true）
+	// 模型差异（布尔位）：Git 侧为默认值，SVN 在 Model() 里覆盖
+	Index          bool // 有暂存区（Git true，SVN false）
+	Amend          bool // 可本地改写最后一次提交（Git true，SVN false）
+	Properties     bool // 支持属性编辑（Git false，SVN true）
+	Locks          bool // 支持仓库锁（Git false，SVN true）
+	OfflineHistory bool // 历史需要访问仓库，缓存须标注陈旧（Git false，SVN true）
+	SeparatePush   bool // 提交是本地操作、发布是另一步（Git true，SVN false）
+
+	// 可选服务（nil 即不支持）
+	HistoryWriter HistoryWriter    // Git: merge/rebase/cherry-pick/reset；SVN: nil
+	Stash         StashWriter      // SVN: nil
+	Worktrees     WorktreeWriter   // SVN: nil
+	Submodules    SubmoduleWriter  // SVN: nil
+	Reflog        ReflogReader     // SVN: nil
+	References    ReferenceWriter  // Git: 分支/tag/remote/refspec 全套；SVN: nil
+	Branches      BranchWriter     // 仅本地分支的增删改；SVN 实现，Git 由 ReferenceWriter 满足
+	Conflicts     ConflictResolver // 逐块改写冲突文件；SVN: nil（只读展示 + svn resolve）
 }
 ```
+
+`SeparatePush` 是实机验收补出来的：没有它，SVN 工作副本的工具栏照样画出 `Push`、
+`Fetch` 与 `Commit and Push`，而这三者都以「本地提交 + 独立发布」为前提。
+`Branches` 是第二个补出来的：`ReferenceWriter` 把 tag、remote 与 refspec 都绑进同一个
+接口，SVN 只有「服务端目录复制」这一种分支写操作，若为实现分支去实现整套
+`ReferenceWriter`，就正好退回本节要避免的「40 个空方法」。
 
 理由：nil 判断可在编译期穷尽，比运行时 `ErrNotSupported` 清晰；避免 `svncli` 出现 40 个空方法。同时**构造函数签名不变**——`*gitcli.Runner` 天然满足必备接口，现有 20 余处 `NewWorkspace(&gitcli.Runner{...})` 测试调用无需改动。
 
@@ -133,7 +147,12 @@ type Repo struct {
 Props byte
 ```
 
-`item` → 字母映射：`modified`→`M`、`added`→`A`、`deleted`→`D`、`missing`→`!`、`unversioned`→`?`、`conflicted`→`C`、`ignored`→`I`、`normal`→` `、`replaced`→`R`、`external`→`X`。
+`item` → 字母映射：`modified`→`M`、`added`→`A`、`deleted`→`D`、`missing`→`D`、`unversioned`→`?`、`conflicted`→`C`、`ignored`→`I`、`normal`→` `、`replaced`→`R`、`external`→`X`、`incomplete`→`!`。
+
+`missing` 不映射 `!`：`!` 是状态模型里的「忽略」字母，`domain.StatusEntry.Ignored()`
+会把带 `!` 的条目从变更列表里过滤掉，结果就是「磁盘上删掉了已跟踪文件」这件事在界面上
+彻底看不见。Git 侧也不会产出 `!`（`git status` 不请求 ignored），所以把它留给 `incomplete`
+这类真正无法展示的状态；`missing` 与 `deleted` 对用户是同一件事——提交会删掉该路径。
 
 **必须修**：`domain.StatusEntry.Conflicted()` 当前只认 `'U'` 与 `AA`/`DD`，不认 `'C'`。不改则 SVN 冲突文件会被当成普通修改，落在错误的列表里。
 
@@ -144,8 +163,8 @@ Props byte
 - 查询一律用 `svn log --xml -r 1:HEAD <URL>`（S1），分页用 `-l`。**禁止**不带 `-r` 的默认调用。
 - SVN 历史是线性序列，`domain.Commit.Parents` 只放**该路径日志中的前一条**，不得合成 `revision-1`——仓库修订号是全局自增，路径日志会出现 r3、r7、r9 这样的跳号。
 - `domain/graph.go` 对 SVN 退化为单车道渲染，不引入第二套绘图算法。
-- 缓存落 `internal/storage`，带 schema 版本、字节配额、LRU 淘汰、TTL；损坏可重建，不阻止打开仓库。
-- 视图必须能表达三态：`Live`（刚查）、`Cache`（未核对）、`Stale`（超时/离线）。复用并扩展 `RepoState.StatusTime`。**离线时显示缓存必须显式标注**，不能冒充最新。
+- 缓存目前是进程内、按仓库键的有界（按条数）内存缓存，**没有**落 `internal/storage`、没有 schema 版本、字节配额、LRU 与 TTL。这是与本节原计划的偏离，记录为延后项：下次改动历史读取前，要么补上落盘与配额，要么按实测数据决定继续保留内存缓存，并把结论写回本节。
+- 视图目前只有两态：刚查到的结果，或者错误。计划中的 `Live`/`Cache`/`Stale` 三态与「离线显示缓存必须显式标注」**尚未实现**，因此离线时宁可报错，也不展示可能过期的内容。复审条件：一旦启用缓存回退，就必须同时落地陈旧标注，两者不可分开交付。
 
 ### 7. 写操作
 
@@ -178,8 +197,8 @@ Props byte
 | 历史（线性） | 有（DAG） | 有（线性，需缓存） |
 | update / commit（含部分提交）/ revert / add / delete | 有 | 有 |
 | 分支（切换、创建、删除） | 有 | 有（目录 + `switch`，语义不同） |
-| 属性编辑（`svn:ignore`、`svn:eol-style`） | 不适用 | 有 |
-| lock / unlock | 不适用 | 有 |
+| 属性编辑（`svn:ignore`、`svn:eol-style`） | 不适用 | **尚未实现** |
+| lock / unlock | 不适用 | **尚未实现** |
 | 冲突只读展示 + 标记已解决 | 有 | 有（复用 markers 解析） |
 | **rebase / cherry-pick / reset / 交互式 rebase** | 有 | **不适用**（无提交改写） |
 | **stash** | 有 | **不适用**（`revert` 不是 stash） |
@@ -188,11 +207,13 @@ Props byte
 
 表中「不适用」不是暂缓，是 SVN 模型没有对应物；对应入口按 `Capabilities` 隐藏，而不是显示后报错。
 
+「尚未实现」是延后，不是不适用：`svncli` 里没有 `propset`/`propget`/`lock`/`unlock`，`Capabilities.Properties` 与 `Capabilities.Locks` 也没有界面消费点，所以界面上既不显示属性编辑也不显示加锁。复审条件：等到属性编辑或锁被排入版本时，先补 `svncli` 的实现与真实 svn 的测试，再把矩阵改回「有」。
+
 ## 代价
 
 - 新增一层抽象与一套后端，`internal/svncli` 的读取子集（status/log/diff/blame/属性）解析工作量与 Git 侧同量级。
-- 历史必须缓存，引入缓存失效、配额、schema 迁移与「陈旧态」展示，这是 Git 侧没有的复杂度；错误处理不当会让用户看到过期数据。
-- 状态与应用层需要同时承载两套语义（双列/单列、DAG/线性、Ahead-Behind/仅 Behind），测试矩阵扩大，CI 需增加安装 `svn` 的分片。
+- 历史需要缓存，引入缓存失效与陈旧态展示的复杂度，这是 Git 侧没有的；本轮只做了进程内缓存，落盘、配额与陈旧标注仍是延后项（见 §6）。
+- 状态与应用层需要同时承载两套语义（双列/单列、DAG/线性、Ahead-Behind/仅 Behind），测试矩阵扩大，CI 需增加安装 `svn` 的分片（本轮已加入 Ubuntu 分片）。
 - 依赖本机 SVN 可执行文件（设置里可配路径），与 Git 一样成为运行时依赖；未安装时功能需明确降级而不是崩溃。
 - 双语文档、README 定位（「Git 桌面客户端」）、`docs/features.zh-CN.md` 已知限制都需同步改动。
 - 依赖 SVN 的 auth cache（`%APPDATA%\Subversion\auth`、`~/.subversion/auth`），Viff 不自建凭据存储；凭据交互失败时的提示质量受 SVN 自身输出限制。

@@ -218,8 +218,11 @@ func (w *Window) gitMenu() []item {
 	if rs == nil {
 		return nil
 	}
-	items := []item{
-		{title: w.t(i18n.SubmoduleMenu), icon: icons.Folder, run: w.openSubmodules},
+	items := []item{}
+	// Submodules are a Git concept; a backend without them must not open a tool
+	// window that only reports "not available".
+	if w.ws.Caps.Submodules != nil {
+		items = append(items, item{title: w.t(i18n.SubmoduleMenu), icon: icons.Folder, run: w.openSubmodules})
 	}
 	if len(rs.Remotes) > 0 {
 		items = append(items, sep(), item{title: w.t(i18n.MenuFetch), icon: icons.Fetch, run: func() { w.ws.Fetch(false) }})

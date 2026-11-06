@@ -38,6 +38,11 @@ const (
 	ChromeA11yBranchButton = Key("chrome.a11y.branchButton")
 	ChromeA11yScrollBar    = Key("chrome.a11y.scrollBar")
 	ChromeA11yResize       = Key("chrome.a11y.resize")
+	// The window buttons Viva draws on the custom titlebar (Windows and Linux).
+	ChromeA11yMinimize    = Key("chrome.a11y.minimize")
+	ChromeA11yMaximize    = Key("chrome.a11y.maximize")
+	ChromeA11yRestore     = Key("chrome.a11y.restore")
+	ChromeA11yCloseWindow = Key("chrome.a11y.closeWindow")
 
 	// Tooltips of the status bar and branch widget.
 	ChromeTipDetached    = Key("chrome.tip.detached")
@@ -214,6 +219,10 @@ func init() {
 		ChromeA11yBranchButton: "Branch",
 		ChromeA11yScrollBar:    "Scroll bar",
 		ChromeA11yResize:       "Resize",
+		ChromeA11yMinimize:     "Minimize",
+		ChromeA11yMaximize:     "Maximize",
+		ChromeA11yRestore:      "Restore",
+		ChromeA11yCloseWindow:  "Close",
 
 		ChromeTipDetached:    "Detached HEAD at %s",
 		ChromeTipBranch:      "Git Branch: %s",
@@ -224,7 +233,7 @@ func init() {
 		ChromeStatusRecording:      "● Recording diagnostics…",
 		ChromeStatusRecordingLabel: "Recording diagnostics",
 
-		ChromeDialogOpenRepository: "Open Git Repository",
+		ChromeDialogOpenRepository: "Open Repository",
 
 		ChromePopupCloseMenu: "Close menu",
 		ChromePopupSearch:    "Search",
@@ -375,6 +384,10 @@ func init() {
 		ChromeA11yBranchButton: "分支",
 		ChromeA11yScrollBar:    "滚动条",
 		ChromeA11yResize:       "调整大小",
+		ChromeA11yMinimize:     "最小化",
+		ChromeA11yMaximize:     "最大化",
+		ChromeA11yRestore:      "还原",
+		ChromeA11yCloseWindow:  "关闭",
 
 		ChromeTipDetached:    "游离 HEAD 位于 %s",
 		ChromeTipBranch:      "Git 分支：%s",
@@ -385,7 +398,7 @@ func init() {
 		ChromeStatusRecording:      "● 正在记录诊断信息…",
 		ChromeStatusRecordingLabel: "正在记录诊断信息",
 
-		ChromeDialogOpenRepository: "打开 Git 仓库",
+		ChromeDialogOpenRepository: "打开仓库",
 
 		ChromePopupCloseMenu: "关闭菜单",
 		ChromePopupSearch:    "搜索",

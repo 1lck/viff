@@ -260,7 +260,7 @@ func (w *Workspace) checkUndo(ctx context.Context, repo domain.Repo, e *undoEntr
 	if op := w.Git.Operation(ctx, repo); op.Active() {
 		return refuse(i18n.AppUndoBlockedOperation, op.Kind.Title())
 	}
-	head, err := w.Git.Head(ctx, repo)
+	head, err := w.HEAD(ctx, repo)
 	if err != nil {
 		return err
 	}
@@ -300,19 +300,27 @@ func (w *Workspace) checkUndo(ctx context.Context, repo domain.Repo, e *undoEntr
 
 // applyUndo reverses the operation after checkUndo passed.
 func (w *Workspace) applyUndo(ctx context.Context, repo domain.Repo, e *undoEntry) error {
+	h, err := w.history()
+	if err != nil {
+		return err
+	}
+	refs, rerr := w.branches()
 	switch e.kind {
 	case undoCommit, undoAmend:
 		// A soft reset puts HEAD back but keeps the index, so the commit's
 		// changes stay staged and can be committed again. It never touches the
 		// working tree, which is why a dirty tree is allowed here.
-		return w.Git.Reset(ctx, repo, gitcli.ResetSoft, e.before.Head)
+		return h.Reset(ctx, repo, gitcli.ResetSoft, e.before.Head)
 	case undoMerge, undoRebase, undoCherryPick, undoRevert, undoReset:
 		// These moved the branch to a new commit and left a clean tree, so a
 		// hard reset restores exactly the recorded state.
-		return w.Git.Reset(ctx, repo, gitcli.ResetHard, e.before.Head)
+		return h.Reset(ctx, repo, gitcli.ResetHard, e.before.Head)
 	case undoCheckout:
 		return w.switchTo(ctx, repo, e.before)
 	case undoCreateBranch:
+		if rerr != nil {
+			return rerr
+		}
 		// Git refuses to delete the branch a worktree has checked out, so a
 		// create-with-checkout first returns to the recorded state. The hash
 		// check above proved the branch holds nothing new; force only skips
@@ -325,13 +333,19 @@ func (w *Workspace) applyUndo(ctx context.Context, repo domain.Repo, e *undoEntr
 		if e.previous != "" {
 			// The create overwrote an existing branch: put its old commit back
 			// rather than deleting it.
-			return w.Git.CreateBranch(ctx, repo, e.name, e.previous, false, true)
+			return refs.CreateBranch(ctx, repo, e.name, e.previous, false, true)
 		}
-		return w.Git.DeleteBranch(ctx, repo, e.name, true)
+		return refs.DeleteBranch(ctx, repo, e.name, true)
 	case undoDeleteBranch:
-		return w.Git.CreateBranch(ctx, repo, e.name, e.hash, false, false)
+		if rerr != nil {
+			return rerr
+		}
+		return refs.CreateBranch(ctx, repo, e.name, e.hash, false, false)
 	case undoRenameBranch:
-		return w.Git.RenameBranch(ctx, repo, e.name, e.oldName)
+		if rerr != nil {
+			return rerr
+		}
+		return refs.RenameBranch(ctx, repo, e.name, e.oldName)
 	}
 	return fmt.Errorf("undo: unknown operation %d", e.kind)
 }

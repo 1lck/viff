@@ -11,8 +11,16 @@ import (
 
 // configValue reads a configuration key through the workspace's runner, so the
 // test sees what Git actually received for that command.
-func configValue(t *testing.T, r *gitcli.Runner, dir, key string) (string, error) {
+//
+// The workspace holds the backend contract now, so the concrete runner is
+// recovered here: these tests assert what Git received on its command line,
+// which is deliberately below the contract.
+func configValue(t *testing.T, g Git, dir, key string) (string, error) {
 	t.Helper()
+	r, ok := g.(*gitcli.Runner)
+	if !ok {
+		t.Fatalf("backend is not a Git runner: %T", g)
+	}
 	out, err := r.Run(context.Background(), dir, "config", "--get", key)
 	return strings.TrimSpace(string(out)), err
 }

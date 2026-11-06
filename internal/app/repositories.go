@@ -11,6 +11,7 @@ import (
 	"viff/internal/domain"
 	"viff/internal/i18n"
 	"viff/internal/storage"
+	"viff/internal/wslpath"
 )
 
 // RepositorySummary is one entry in the workspace-wide repository list. The
@@ -72,9 +73,17 @@ type repositoriesState struct {
 // canonicalPath resolves a path to the real directory it names, following
 // symlinks. It is the deduplication key: /tmp and /private/tmp (on macOS) name
 // one repository and must not become two rows.
+//
+// A WSL path dedups by its normalized \\wsl.localhost spelling instead: the
+// legacy \\wsl$ alias and distro-name casing are the same file system, and
+// EvalSymlinks is both slow over 9P and wrong there — the Linux side can hold
+// symlinks the Windows spelling must not resolve (wslpath; ADR 0038).
 func canonicalPath(path string) string {
 	if path == "" {
 		return ""
+	}
+	if n, ok := wslpath.Normalize(path); ok {
+		return n
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -243,7 +252,17 @@ func (w *Workspace) markRepositoryError(root string, err error) {
 func (w *Workspace) AddRepository(dir string, done func(error)) {
 	_, ctx, finish := w.startTask("Adding "+filepath.Base(dir), false)
 	go func() {
-		repo, err := w.Git.Discover(ctx, dir)
+		backend := w.pickBackend(dir)
+		if backend == nil {
+			w.post(func() {
+				finish()
+				if done != nil {
+					done(ErrUnsupported)
+				}
+			})
+			return
+		}
+		repo, err := backend.Discover(ctx, dir)
 		w.post(func() {
 			finish()
 			if err != nil {
@@ -306,7 +325,17 @@ func (w *Workspace) ActivateRepository(root string, done func(error)) {
 	seq := w.repos.activateSeq
 	_, ctx, finish := w.startTask("Opening "+filepath.Base(entry.root), false)
 	go func() {
-		repo, err := w.Git.Discover(ctx, entry.root)
+		backend := w.pickBackend(entry.root)
+		if backend == nil {
+			w.post(func() {
+				finish()
+				if done != nil {
+					done(ErrUnsupported)
+				}
+			})
+			return
+		}
+		repo, err := backend.Discover(ctx, entry.root)
 		w.post(func() {
 			finish()
 			// The row may have been removed while discovery ran; a newer
@@ -335,6 +364,7 @@ func (w *Workspace) ActivateRepository(root string, done func(error)) {
 				}
 				return
 			}
+			w.useBackend(backend)
 			w.setRepo(repo)
 			if done != nil {
 				done(nil)

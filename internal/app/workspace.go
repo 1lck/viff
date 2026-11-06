@@ -23,11 +23,8 @@ import (
 	"viff/internal/gitcli"
 	"viff/internal/i18n"
 	"viff/internal/observability"
+	"viff/internal/vcs"
 )
-
-// Git is the subset of the Git adapter the use cases need. It is satisfied by
-// *gitcli.Runner; tests may pass the same runner with an isolated environment.
-type Git = *gitcli.Runner
 
 // Notification is a balloon shown to the user.
 type Notification struct {
@@ -85,6 +82,17 @@ type Workspace struct {
 
 	// Repo is the open repository, nil on the welcome screen.
 	Repo *RepoState
+
+	// Caps are the optional features of the active backend, derived from the
+	// instance by NewWorkspace. The UI hides what the backend cannot do instead
+	// of showing an entry that fails later, which is how rebase and stash stay
+	// visible for Git and absent for Subversion.
+	Caps Capabilities
+
+	// ConsoleTool is the executable name the console and the event log show for
+	// the active backend ("git" or "svn"). It is set with the backend, so a
+	// command is never labelled with the other tool's name.
+	ConsoleTool string
 
 	// Repositories is the explicit multi-repository list, in the order the user
 	// added them. Only the active repository (Repo) runs Git commands and has a
@@ -156,6 +164,10 @@ type Workspace struct {
 	pending    []func()
 	nextID     uint64
 	watcher    Watcher
+	// backends are the adapters this workspace may use, registered by the
+	// composition root. A single entry means one version control system; the
+	// field is written before any command runs and read-only afterwards.
+	backends []probeTarget
 	// Watch starts file-system watching for a repository; set by the
 	// composition root so platform code stays out of this package.
 	Watch func(repo domain.Repo, changed func(meta bool)) (Watcher, error)
@@ -179,12 +191,13 @@ type Watcher interface{ Close() }
 // working unchanged.
 func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
 	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now, obs: observability.Nop{}, inc: observability.Nop{}}
+	w.Caps = CapabilitiesOf(git)
 	w.SetLogLevel("")
 	w.initUpdateState()
 	if settings != nil {
 		w.SetLogLevel(settings.LogLevel)
 	}
-	git.Log = w.logCommand
+	git.SetCommandLog(w.logCommand)
 	w.loadRepositories()
 	w.ApplyGitSettings()
 	return w
@@ -379,7 +392,11 @@ func (w *Workspace) logCommand(dir string, args []string, took time.Duration, er
 	if err == nil && quietRead(args) {
 		return // reads are not console noise unless they fail
 	}
-	entry := ConsoleEntry{Time: w.now(), Command: "git " + strings.Join(quoteArgs(args), " "), Took: took}
+	tool := w.ConsoleTool
+	if tool == "" {
+		tool = toolName(w.Git)
+	}
+	entry := ConsoleEntry{Time: w.now(), Command: tool + " " + strings.Join(quoteArgs(args), " "), Took: took}
 	if err != nil {
 		entry.Failed = true
 		var ge *gitcli.Error
@@ -577,11 +594,65 @@ func (w *Workspace) NotifyError(title string, err error) {
 		w.notify(NoticeInfo, title, w.tr(i18n.AppNoticeCancelled), gitcli.CodeOf(err))
 		return
 	}
-	w.notify(NoticeError, title, ErrorText(err), gitcli.CodeOf(err))
+	w.notify(NoticeError, title, w.ErrorText(err), gitcli.CodeOf(err))
 }
 
 // ErrorText is the message of an error suitable for the UI, with a hint for
 // failures the user can act on.
+//
+// The hints name the backend because the advice differs: Git goes through the
+// credential helper and the SSH agent, Subversion through its own auth cache.
+// Telling a Subversion user to configure a Git credential helper would send
+// them looking in the wrong place, so the tool recorded on the error decides
+// which hint is right.
+func (w *Workspace) ErrorText(err error) string {
+	svn := errorFromSVN(err)
+	var ge *gitcli.Error
+	msg := err.Error()
+	if errors.As(err, &ge) {
+		msg = ge.Message()
+	}
+	msg = strings.TrimPrefix(msg, "fatal: ")
+	msg = strings.TrimPrefix(msg, "error: ")
+	switch gitcli.KindOf(err) {
+	case gitcli.ErrAuth:
+		if svn {
+			msg += "\n\n" + w.tr(i18n.AppErrorAuthHintSVN)
+		} else {
+			msg += "\n\n" + w.tr(i18n.AppErrorAuthHintGit)
+		}
+	case gitcli.ErrLocked:
+		if svn {
+			msg += "\n\n" + w.tr(i18n.AppErrorLockedHintSVN)
+		} else {
+			msg += "\n\n" + w.tr(i18n.AppErrorLockedHintGit)
+		}
+	case gitcli.ErrNoGit:
+		if svn {
+			msg = w.tr(i18n.AppErrorToolMissingSVN)
+		} else {
+			msg = w.tr(i18n.AppErrorToolMissingGit)
+		}
+	}
+	if errors.Is(err, ErrUnsupported) {
+		msg = w.tr(i18n.AppErrorUnsupported)
+	}
+	if len(msg) > 2000 {
+		msg = msg[:2000] + "…"
+	}
+	return msg
+}
+
+// errorFromSVN reports whether the failure came from the Subversion adapter.
+func errorFromSVN(err error) bool {
+	var ve *vcs.Error
+	return errors.As(err, &ve) && ve.Tool == "svn"
+}
+
+// ErrorText is the backend-agnostic form used where no workspace is at hand.
+// It keeps the Git wording, which is what a caller outside this package had
+// before; anything user-facing inside the application uses the method above so
+// the hint matches the open repository.
 func ErrorText(err error) string {
 	var ge *gitcli.Error
 	msg := err.Error()
@@ -597,6 +668,12 @@ func ErrorText(err error) string {
 		msg += "\n\nAnother Git process is using this repository. Wait for it to finish; remove the .lock file only if no Git process is running."
 	case gitcli.ErrNoGit:
 		msg = "Git was not found. Install Git or set its path in Settings."
+	case gitcli.ErrNoWSL:
+		msg = "WSL was not found. Open WSL repositories by installing WSL (wsl --install in a terminal) and trying again."
+	case gitcli.ErrNoDistro:
+		msg = "The WSL distribution named in the path does not exist. Check the spelling — a WSL repository path looks like \\\\wsl.localhost\\Ubuntu\\home\\you\\repo."
+	case gitcli.ErrNoWSLGit:
+		msg = "Git is not installed inside the WSL distribution. Install it there (for example: sudo apt install git) and try again."
 	}
 	if len(msg) > 2000 {
 		msg = msg[:2000] + "…"

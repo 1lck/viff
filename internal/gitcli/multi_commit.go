@@ -4,16 +4,11 @@ import (
 	"context"
 
 	"viff/internal/domain"
+	"viff/internal/vcs"
 )
 
-// MultiCommitChanges is the change list of one commit in a multi-commit
-// selection. The commits are queried independently, so one failure does not
-// hide the changes of the others.
-type MultiCommitChanges struct {
-	Commit  domain.Commit
-	Changes []domain.Change
-	Err     error
-}
+// MultiCommitChanges is shared with every backend and lives in internal/vcs.
+type MultiCommitChanges = vcs.MultiCommitChanges
 
 // MultiCommitChanges lists the files each commit changed relative to its first
 // parent, the same comparison CommitDetail uses. A merge commit therefore shows

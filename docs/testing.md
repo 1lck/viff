@@ -23,6 +23,17 @@ remotes; they do not authenticate to public Git hosting.
 不会启动应用窗口，但仍需要平台渲染后端。测试使用临时仓库、隔离配置和本地临时远端，
 不测试公网 Git 托管服务的登录过程。
 
+The Subversion adapter's tests need an `svn` client on `PATH`, plus `svnadmin` for
+the `file://` fixtures they create; `VIFF_SVN` and `VIFF_SVNADMIN` override the
+lookup, which is what a Windows install outside `PATH` needs. Without a client
+they skip, so a machine without Subversion proves nothing about that adapter: the
+Linux CI shard installs `subversion` and fails if the package skips.
+
+Subversion 适配器的测试需要 `PATH` 上有 `svn`，以及为 `file://` 仓库服务的 `svnadmin`；
+`VIFF_SVN` 与 `VIFF_SVNADMIN` 可覆盖查找结果（Windows 装在 `PATH` 之外时用它们）。
+没有 svn 客户端时这些用例会跳过，所以只跑跳过等于没有验证这一层：CI 的 Linux 分片
+会安装 `subversion`，并在该包出现跳过时报失败。
+
 For screenshots on macOS / macOS 保存截图：
 
 ```sh
