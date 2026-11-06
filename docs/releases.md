@@ -13,6 +13,9 @@ adapted to Viff's actual packages and platform support.
 内容以 Viff 实际产物和平台支持为准，不照搬其他项目的功能、贡献者、Intel 包或 Homebrew 安装说明。
 
 1. Choose a version and its comparison baseline, such as `v0.1.0-alpha.2` and `v0.1.0-alpha.1`.
+   A release request means a patch bump (`vX.Y.Z` to `vX.Y.Z+1`); raising the
+   minor or major number is a separate decision the maintainer states
+   explicitly, never something the size of the change set decides.
 2. Copy the template to `docs/releases/vTAG.md`, where `vTAG` is the full tag, and replace every placeholder.
 3. Derive changes from the release's commits and pull requests, verifying download names, compatibility, and contributors.
 4. Validate and commit the notes with the release changes before creating a tag.
@@ -23,6 +26,8 @@ adapted to Viff's actual packages and platform support.
 中文步骤：
 
 1. 选择版本和对比基线，例如 `v0.1.0-alpha.2` 与 `v0.1.0-alpha.1`。
+   用户要求发版时默认只递增补丁位（`vX.Y.Z` → `vX.Y.Z+1`）；升次版本或主版本是维护者
+   单独给出的决定，不凭「这次改动多」自行进位。
 2. 将模板复制为 `docs/releases/vTAG.md`，其中 `vTAG` 为完整标签，并替换全部占位符。
 3. 从本次提交和 PR 提炼变化，核实下载文件名、兼容性和贡献者身份。
 4. 验证说明，并在创建标签前将说明与发布改动一同提交。
