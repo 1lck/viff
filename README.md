@@ -33,10 +33,10 @@ runs your installed Git executable.
 - **Git stays Git:** use your repositories, remotes, hooks, and configured credentials. Inspect executed commands and output in the Console.
 - **Work is loaded as needed:** paginated history and on-demand diffs keep large repositories from becoming a single eager load.
 
-For a concrete size reference, the stripped executables built from v0.2.0 on
-November 5, 2026 were **12.05 MiB on macOS arm64** and **13.61 MiB on Windows
-amd64** (`-trimpath -ldflags="-s -w"`, executable only). Archive size,
-installed Git, and runtime memory are separate measurements.
+For a concrete size reference, the stripped executables inside the v0.2.0
+packages on November 5, 2026 were **12.13 MiB on macOS arm64** and **13.67 MiB
+on Windows amd64** (`-trimpath -ldflags="-s -w"`, executable only). Archive
+size, installed Git, and runtime memory are separate measurements.
 
 Lightweight is a design goal, not an unmeasured performance claim. Memory usage
 and startup time vary with the repository, platform, and renderer; no comparative
