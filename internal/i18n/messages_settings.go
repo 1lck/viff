@@ -64,6 +64,10 @@ const (
 	SettingsPlaceholderAuto  = Key("settings.placeholder.auto")
 	SettingsPlaceholderTheme = Key("settings.placeholder.theme")
 
+	// The Git page echoes the executable an empty setting resolved to, so
+	// "Detected automatically" never hides which binary commands run.
+	SettingsHintGitMissing = Key("settings.hint.git.missing")
+
 	CommonOK     = Key("common.ok")
 	CommonCancel = Key("common.cancel")
 	CommonClose  = Key("common.close")
@@ -135,6 +139,8 @@ func init() {
 		SettingsPlaceholderAuto:  "Detected automatically",
 		SettingsPlaceholderTheme: "Islands Dark",
 
+		SettingsHintGitMissing: "Git not found",
+
 		CommonOK:     "OK",
 		CommonCancel: "Cancel",
 		CommonClose:  "Close",
@@ -204,6 +210,8 @@ func init() {
 
 		SettingsPlaceholderAuto:  "自动检测",
 		SettingsPlaceholderTheme: "Islands 深色",
+
+		SettingsHintGitMissing: "未找到 Git",
 
 		CommonOK:     "确定",
 		CommonCancel: "取消",

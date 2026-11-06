@@ -81,6 +81,8 @@ flowchart TB
 
 **官方 Git CLI 是首选执行引擎。** 这样可以沿用用户的认证、签名和 hooks 环境；仍需逐项验证 GUI 启动环境与终端的差异。第一阶段发现并允许配置系统 Git，记录版本和能力；最低支持版本在兼容测试后固定。是否随安装包分发 Git 单独决策，不能宣称当前架构无需外部依赖。
 
+**WSL 仓库用发行版内的 Git，而不是 Windows 的。** Windows 版打开 `\\wsl.localhost\<发行版>\...` 时，Git 命令经 `wsl.exe -d <发行版> --cd <Linux 路径> --exec git` 在发行版内执行，于是认证、签名与 hooks 都来自 Linux 侧；文件读取仍走同一个 UNC 路径（9P 重定向器），应用其余部分只看到一种路径形态。取舍与代价见 [ADR 0038](decisions/0038-wsl-repositories.md)。
+
 - 状态优先采用 `status --porcelain=v2 -z` 等机器格式；路径按 NUL 分隔，保留原始路径，显示转义不能反过来修改操作路径。[Git status 文档](https://git-scm.com/docs/git-status)
 - 用参数数组执行进程，避免 shell 拼接。支持空格、换行、Unicode、特殊前缀路径及不同换行符；对象 ID 不写死为 SHA-1 长度。
 - 输出流式解析，stderr 持续消费且限量保留。只在重复读取对象有测量收益时使用受管理的 `cat-file` 批处理进程，仓库休眠后退出。

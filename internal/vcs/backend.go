@@ -166,6 +166,17 @@ type Lifecycle interface {
 	SetConfig(c Config)
 	// SetPath overrides the executable location; "" means PATH.
 	SetPath(path string)
+	// ExecutableIn resolves the executable the commands of the repository at
+	// root run, probing when the backend has not resolved it yet. It can start
+	// a process (a WSL distribution has to be asked), so callers that paint use
+	// CachedExecutableIn instead.
+	ExecutableIn(ctx context.Context, root string) (string, error)
+	// CachedExecutableIn reports the executable the commands of the repository
+	// at root run, without starting one: a backend that resolves per repository
+	// (Git inside a WSL distribution) answers from what it already probed, and
+	// "" means nothing has been resolved yet. The settings page paints the
+	// answer, so it must not launch a process.
+	CachedExecutableIn(root string) (string, error)
 	// SetCommandLog installs the hook that records finished commands. Passing
 	// nil disables it. The application layer installs one implementation for
 	// whichever backend is active, so the console and the event log behave the

@@ -62,7 +62,7 @@ const (
 // warn about a repository it cannot yet fetch LFS objects for.
 func (r *Runner) LFS(ctx context.Context, repo domain.Repo) LFSStatus {
 	var st LFSStatus
-	version, installed := r.lfsCapability(ctx)
+	version, installed := r.lfsCapability(ctx, repo)
 	st.Installed, st.Version = installed, version
 	patterns, err := r.lfsPatterns(ctx, repo)
 	st.Patterns = patterns
@@ -80,16 +80,23 @@ func (r *Runner) LFS(ctx context.Context, repo domain.Repo) LFSStatus {
 }
 
 // lfsCapability probes `git lfs version` once per Git executable and process.
-// A canceled probe is not cached: it says nothing about the installation.
-func (r *Runner) lfsCapability(ctx context.Context) (string, bool) {
+// The probe runs in the repository so a WSL repository probes the distro's
+// git-lfs, not the Windows one; the cache key follows the executable that
+// would serve the repo. A canceled probe is not cached: it says nothing about
+// the installation.
+func (r *Runner) lfsCapability(ctx context.Context, repo domain.Repo) (string, bool) {
 	key := "custom"
 	if r.LFSCommand == nil {
-		git, err := r.git()
-		if err != nil {
-			// Without git no repository can be opened in the first place.
-			return "", false
+		if distro := wslDistroOf(repo.Root); distro != "" {
+			key = "wsl:" + distro
+		} else {
+			git, err := r.git()
+			if err != nil {
+				// Without git no repository can be opened in the first place.
+				return "", false
+			}
+			key = git
 		}
-		key = git
 	}
 	r.lfsMu.Lock()
 	if r.lfsProbed && r.lfsProbeKey == key {
@@ -99,7 +106,7 @@ func (r *Runner) lfsCapability(ctx context.Context) (string, bool) {
 	}
 	r.lfsMu.Unlock()
 
-	out, err := r.lfsCommand(ctx, "", "version")
+	out, err := r.lfsCommand(ctx, repo.Root, "version")
 	if ctx.Err() != nil {
 		return "", false
 	}

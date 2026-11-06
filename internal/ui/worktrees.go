@@ -13,6 +13,7 @@ import (
 	"viff/internal/domain"
 	"viff/internal/i18n"
 	"viff/internal/ui/icons"
+	"viff/internal/wslpath"
 )
 
 // worktrees.go is IntelliJ's Git Worktrees dialog: the linked checkouts of one
@@ -463,7 +464,8 @@ func (w *Window) worktreeBranchProblem(rs *vapp.RepoState, branch string) string
 }
 
 // worktreePathProblem says why the directory cannot take a worktree; "" when
-// it can.
+// it can. The path is resolved into the repository's own path domain first, so
+// the existence check looks at the directory Git will actually use.
 func (w *Window) worktreePathProblem(p string) string {
 	switch {
 	case p == "":
@@ -475,6 +477,31 @@ func (w *Window) worktreePathProblem(p string) string {
 		return w.t(i18n.DialogExists, p)
 	}
 	return ""
+}
+
+// worktreePath resolves a typed path into the identity domain of the current
+// repository. A WSL repository also accepts the Linux spelling the file
+// manager inside the distro shows ("/home/you/wt"): it is mapped to the
+// \\wsl.localhost form so the existence check and the workspace list see one
+// shape, while Git receives the Linux spelling again on its side (toGitPath in
+// internal/gitcli). Anywhere else a typed path is kept as it is, and a Linux
+// path is not a Windows path.
+func (w *Window) worktreePath(p string) string {
+	if p == "" {
+		return ""
+	}
+	rs := w.repo()
+	if rs == nil || !wslpath.Is(rs.Repo.Root) {
+		return p
+	}
+	distro, _, _ := wslpath.Split(rs.Repo.Root)
+	if distro == "" {
+		return p
+	}
+	if strings.HasPrefix(p, "/") {
+		return wslpath.FromLinux(distro, p)
+	}
+	return p
 }
 
 // newWorktreeBranchProblem says why name cannot be a new branch; "" when it can.
@@ -520,6 +547,9 @@ func (w *Window) openNewWorktree() {
 		if p == "" {
 			return ""
 		}
+		// The Linux spelling a WSL repository accepts becomes its UNC form
+		// before anything checks or uses it.
+		p = w.worktreePath(p)
 		if a, err := filepath.Abs(p); err == nil {
 			return a
 		}

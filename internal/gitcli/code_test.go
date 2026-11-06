@@ -24,10 +24,13 @@ func TestErrorKindCodes(t *testing.T) {
 		ErrNothingToCommit:       "commit.empty",
 		ErrHookFailed:            "hook.failed",
 		ErrNoGit:                 "git.missing",
+		ErrNoWSL:                 "wsl.unavailable",
+		ErrNoDistro:              "wsl.distro_missing",
+		ErrNoWSLGit:              "wsl.git_missing",
 		ErrCancelled:             "git.cancelled",
 		ErrOther:                 "git.failed",
 	}
-	if len(want) != 14 {
+	if len(want) != 17 {
 		t.Fatalf("the mapping must cover every kind, got %d", len(want))
 	}
 	for kind, code := range want {
@@ -46,6 +49,9 @@ func TestErrorKindString(t *testing.T) {
 		ErrAuth:      "auth",
 		ErrRejected:  "rejected",
 		ErrNoGit:     "no_git",
+		ErrNoWSL:     "no_wsl",
+		ErrNoDistro:  "no_distro",
+		ErrNoWSLGit:  "no_wsl_git",
 		ErrCancelled: "cancelled",
 		ErrOther:     "other",
 	}

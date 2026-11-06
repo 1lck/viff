@@ -16,6 +16,7 @@ import (
 
 	"viff/internal/process"
 	"viff/internal/vcs"
+	"viff/internal/wslpath"
 )
 
 // stderrLimit bounds the stderr kept for an error message.
@@ -47,6 +48,11 @@ const (
 	ErrNothingToCommit       = vcs.ErrNothingToCommit
 	ErrHookFailed            = vcs.ErrHookFailed
 	ErrNoGit                 = vcs.ErrNoGit
+	// ErrNoWSL, ErrNoDistro and ErrNoWSLGit are the three ways a WSL-backed
+	// invocation fails before Git starts (wsl.go, wsl_windows.go).
+	ErrNoWSL    = vcs.ErrNoWSL
+	ErrNoDistro = vcs.ErrNoDistro
+	ErrNoWSLGit = vcs.ErrNoWSLGit
 )
 
 // KindOf returns the error kind of err, ErrOther for foreign errors.
@@ -143,6 +149,18 @@ type Runner struct {
 
 	cfgMu sync.Mutex
 	cfg   Config
+
+	// WSL state: which distros were probed to have a working git, and the
+	// resolved wsl.exe. Guarded by wslMu; wslProbe and wslExeOverride are the
+	// test seams (like LFSCommand).
+	wslMu          sync.Mutex
+	wslReady       map[string]bool
+	wslGitPath     map[string]string
+	wslExe         string
+	wslExeKnown    bool
+	wslExeErr      error
+	wslProbe       func(ctx context.Context, distro string) error
+	wslExeOverride string
 }
 
 // SetConfig replaces the configuration used by commands started afterwards.
@@ -169,6 +187,73 @@ func (r *Runner) SetPath(path string) {
 	r.resolved = ""
 	r.findErr = nil
 	r.resolveMu.Unlock()
+}
+
+// Executable reports the Git binary commands would run: the configured Path,
+// or the one found on PATH and the well-known macOS locations. The error is
+// classified ErrNoGit when there is none. The settings dialog shows it so the
+// user can see what "automatic" resolved to.
+func (r *Runner) Executable() (string, error) {
+	return r.git()
+}
+
+// ExecutableIn reports the Git binary the commands of the repository at root
+// run: a WSL repository runs the git inside its distribution, anything else
+// uses Executable. The settings dialog asks this so the echoed path names the
+// binary that will really serve the open repository, not the Windows default.
+//
+// A distro this process has not probed yet is probed here; the answer is then
+// cached like every other probe, so opening the dialog is cheap.
+func (r *Runner) ExecutableIn(ctx context.Context, root string) (string, error) {
+	distro := wslDistroOf(root)
+	if distro == "" {
+		return r.Executable()
+	}
+	if exe := r.cachedWSLGit(distro); exe != "" {
+		return exe, nil
+	}
+	if err := r.probeWSL(ctx, distro); err != nil {
+		return "", err
+	}
+	if exe := r.cachedWSLGit(distro); exe != "" {
+		return exe, nil
+	}
+	// A probed distro always records its path; "git" is the lookup Git itself
+	// performs through PATH inside the distro.
+	return "git", nil
+}
+
+func (r *Runner) cachedWSLGit(distro string) string {
+	r.wslMu.Lock()
+	defer r.wslMu.Unlock()
+	return r.wslGitPath[distro]
+}
+
+// CachedExecutableIn reports the Git binary the commands of the repository at
+// root run without starting a process: a WSL repository answers with the git
+// inside its distribution when an earlier probe recorded it, "" when this
+// process has not probed the distro yet. It exists for callers that paint,
+// where running wsl.exe — a round trip that can wait on the distribution
+// booting — would stall the frame.
+func (r *Runner) CachedExecutableIn(root string) (string, error) {
+	distro := wslDistroOf(root)
+	if distro == "" {
+		return r.Executable()
+	}
+	return r.cachedWSLGit(distro), nil
+}
+
+func (r *Runner) setWSLGit(distro, exe string) {
+	r.wslMu.Lock()
+	if r.wslGitPath == nil {
+		r.wslGitPath = map[string]string{}
+	}
+	if r.wslReady == nil {
+		r.wslReady = map[string]bool{}
+	}
+	r.wslGitPath[distro] = exe
+	r.wslReady[distro] = true
+	r.wslMu.Unlock()
 }
 
 // SetCommandLog installs the hook that records finished commands. The
@@ -208,6 +293,11 @@ func (r *Runner) git() (string, error) {
 var baseArgs = []string{"-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "log.showSignature=false"}
 
 func (r *Runner) command(ctx context.Context, dir string, args []string) (*exec.Cmd, error) {
+	if wslpath.Is(dir) {
+		// A WSL repository runs the distro's own git through wsl.exe; see
+		// wsl_windows.go and docs/decisions/0038-wsl-repositories.md.
+		return r.wslCommand(ctx, dir, args)
+	}
 	git, err := r.git()
 	if err != nil {
 		return nil, err
@@ -339,6 +429,10 @@ func (r *Runner) wrap(ctx context.Context, args []string, err error, stderr, std
 	if errors.As(err, &ee) {
 		exit = ee.ExitCode()
 	}
+	// wsl.exe writes its own diagnostics as UTF-16LE with a BOM while the Git
+	// it execs passes UTF-8 through; the BOM decides (see wsl.go). Git's own
+	// output never starts with one, so decoding unconditionally is safe.
+	stderr, stdout = decodeWSLText(stderr), decodeWSLText(stdout)
 	return &Error{Kind: classify(stderr+"\n"+stdout, exit, ctx.Err()), Args: args, ExitCode: exit, Stderr: stderr, Stdout: stdout, Err: err}
 }
 

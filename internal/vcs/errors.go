@@ -45,6 +45,17 @@ const (
 	ErrNetwork
 	// ErrNoRevision names a revision that does not exist (svn E160006).
 	ErrNoRevision
+
+	// WSL kinds (ADR 0038). A Git backend running through wsl.exe can fail
+	// before Git itself starts, and the user has three different things to fix,
+	// so the three are separate kinds rather than one "git.failed".
+	//
+	// ErrNoWSL means wsl.exe is missing or unusable on this machine.
+	ErrNoWSL
+	// ErrNoDistro means the distribution named by the path does not exist.
+	ErrNoDistro
+	// ErrNoWSLGit means the distribution has no git executable.
+	ErrNoWSLGit
 )
 
 // Error is a failed backend invocation with the context needed to diagnose it.
@@ -150,6 +161,12 @@ func (k ErrorKind) String() string {
 		return "network"
 	case ErrNoRevision:
 		return "no_revision"
+	case ErrNoWSL:
+		return "no_wsl"
+	case ErrNoDistro:
+		return "no_distro"
+	case ErrNoWSLGit:
+		return "no_wsl_git"
 	}
 	return "other"
 }
@@ -197,6 +214,12 @@ func (k ErrorKind) Code() string {
 		return "repo.unreachable"
 	case ErrNoRevision:
 		return "revision.not_found"
+	case ErrNoWSL:
+		return "wsl.unavailable"
+	case ErrNoDistro:
+		return "wsl.distro_missing"
+	case ErrNoWSLGit:
+		return "wsl.git_missing"
 	}
 	return "git.failed"
 }

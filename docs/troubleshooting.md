@@ -29,6 +29,9 @@
 | `commit.empty` | 没有可提交的改动（暂存区为空，或改动被忽略规则排除） | 先暂存文件；检查 `.gitignore` 与文件状态；amend 场景确认是否本来就无改动 | 暂存区状态、文件列表、操作类型（普通提交/amend） |
 | `hook.failed` | Git hook 失败（pre-commit、commit-msg、pre-push 等） | 阅读 hook 输出；修复 hook 或在提交对话框勾选跳过 hooks（跳过前确认代价）。检查 hook 脚本权限与解释器 | hook 名称、原始输出、操作系统、是否通过终端可复现 |
 | `git.missing` | 找不到 `git` 可执行文件 | 安装 Git：macOS 安装 Git 或 Xcode Command Line Tools；Windows 安装 Git for Windows；Linux 用包管理器。确认 Git 在 `PATH` 中，重启 Viff | 操作系统、安装方式、终端 `git --version` 输出、`PATH` 大致情况（不含敏感路径） |
+| `wsl.unavailable` | 打开 WSL 仓库，但本机没有可用的 WSL | 在终端运行 `wsl --install`，安装完成后重启；确认 `wsl.exe` 在 `PATH` 中且 `wsl --status` 可用 | Windows 版本、`wsl --status` 输出、`wsl.exe --version` |
+| `wsl.distro_missing` | 路径里的发行版名不存在 | 检查路径写法：`\\wsl.localhost\<发行版>\home\<用户>\<仓库>`；用 `wsl --list` 确认发行版名称 | 完整的仓库路径、`wsl --list --verbose` 输出（可脱敏用户名） |
+| `wsl.git_missing` | 发行版里没有安装 Git | 在发行版内安装：`wsl -d <发行版> -- sudo apt install git`（或对应发行版的包管理器），然后重试 | 发行版名称、发行版内 `git --version` 输出、发行版类型与版本 |
 | `git.cancelled` | 操作被取消：手动取消、切换/关闭仓库、退出，或任务超时 | 重新执行操作；若反复取消，检查是否仓库过大、是否有外部操作/退出触发；看 Console 最后一条命令 | 什么操作、是否手动取消、诊断包（含时间线） |
 | `git.failed` | 其他 Git 失败：权限不足、磁盘满、网络/代理异常、Git 版本过旧、仓库损坏等（未分类兜底） | 按 Console 的 Git 原始错误判断：检查磁盘空间、目录写权限、代理设置、`git --version`；仍无法解决时导出诊断包 | Git 原始错误、`git --version`、磁盘剩余空间、代理设置（不要贴凭据） |
 

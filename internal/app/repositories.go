@@ -11,6 +11,7 @@ import (
 	"viff/internal/domain"
 	"viff/internal/i18n"
 	"viff/internal/storage"
+	"viff/internal/wslpath"
 )
 
 // RepositorySummary is one entry in the workspace-wide repository list. The
@@ -72,9 +73,17 @@ type repositoriesState struct {
 // canonicalPath resolves a path to the real directory it names, following
 // symlinks. It is the deduplication key: /tmp and /private/tmp (on macOS) name
 // one repository and must not become two rows.
+//
+// A WSL path dedups by its normalized \\wsl.localhost spelling instead: the
+// legacy \\wsl$ alias and distro-name casing are the same file system, and
+// EvalSymlinks is both slow over 9P and wrong there — the Linux side can hold
+// symlinks the Windows spelling must not resolve (wslpath; ADR 0038).
 func canonicalPath(path string) string {
 	if path == "" {
 		return ""
+	}
+	if n, ok := wslpath.Normalize(path); ok {
+		return n
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {

@@ -66,6 +66,25 @@ func (r *Runner) Version(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// ExecutableIn resolves the svn client. Subversion has no per-repository
+// executable, so the answer is the same for every root and needs no probe.
+func (r *Runner) ExecutableIn(ctx context.Context, root string) (string, error) {
+	return r.svn()
+}
+
+// CachedExecutableIn reports the svn client without starting a process: the
+// resolved path once it is known, otherwise the configured one. "" means the
+// path has not been resolved yet, which is what the settings echo shows as
+// "automatic".
+func (r *Runner) CachedExecutableIn(root string) (string, error) {
+	r.resolveMu.Lock()
+	defer r.resolveMu.Unlock()
+	if r.resolved != "" {
+		return r.resolved, nil
+	}
+	return r.Path, nil
+}
+
 func (r *Runner) svn() (string, error) {
 	r.resolveMu.Lock()
 	defer r.resolveMu.Unlock()

@@ -668,6 +668,12 @@ func ErrorText(err error) string {
 		msg += "\n\nAnother Git process is using this repository. Wait for it to finish; remove the .lock file only if no Git process is running."
 	case gitcli.ErrNoGit:
 		msg = "Git was not found. Install Git or set its path in Settings."
+	case gitcli.ErrNoWSL:
+		msg = "WSL was not found. Open WSL repositories by installing WSL (wsl --install in a terminal) and trying again."
+	case gitcli.ErrNoDistro:
+		msg = "The WSL distribution named in the path does not exist. Check the spelling — a WSL repository path looks like \\\\wsl.localhost\\Ubuntu\\home\\you\\repo."
+	case gitcli.ErrNoWSLGit:
+		msg = "Git is not installed inside the WSL distribution. Install it there (for example: sudo apt install git) and try again."
 	}
 	if len(msg) > 2000 {
 		msg = msg[:2000] + "…"

@@ -66,6 +66,7 @@ Git 仍是核心。围绕它，Viff 提供只读的项目浏览与 Quick Open、
 | 同步协作   | Fetch、Pull、Push、force-with-lease、远端、补丁、签名与凭据设置                                                                   |
 | 网页协作   | 在 GitHub、GitLab、Bitbucket 或 Gitea 打开提交、分支、比较与创建 PR 的页面                                                        |
 | 执行命令   | 内置终端，在当前仓库打开；支持滚动回看、选择复制、粘贴、清屏、重启与缩放                                                           |
+| 打开 WSL 仓库 | Windows 版可直接打开发行版内的仓库：Git 由发行版执行，文件经 `\\wsl.localhost` 读取                                          |
 | 使用母语   | 界面支持英文与简体中文，默认英文，可在 设置 → General → Language 切换                                                             |
 
 在 Log → Branch 中可直接输入名称搜索本地分支、远端分支和标签。

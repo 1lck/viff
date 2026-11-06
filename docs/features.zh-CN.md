@@ -122,3 +122,4 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
   - 分支是目录约定加 `switch` 语义，不是轻量引用，所以「分支」操作的效果与 Git 不同。
   - 冲突解决后会在工作副本留下 `.mine` / `.r2` / `.r3` 辅助文件；Viff 已把它们从状态列表中过滤，但用户仍可能在文件系统里看到。
 - 终端目前只有一个本地会话：不连 SSH、不支持多标签/分屏、搜索、链接、内联图片与鼠标上报；隐藏工具窗时 shell 继续运行，会话不跨重启恢复。切换仓库不会改写已在运行的 shell 的当前目录，新会话才从新仓库根目录开始。Windows 使用 ConPTY（需要 Windows 10 1809+），本机未做 Windows 实机验收。见 [0028](decisions/0028-integrated-terminal.md)。
+- Windows 版可直接打开 WSL 发行版内的仓库（`\\wsl.localhost\...` 或旧的 `\\wsl$`，两种写法视为同一仓库）：Git 由发行版执行，文件经 9P 读取，因此 diff 与刷新比本地磁盘慢；设置里针对 Windows git 的取值（Git 路径、GPG 程序、签名密钥、凭据助手、SSH 命令）对 WSL 仓库不生效，认证、签名与 hooks 全部取自 Linux 侧。文件监听在 WSL 仓库上放宽到 5 秒。内置终端与 `rg` 内容搜索仍走 Windows 侧，未针对 WSL 适配。见 [0038](decisions/0038-wsl-repositories.md)。

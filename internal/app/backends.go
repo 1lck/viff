@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+
 	"viff/internal/domain"
 	"viff/internal/vcs"
 )
@@ -100,6 +102,28 @@ func (w *Workspace) SetGitPath(path string) {
 	if b := w.gitBackend(); b != nil {
 		b.SetPath(path)
 	}
+}
+
+// ExecutableIn resolves the executable the repository at root runs, probing
+// when the backend has not resolved it yet. Opening a repository already runs
+// its commands, so this answers from the cache in practice; a caller that
+// paints must use CachedExecutableIn instead.
+func (w *Workspace) ExecutableIn(ctx context.Context, root string) (string, error) {
+	if l, ok := w.Git.(vcs.Lifecycle); ok {
+		return l.ExecutableIn(ctx, root)
+	}
+	return "", nil
+}
+
+// CachedExecutableIn reports the executable the repository at root runs,
+// answered from what the active backend already resolved. It starts no
+// process, so a caller that paints — the settings page echo — can read it
+// every frame; "" means nothing has been resolved yet.
+func (w *Workspace) CachedExecutableIn(root string) (string, error) {
+	if l, ok := w.Git.(vcs.Lifecycle); ok {
+		return l.CachedExecutableIn(root)
+	}
+	return "", nil
 }
 
 // SetSVNPath pushes the configured svn executable to the Subversion adapter.

@@ -383,9 +383,15 @@ func (r *Runner) Init(ctx context.Context, dir string) error {
 	return err
 }
 
-// Clone clones url into dir with progress.
+// Clone clones url into dir with progress. dir is the target location in the
+// Windows identity domain; for a parent inside a WSL distro it maps to the
+// Linux spelling Git runs with (toGitPath; wsl.go).
 func (r *Runner) Clone(ctx context.Context, parent, url, dir string, progress func(string)) error {
-	_, err := r.RunProgress(ctx, parent, progress, "clone", "--progress", "--", url, dir)
+	target, err := toGitPath(parent, dir)
+	if err != nil {
+		return err
+	}
+	_, err = r.RunProgress(ctx, parent, progress, "clone", "--progress", "--", url, target)
 	return err
 }
 
@@ -428,13 +434,19 @@ func (r *Runner) ApplyPatch(ctx context.Context, repo domain.Repo, patch []byte,
 	return err
 }
 
-// AddWorktree, RemoveWorktree manage linked worktrees.
+// AddWorktree, RemoveWorktree manage linked worktrees. The path arrives in
+// the Windows identity domain and is handed to Git in the spelling its own
+// file system understands (toGitPath; wsl.go).
 func (r *Runner) AddWorktree(ctx context.Context, repo domain.Repo, path, branch, start string) error {
+	target, err := toGitPath(repo.Root, path)
+	if err != nil {
+		return err
+	}
 	args := []string{"worktree", "add"}
 	if branch != "" {
 		args = append(args, "-b", branch)
 	}
-	args = append(args, path)
+	args = append(args, target)
 	if start != "" {
 		args = append(args, start)
 	}
@@ -485,7 +497,11 @@ func (r *Runner) AddWorktreeExisting(ctx context.Context, repo domain.Repo, path
 	}
 	// -- keeps a path with a leading dash literal; Git's own path check then
 	// refuses a non-empty directory without --force.
-	return r.write(ctx, repo, "worktree", "add", "--", path, branch)
+	target, err := toGitPath(repo.Root, path)
+	if err != nil {
+		return err
+	}
+	return r.write(ctx, repo, "worktree", "add", "--", target, branch)
 }
 
 // checkBranchName rejects names that Git would not read back as the literal
@@ -525,11 +541,15 @@ func (r *Runner) localBranchExists(ctx context.Context, repo domain.Repo, branch
 }
 
 func (r *Runner) RemoveWorktree(ctx context.Context, repo domain.Repo, path string, force bool) error {
+	target, err := toGitPath(repo.Root, path)
+	if err != nil {
+		return err
+	}
 	args := []string{"worktree", "remove"}
 	if force {
 		args = append(args, "--force")
 	}
-	return r.write(ctx, repo, append(args, path)...)
+	return r.write(ctx, repo, append(args, target)...)
 }
 
 // IsAncestor reports whether a is an ancestor of b.
