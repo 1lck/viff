@@ -40,3 +40,4 @@
 | [0034](0034-window-geometry.md) | 记住窗口位置（含副屏） |
 | [0035](0035-ai-prompt-rules.md) | 可自定义的提交信息规则 |
 | [0036](0036-repository-discovery.md) | 从父目录发现并批量导入仓库 |
+| [0037](0037-content-search.md) | 在文件中查找：按需内容搜索 |

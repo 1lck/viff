@@ -237,3 +237,38 @@ func TestSkipUpdateDialogPersists(t *testing.T) {
 		t.Fatalf("skipUpdateDialog was not kept: %+v", back)
 	}
 }
+
+// The search backend follows the same rule as the language: an old file has
+// none of the fields, and an unknown value means auto rather than a failure.
+func TestSearchSettingsDefaultsAndSanitize(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if s := Load(path); s.SearchTool != "auto" || s.RipgrepPath != "" {
+		t.Fatalf("defaults = %+v", s)
+	}
+
+	s := Load(path)
+	s.SearchTool = "  rg  "
+	s.RipgrepPath = "  C:\\tools\\rg.exe  "
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	back := Load(path)
+	if back.SearchTool != "rg" || back.RipgrepPath != `C:\tools\rg.exe` {
+		t.Fatalf("round trip = %+v", back)
+	}
+
+	load := func(tool string) *Settings {
+		t.Helper()
+		data := []byte(`{"version":1,"searchTool":"` + tool + `"}`)
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+	if got := load("klingon").SearchTool; got != "auto" {
+		t.Errorf("unknown tool = %q, want auto", got)
+	}
+	if got := load("git").SearchTool; got != "git" {
+		t.Errorf("git = %q", got)
+	}
+}

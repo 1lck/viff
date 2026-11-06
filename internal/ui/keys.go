@@ -100,6 +100,8 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		}
 	case ch == "d":
 		w.showDiffForFocus()
+	case ch == "f" && shift:
+		w.openFindInFiles()
 	case ch == "f":
 		if t := w.ed.cur(); t != nil && t.res != nil && !w.focused(idLogTable) && !w.focused(idLogSearch) {
 			w.openDiffSearch()
@@ -135,11 +137,11 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		for _, r := range w.cm.rows {
 			w.cm.sel[r.key] = true
 		}
-	case ch == "a" && !shift && (w.focused(idDiffText) || w.focused(idDiffRight)):
+	case ch == "a" && !shift && (w.focused(idDiffText) || w.focused(idDiffTextOld) || w.focused(idDiffRight)):
 		// Select All in the read-only file view; a focused text field keeps
 		// Command+A for its own text (Viva consumes the chord before this).
 		t := w.ed.cur()
-		if t == nil || !t.selectAllText() {
+		if t == nil || !t.selectAllText(w.ws.Settings.DiffUnified) {
 			return false
 		}
 	case ch == "c" && !shift && !alt:
