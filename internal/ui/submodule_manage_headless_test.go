@@ -14,6 +14,24 @@ import (
 	vapp "viff/internal/app"
 )
 
+// clickWhenReady presses label once the rendered frame carries a hit for it.
+// A slow CI runner can paint a dialog's content before its controls take part
+// in hit testing; clicking on the fixed settle was a source of flakes.
+func clickWhenReady(t *testing.T, f *uiFixture, label string) {
+	t.Helper()
+	if err := f.s.WaitFor(func(s app.Snapshot) bool {
+		for _, h := range s.Hits {
+			if h.Label == label {
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second); err != nil {
+		t.Fatalf("control %q never became clickable: %v\ntexts: %s", label, err, strings.Join(f.s.Texts(), " | "))
+	}
+	f.click(label)
+}
+
 // waitSubmoduleDialog waits for a dialog with the given title that also shows
 // every wanted text.
 func waitSubmoduleDialog(t *testing.T, f *uiFixture, title string, want ...string) {
@@ -187,7 +205,7 @@ func TestSubmoduleRemoveDialog(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(f.dir, "deps/lib/lib.go")); err != nil {
 		t.Fatal("update did not restore submodule:", err)
 	}
-	f.click("Remove…")
+	clickWhenReady(t, f, "Remove…")
 	waitSubmoduleDialog(t, f, "Remove Submodule", "deps/lib")
 	f.click("Remove")
 	waitSubmoduleDialog(t, f, "Submodules")
@@ -212,7 +230,7 @@ func TestSubmoduleRemoveDialog(t *testing.T) {
 	f.ws.Refresh(true)
 	f.settle()
 	openSubmodulesDialog(t, f)
-	f.click("Remove…")
+	clickWhenReady(t, f, "Remove…")
 	waitSubmoduleDialog(t, f, "Remove Submodule", "Force Remove", "local changes")
 	f.snap("submodule-force-confirmation")
 	f.click("Force Remove")
@@ -237,7 +255,7 @@ func TestSubmoduleRemoveDialog(t *testing.T) {
 	f.ws.Refresh(true)
 	f.settle()
 	openSubmodulesDialog(t, f)
-	f.click("Remove…")
+	clickWhenReady(t, f, "Remove…")
 	waitSubmoduleDialog(t, f, "Remove Submodule", "deps/lib")
 	beforeFailure := len(f.ws.Notifications)
 	f.click("Remove")
