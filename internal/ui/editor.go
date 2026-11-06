@@ -73,6 +73,13 @@ type diffTab struct {
 	// textSel is the read-only file view's text selection (selection.go). It
 	// is meaningful only when src.View.
 	textSel textSel
+
+	// The right edge's two caches, filled once per load by prepareTab. marks
+	// hold one entry per changed stretch; code maps hold the compressed shape
+	// of every display line. The unified viewer interleaves both sides, so it
+	// keeps its own copy of each.
+	marksNew, marksOld, marksUni []miniMark
+	mapNew, mapOld, mapUni       []codemapLine
 }
 
 // uline is one row of the unified view.
@@ -237,6 +244,19 @@ func (w *Window) prepareTab(t *diffTab) {
 	}
 	t.oldBlk = blockMap(len(t.oldDisp), res.Blocks, true)
 	t.newBlk = blockMap(len(t.newDisp), res.Blocks, false)
+	// Both right-edge caches are filled here, once per load, so a repaint only
+	// scales and draws them. Each is skipped while its part is off.
+	s := w.ws.Settings
+	t.marksOld, t.marksNew, t.marksUni = nil, nil, nil
+	t.mapOld, t.mapNew, t.mapUni = nil, nil, nil
+	if s.DiffMarks {
+		t.marksOld = buildMarks(t.oldBlk, res.Blocks)
+		t.marksNew = buildMarks(t.newBlk, res.Blocks)
+	}
+	if s.DiffCodemap {
+		t.mapOld = buildCodemap(t.oldDisp, t.oldSyn, t.oldBlk, t.maxCells)
+		t.mapNew = buildCodemap(t.newDisp, t.newSyn, t.newBlk, t.maxCells)
+	}
 	t.unified = t.unified[:0]
 	o, n := 0, 0
 	for bi, b := range res.Blocks {
@@ -263,6 +283,16 @@ func (w *Window) prepareTab(t *diffTab) {
 	}
 	for ; o < len(oldLines); o++ {
 		t.unified = append(t.unified, uline{old: o, new: -1, block: -1})
+	}
+	// The unified viewer interleaves both sides, so its caches are collected from
+	// the rows rather than from one side's maps; the rows exist by now.
+	if w.ws.Settings.DiffUnified {
+		if w.ws.Settings.DiffMarks {
+			t.marksUni = buildMarksUnified(t)
+		}
+		if w.ws.Settings.DiffCodemap {
+			t.mapUni = buildCodemapUnified(t, t.maxCells)
+		}
 	}
 }
 

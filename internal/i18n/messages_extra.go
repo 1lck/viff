@@ -38,6 +38,7 @@ const (
 	FileviewAnnotateRev      = Key("fileview.annotateRevision")
 	FileviewCopyRev          = Key("fileview.copyRevision")
 	FileviewOpenExternal     = Key("fileview.openExternal")
+	FileviewShowHistory      = Key("fileview.showHistory")
 
 	RevisionTitle   = Key("revision.title")
 	RevisionFilter  = Key("revision.filter")
@@ -84,6 +85,7 @@ func init() {
 		FileviewAnnotateRev:      "Annotate Revision %s",
 		FileviewCopyRev:          "Copy Revision Number",
 		FileviewOpenExternal:     "Open in External Editor",
+		FileviewShowHistory:      "Show History",
 
 		RevisionTitle:   "Repository at %s",
 		RevisionFilter:  "Filter files",
@@ -96,7 +98,7 @@ func init() {
 		RebaseCannotFrom:    "无法从此提交变基：%s",
 		RebaseInteractive:   "交互式变基",
 		RebaseAllDropped:    "所有提交都会被丢弃：分支将指向基点提交。",
-		RebaseHint:          "本地更改会自动暂存并在之后恢复；遇到冲突会停下变基，可在提交窗口里继续或中止。",
+		RebaseHint:          "本地更改会自动储藏并在之后恢复；遇到冲突会停下变基，可在提交窗口里继续或中止。",
 		RebasePlan:          "变基计划",
 		RebaseMoveUp:        "上移",
 		RebaseMoveDown:      "下移",
@@ -128,6 +130,7 @@ func init() {
 		FileviewAnnotateRev:      "注解提交 %s",
 		FileviewCopyRev:          "复制提交哈希",
 		FileviewOpenExternal:     "在外部编辑器中打开",
+		FileviewShowHistory:      "显示历史",
 
 		RevisionTitle:   "%s 的仓库内容",
 		RevisionFilter:  "筛选文件",

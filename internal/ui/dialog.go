@@ -54,6 +54,10 @@ type dialog struct {
 	// bodyH is the visible height of the scrolling body, recorded by the paint
 	// so key handling can page it without measuring again.
 	bodyH float32
+	// noClose hides the X in the title row. A dialog that is edited rather than
+	// confirmed still keeps Cancel, so the window has one obvious way out
+	// instead of two that do slightly different things.
+	noClose bool
 }
 
 // form lays out dialog content top to bottom.
@@ -194,8 +198,10 @@ func (w *Window) paintDialog(full ui.Rect) {
 
 	title := rect(r.X+dlgPad, r.Y, r.Width-2*dlgPad-30, 44)
 	w.p.text(d.title, title, fontUI, semibold, w.pal.Text)
-	if w.action(idDialogClose, right(r)-38, r.Y+9, icons.Close, "Close", actOpts{}) {
-		w.after(w.closeDialog)
+	if !d.noClose {
+		if w.action(idDialogClose, right(r)-38, r.Y+9, icons.Close, "Close", actOpts{}) {
+			w.after(w.closeDialog)
+		}
 	}
 
 	// The header is measured and painted first: its height sets where the

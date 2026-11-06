@@ -197,7 +197,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		rx := rr.X + 8 + float32(row.depth)*fileIndent
 		switch {
 		case row.root:
-			expanded := v.rootOpen || v.query != ""
+			expanded := v.rootOpen
 			chev := icons.ChevronRight
 			if expanded {
 				chev = icons.ChevronDown
@@ -214,7 +214,7 @@ func (w *Window) paintProject(r ui.Rect) {
 			w.c.HitWithOptions(id, rr, row.name+" "+row.hint, ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected, Expandable: true, Expanded: expanded})
 		case row.dir:
 			chev := icons.ChevronRight
-			expanded := v.query != "" || !v.collapsed[row.path]
+			expanded := !v.collapsed[row.path]
 			if expanded {
 				chev = icons.ChevronDown
 			}
@@ -484,7 +484,7 @@ func (w *Window) filesMenu(row fileRow) []item {
 		{title: "Open in External Editor", icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(row.path, 0) }},
 		sep(),
 		{title: "Annotate with Git Blame", icon: icons.Vcs, run: func() { w.openFileView(row.path, "", true) }},
-		{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(row.path) }},
+		{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(row.path) }},
 		sep(),
 		{title: "Copy Path", icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
 		{title: "Copy Relative Path", run: func() { w.copyText(row.path) }},

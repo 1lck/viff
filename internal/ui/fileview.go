@@ -118,8 +118,8 @@ func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
 		w.after(func() { w.toggleAnnotate(t) })
 	}
 	x += bw + 4
-	hw := w.p.width("Show History", fontUI, regular) + 20
-	if w.button(idFileHistory, rect(x, r.Y+(r.Height-26)/2, hw, 26), "Show History", btnBorderless, false) {
+	hw := w.p.width(w.t(i18n.FileviewShowHistory), fontUI, regular) + 20
+	if w.button(idFileHistory, rect(x, r.Y+(r.Height-26)/2, hw, 26), w.t(i18n.FileviewShowHistory), btnBorderless, false) {
 		p := t.src.Path
 		w.after(func() { w.showPathHistory(p) })
 	}

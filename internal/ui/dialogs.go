@@ -650,6 +650,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	editor := text.NewEditor(s.ExternalEditor)
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
 	autoUpdate, autoUpdateWas := s.AutoUpdateCheck, s.AutoUpdateCheck
+	marks, codemap := s.DiffMarks, s.DiffCodemap
 	debugLog := s.LogLevel == "debug"
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
@@ -775,6 +776,11 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			f.gap(6)
 			if f.collapsibleGroup("updates", w.t(i18n.SettingsGroupUpdates)) {
 				f.check(w.t(i18n.SettingsCheckAutoUpdate), &autoUpdate)
+				f.check(w.t(i18n.SettingsCheckMarks), &marks)
+				f.check(w.t(i18n.SettingsCheckCodemap), &codemap)
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsHintCodemap), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				})
 			}
 			f.gap(6)
 			if f.collapsibleGroup("fonts", w.t(i18n.SettingsGroupFonts)) {
@@ -884,6 +890,12 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			s.AutoFetch, s.FetchPrune, s.PullMode = autoFetch, prune, pull
 			s.SkipUpdateDialog = !askUpdate
 			s.AutoUpdateCheck = autoUpdate
+			if marks != s.DiffMarks || codemap != s.DiffCodemap {
+				s.DiffMarks, s.DiffCodemap = marks, codemap
+				// The caches are dropped or built here, so the new setting
+				// applies to every open tab without reloading it.
+				defer w.rebuildDiffEdge()
+			}
 			if m > 0 {
 				s.AutoFetchMins = m
 			}

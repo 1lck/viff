@@ -79,6 +79,11 @@ type Settings struct {
 	// (the default when empty, which keeps an older settings file working) or
 	// "anthropic-messages".
 	AIProtocol string `json:"aiProtocol,omitempty"`
+	// AIConfirmGenerate asks before the AI button starts a request. It defaults
+	// to true: Decode keeps the default for an older settings file that has no
+	// field, while an explicit false is stored and respected. The switch lives
+	// in the AI button's own context menu, next to the rule picker.
+	AIConfirmGenerate bool `json:"aiConfirmGenerate"`
 
 	ExternalEditor string `json:"externalEditor"`
 
@@ -105,7 +110,13 @@ type Settings struct {
 	DiffWhitespace     int     `json:"diffWhitespace"`
 	DiffSyncScroll     bool    `json:"diffSyncScroll"`
 	DiffHighlightWords bool    `json:"diffHighlightWords"`
-	CommitTree         bool    `json:"commitTree"`
+	// DiffMarks keeps the change ruler on the right edge of the diff, where it
+	// also stands in for the overlay scroll bar. DiffCodemap adds the optional
+	// code minimap next to it. Older files omit both fields, and Load unmarshals
+	// into Defaults, so an absent value keeps its default: marks on, codemap off.
+	DiffMarks   bool `json:"diffMarks"`
+	DiffCodemap bool `json:"diffCodemap"`
+	CommitTree  bool `json:"commitTree"`
 
 	path     string
 	readOnly bool
@@ -140,10 +151,12 @@ func Defaults() *Settings {
 	return &Settings{
 		Version: SchemaVersion, Theme: "dark", UIScale: 1, FontSize: 13,
 		AutoFetch: false, AutoFetchMins: 10, FetchPrune: true, PullMode: "merge",
-		AutoUpdateCheck: true, SearchTool: "auto",
-		Window:           Window{Width: 1440, Height: 900},
-		CommitPanelWidth: 340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
-		DiffSyncScroll: true, DiffHighlightWords: true, CommitTree: false,
+		AutoUpdateCheck:   true,
+		AIConfirmGenerate: true,
+		SearchTool:        "auto",
+		Window:            Window{Width: 1440, Height: 900},
+		CommitPanelWidth:  340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
+		DiffSyncScroll: true, DiffHighlightWords: true, DiffMarks: true, CommitTree: false,
 	}
 }
 
