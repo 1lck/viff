@@ -74,10 +74,16 @@ func TestClassifyWSLError(t *testing.T) {
 
 func TestWSLEnvForward(t *testing.T) {
 	got := wslEnvForward("")
-	for _, want := range []string{"GIT_TERMINAL_PROMPT/u", "GIT_OPTIONAL_LOCKS/u", "LC_ALL/u", "LANGUAGE/u", "GIT_SSH_COMMAND/u"} {
+	for _, want := range []string{"GIT_TERMINAL_PROMPT/u", "GIT_OPTIONAL_LOCKS/u", "LC_ALL/u", "LANGUAGE/u"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("wslEnvForward(\"\") = %q, missing %q", got, want)
 		}
+	}
+	// GIT_SSH_COMMAND comes from the Windows settings and names a Windows
+	// program, so it must reach the distro's git through the Linux-side
+	// configuration instead of being forwarded.
+	if strings.Contains(got, "GIT_SSH_COMMAND") {
+		t.Errorf("wslEnvForward forwarded GIT_SSH_COMMAND: %q", got)
 	}
 	// A name the user already forwards keeps its flags and is not repeated.
 	got = wslEnvForward("LC_ALL/p:MY_VAR")
