@@ -37,4 +37,4 @@
 | [0031](0031-lfs.md) | Git LFS 检测与状态 |
 | [0032](0032-ai-conflict-context.md) | 复制冲突上下文给外部 AI |
 | [0033](0033-large-repo-performance.md) | 大仓库的 Log 首屏与提交详情 |
-| [0035](0035-wsl-repositories.md) | 在 Windows 版直接打开 WSL 仓库 |
+| [0036](0036-wsl-repositories.md) | 在 Windows 版直接打开 WSL 仓库 |

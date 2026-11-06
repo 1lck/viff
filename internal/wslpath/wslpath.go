@@ -7,7 +7,7 @@
 // Windows identity domain, so file reads, watchers and external opens go
 // through the 9P redirector unchanged; only arguments handed to a Git process
 // running inside a distro (and absolute paths it reports back) cross the
-// boundary here. See docs/decisions/0035-wsl-repositories.md.
+// boundary here. See docs/decisions/0036-wsl-repositories.md.
 //
 // Distro names are case-insensitive identifiers, so the canonical forms this
 // package produces lowercase the distro component while preserving the case of

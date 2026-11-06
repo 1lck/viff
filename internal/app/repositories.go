@@ -77,7 +77,7 @@ type repositoriesState struct {
 // A WSL path dedups by its normalized \\wsl.localhost spelling instead: the
 // legacy \\wsl$ alias and distro-name casing are the same file system, and
 // EvalSymlinks is both slow over 9P and wrong there — the Linux side can hold
-// symlinks the Windows spelling must not resolve (wslpath; ADR 0035).
+// symlinks the Windows spelling must not resolve (wslpath; ADR 0036).
 func canonicalPath(path string) string {
 	if path == "" {
 		return ""
