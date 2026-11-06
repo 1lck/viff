@@ -113,6 +113,7 @@ const (
 
 	AppNoticeChangeListsUnavailable = Key("app.notice.changeListsUnavailable")
 	AppNoticeChangeLists            = Key("app.notice.changeLists")
+	AppNoticePromptRulesUnavailable = Key("app.notice.promptRulesUnavailable")
 	AppNoticeCancelled              = Key("app.notice.cancelled")
 
 	AppNoticeRepositoryGone   = Key("app.notice.repositoryGone")
@@ -132,6 +133,9 @@ const (
 
 	AppNoticeUpdateAvailable     = Key("app.notice.updateAvailable")
 	AppNoticeUpdateAvailableBody = Key("app.notice.updateAvailableBody")
+
+	AppNoticeUpdatingProject     = Key("app.notice.updatingProject")
+	AppNoticeUpdatingProjectBody = Key("app.notice.updatingProjectBody")
 
 	AppNoticeResolveConflictFailed = Key("app.notice.resolveConflictFailed")
 
@@ -311,6 +315,7 @@ func init() {
 		AppNoticeEditHitConflictBody:  "The edit hit a conflict. Viff aborted the rebase and left the branch as it was.",
 
 		AppNoticeChangeListsUnavailable: "Change lists are unavailable",
+		AppNoticePromptRulesUnavailable: "Commit message rules are unavailable",
 		AppNoticeChangeLists:            "Change lists",
 		AppNoticeCancelled:              "Cancelled",
 
@@ -331,6 +336,9 @@ func init() {
 
 		AppNoticeUpdateAvailable:     "Update available",
 		AppNoticeUpdateAvailableBody: "Viff %s is available (you have %s).",
+
+		AppNoticeUpdatingProject:     "Updating %s",
+		AppNoticeUpdatingProjectBody: "Updating from %s (%s).",
 
 		AppNoticeResolveConflictFailed: "Resolve conflict failed",
 
@@ -506,6 +514,7 @@ func init() {
 		AppNoticeEditHitConflictBody:  "该编辑遇到冲突。Viff 已中止变基，分支保持原状。",
 
 		AppNoticeChangeListsUnavailable: "变更列表不可用",
+		AppNoticePromptRulesUnavailable: "提交信息规则不可用",
 		AppNoticeChangeLists:            "变更列表",
 		AppNoticeCancelled:              "已取消",
 
@@ -526,6 +535,9 @@ func init() {
 
 		AppNoticeUpdateAvailable:     "有可用更新",
 		AppNoticeUpdateAvailableBody: "Viff %s 已发布（当前为 %s）。",
+
+		AppNoticeUpdatingProject:     "正在更新 %s",
+		AppNoticeUpdatingProjectBody: "从 %s 更新（%s）。",
 
 		AppNoticeResolveConflictFailed: "解决冲突失败",
 
