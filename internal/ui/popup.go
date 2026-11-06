@@ -24,15 +24,53 @@ type item struct {
 	sub      []item
 	subFn    func() []item // built lazily when the submenu opens
 	run      func()
-	star     *bool  // favourite toggle (branch popup)
-	filter   string // text matched by the speed search; "" = title
-	bold     bool
+	star     *bool // favourite toggle (branch popup)
+	// switchOn and switchOnSet turn a row into a real switch: the row draws a
+	// track and a knob on the right, and clicking it flips the value without
+	// closing the menu (a switch is a setting, not a command).
+	switchOn    bool
+	switchOnSet func(bool)
+	// label draws a plain statement row: no icon, no hit target, no action. It
+	// is how a confirmation asks its question inside a menu.
+	label bool
+	// buttons turns the row into a button bar, painted left to right in the
+	// order given. Each entry needs only a title and a run.
+	buttons []item
+	filter  string // text matched by the speed search; "" = title
+	bold    bool
 }
 
-func sep() item                  { return item{sep: true} }
-func header(title string) item   { return item{header: title} }
-func (it item) selectable() bool { return !it.sep && it.header == "" && !it.disabled }
-func (it item) hasSub() bool     { return len(it.sub) > 0 || it.subFn != nil }
+func sep() item                { return item{sep: true} }
+func header(title string) item { return item{header: title} }
+func (it item) selectable() bool {
+	if it.sep || it.header != "" || it.disabled || it.label {
+		return false
+	}
+	if it.buttons != nil {
+		// A button row is one keyboard stop: Enter runs its default button, so a
+		// confirmation built from a menu stays usable without a pointer.
+		return it.defaultButton() >= 0
+	}
+	return true
+}
+func (it item) hasSub() bool { return len(it.sub) > 0 || it.subFn != nil }
+
+// defaultButton is the button Enter and Space activate: the right-most enabled
+// one, which is the default button the row paints last.
+func (it item) defaultButton() int {
+	for n := len(it.buttons) - 1; n >= 0; n-- {
+		if !it.buttons[n].disabled {
+			return n
+		}
+	}
+	return -1
+}
+
+// switchW and switchH are the track of the setting switches in a menu.
+const (
+	switchW = 32
+	switchH = 18
+)
 
 // popup is an open menu.
 type popup struct {
@@ -49,7 +87,10 @@ type popup struct {
 	scroll   scroller
 	r        ui.Rect // painted bounds
 	byKey    bool
-	onClose  func()
+	// above opens the popup with its bottom edge just over the anchor, so a
+	// short confirmation can sit above a button instead of covering it.
+	above   bool
+	onClose func()
 }
 
 const (
@@ -72,6 +113,22 @@ func (w *Window) openMenuBelow(anchor ui.Rect, items []item, minWidth float32) *
 	w.popups = []*popup{p}
 	w.tipID = ui.ID{}
 	return p
+}
+
+// openMenuAbove opens a menu with its bottom edge just over the anchor, so a
+// short confirmation can sit above the button that raised it instead of
+// covering it. The anchor is kept for the height calculation in paintPopup.
+func (w *Window) openMenuAbove(anchor ui.Rect, items []item, minWidth float32) {
+	p := &popup{
+		x: anchor.X, anchor: anchor, above: true,
+		items: items, sel: -1, minWidth: minWidth,
+	}
+	// A bubble above a button is a question with a default answer, so its row is
+	// preselected: Enter answers the question instead of doing nothing until the
+	// user walks into the row with the arrow keys.
+	p.sel = firstSelectable(p, -1, 1)
+	w.popups = []*popup{p}
+	w.tipID = ui.ID{}
 }
 
 func (w *Window) closePopups() {
@@ -164,6 +221,22 @@ func (w *Window) popupSize(p *popup) (float32, float32) {
 			h += 9
 		case it.header != "":
 			h += headerRowH
+		case it.buttons != nil:
+			h += buttonH + 8
+			tw := float32(2*popupPadX + 8)
+			for n, b := range it.buttons {
+				if n > 0 {
+					tw += 10
+				}
+				tw += w.buttonWidth(b.title)
+			}
+			width = max(width, tw)
+		case it.label:
+			h += popupRowH
+			// A statement has no icon column, but it is painted inside the row
+			// padding with 8 points on each side, so the popup must reserve both
+			// or the question is elided to "…with…" instead of being asked.
+			width = max(width, float32(2*popupPadX)+w.p.width(it.title, fontUI, regular)+16)
 		default:
 			h += popupRowH
 			tw := 36 + w.p.width(it.title, fontUI, regular) + 24
@@ -178,6 +251,9 @@ func (w *Window) popupSize(p *popup) (float32, float32) {
 			}
 			if it.star != nil {
 				tw += 20
+			}
+			if it.switchOnSet != nil {
+				tw += switchW + 28
 			}
 			width = max(width, tw)
 		}
@@ -202,6 +278,14 @@ func (w *Window) paintPopup(level int, p *popup, full ui.Rect) {
 	width, height := w.popupSize(p)
 	height = min(height, min(popupMaxH, full.Height-16))
 	x, y := p.x, p.y
+	if p.above {
+		// Sit the bottom edge just over the anchor with the right edges aligned,
+		// so the bubble grows to the left instead of covering the commit box.
+		// The height is only known here, which is why it is resolved at paint
+		// time and not at open time.
+		y = max(8, p.anchor.Y-height-6)
+		x = right(p.anchor) - width
+	}
 	if level > 0 {
 		x, y = right(p.anchor)+2, p.anchor.Y-popupPadY
 		if x+width > full.Width-8 {
@@ -290,6 +374,72 @@ func (w *Window) paintPopup(level int, p *popup, full ui.Rect) {
 		case it.header != "":
 			w.p.text(it.header, rect(row.X+8, row.Y+2, row.Width-16, h-2), fontSmall, semibold, w.pal.TextSecond)
 			continue
+		case it.label:
+			// A statement, not a command: it has no hit target, no icon and no
+			// hover, so it reads as the question the buttons below answer.
+			w.p.text(it.title, rect(row.X+8, row.Y, row.Width-16, h), fontUI, regular, w.pal.Text)
+			continue
+		case it.switchOnSet != nil:
+			// A switch is a setting, so the whole row is the control: the track
+			// sits before the label and a click anywhere on the row flips it
+			// without closing the menu. The row must NOT also be registered as a
+			// menu item below — that hit is registered later and therefore covers
+			// this one, which is why the click used to be swallowed and the menu
+			// closed with nothing changed.
+			sid := scPopupSwitch.At(i)
+			track := rect(row.X+8, row.Y+(h-switchH)/2, switchW, switchH)
+			tone := w.pal.ControlBorder
+			if it.switchOn {
+				tone = w.pal.Brand
+			}
+			if w.hovered(sid) {
+				tone = w.pal.Focus
+			}
+			w.p.round(track, switchH/2, tone)
+			knob := float32(switchH) - 4
+			kx := track.X + 2
+			if it.switchOn {
+				kx = right(track) - knob - 2
+			}
+			w.p.round(rect(kx, track.Y+2, knob, knob), knob/2, w.pal.BrandText)
+			tx := right(track) + 10
+			w.p.text(it.title, rect(tx, row.Y, max(0, right(row)-tx-8), h), fontUI, regular, w.pal.Text)
+			w.c.HitWithOptions(sid, row, it.title, ui.HitOptions{SkipFocus: true, Role: ui.RoleButton, Checked: it.switchOn})
+			if w.c.Clicked(sid) {
+				fn := it.switchOnSet
+				on := !it.switchOn
+				// The menu stays open, so paint from the new value immediately
+				// instead of waiting for it to be reopened. Painting already
+				// happened for this frame, so ask for the next one.
+				p.items[i].switchOn = on
+				w.c.RequestFrame()
+				w.after(func() { fn(on) })
+			}
+			continue
+		case it.buttons != nil:
+			// Painted left to right in the order given, so the caller decides
+			// which one sits on the right; no icon is drawn inside a button.
+			bx := row.X + 8
+			for n, b := range it.buttons {
+				if n > 0 {
+					bx += 10
+				}
+				bw := w.buttonWidth(b.title)
+				bid := scPopupButtons.At(i*8 + n)
+				kind := btnNormal
+				if n == len(it.buttons)-1 {
+					kind = btnDefault
+				}
+				if w.button(bid, rect(bx, row.Y+4, bw, buttonH), b.title, kind, b.disabled) {
+					if fn := b.run; fn != nil {
+						w.after(func() { w.closePopups(); fn() })
+					} else {
+						w.after(w.closePopups)
+					}
+				}
+				bx += bw
+			}
+			continue
 		}
 		id := scope.At(i)
 		if !it.disabled && w.hovered(id) && !p.byKey && p.sel != i {
@@ -376,6 +526,8 @@ func rowHeight(it item) float32 {
 		return 9
 	case it.header != "":
 		return headerRowH
+	case it.buttons != nil:
+		return buttonH + 8
 	}
 	return popupRowH
 }
@@ -409,6 +561,30 @@ func (w *Window) activate(level, i int) {
 	}
 	it := p.items[i]
 	if !it.selectable() {
+		return
+	}
+	if it.switchOnSet != nil {
+		// Enter on a switch flips it and leaves the menu open, the same way a
+		// click on the row does.
+		fn := it.switchOnSet
+		on := !it.switchOn
+		p.items[i].switchOn = on
+		w.c.RequestFrame()
+		w.after(func() { fn(on) })
+		return
+	}
+	if it.buttons != nil {
+		// Enter runs the default button, the same one a click on the right-most
+		// button runs, so a confirmation asks nothing a keyboard cannot answer.
+		n := it.defaultButton()
+		if n < 0 {
+			return
+		}
+		btn := it.buttons[n]
+		w.closePopups()
+		if btn.run != nil {
+			btn.run()
+		}
 		return
 	}
 	if it.hasSub() {

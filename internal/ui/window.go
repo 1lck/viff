@@ -761,7 +761,13 @@ func (w *Window) repo() *vapp.RepoState { return w.ws.Repo }
 
 func (w *Window) openRepo(dir string) {
 	w.ws.Open(dir, func(err error) {
-		if err != nil {
+		switch {
+		case err == nil:
+		case vapp.IsNotRepository(err):
+			// A folder that is not itself a repository may contain several
+			// repositories: offer discovery instead of Git's raw error.
+			w.after(func() { w.openRepositoryDiscovery(dir) })
+		default:
 			w.ws.NotifyError("Cannot open "+filepath.Base(dir), err)
 		}
 	})

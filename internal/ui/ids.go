@@ -169,9 +169,13 @@ var (
 	scSubItems      = tree.Sub(fPopup, tree.Name("sub-items"))
 	idSubPanel      = tree.ID(fPopup, "sub-panel")
 	scPopupStar     = tree.Sub(fPopup, tree.Name("star"))
+	scPopupSwitch   = tree.Sub(fPopup, tree.Name("switch"))
+	scPopupButtons  = tree.Sub(fPopup, tree.Name("buttons"))
 
 	// The Report a Problem dialog's description field.
 	idReportProblemText = tree.ID(fDialog, "problem-description")
+	// The commit message rules editor's text area.
+	idPromptRuleText = tree.ID(fDialog, "prompt-rule-text")
 
 	// Dialogs.
 	idDialogScrim  = tree.ID(fDialog, "scrim")

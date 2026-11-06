@@ -79,6 +79,11 @@ type Settings struct {
 	// (the default when empty, which keeps an older settings file working) or
 	// "anthropic-messages".
 	AIProtocol string `json:"aiProtocol,omitempty"`
+	// AIConfirmGenerate asks before the AI button starts a request. It defaults
+	// to true: Decode keeps the default for an older settings file that has no
+	// field, while an explicit false is stored and respected. The switch lives
+	// in the AI button's own context menu, next to the rule picker.
+	AIConfirmGenerate bool `json:"aiConfirmGenerate"`
 
 	ExternalEditor string `json:"externalEditor"`
 
@@ -132,9 +137,10 @@ func Defaults() *Settings {
 	return &Settings{
 		Version: SchemaVersion, Theme: "dark", UIScale: 1, FontSize: 13,
 		AutoFetch: false, AutoFetchMins: 10, FetchPrune: true, PullMode: "merge",
-		AutoUpdateCheck:  true,
-		Window:           Window{Width: 1440, Height: 900},
-		CommitPanelWidth: 340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
+		AutoUpdateCheck:   true,
+		AIConfirmGenerate: true,
+		Window:            Window{Width: 1440, Height: 900},
+		CommitPanelWidth:  340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
 		DiffSyncScroll: true, DiffHighlightWords: true, CommitTree: false,
 	}
 }

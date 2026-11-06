@@ -60,7 +60,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, and picture previews                                      |
 | Build a commit        | Check files, folders, or groups; stage files, hunks, or lines; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
-| Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, and named ChangeLists                                                                |
+| Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, named ChangeLists, and discovery of repositories below a parent folder |
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |
 | Browse files          | Project tool window with folders, status colours, Quick Open, read-only viewing, blame, and file history                                                      |
 | Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                                                              |
@@ -84,7 +84,8 @@ includes **all staged files**, even when a list filter is active. Filtered bulk
 staging only stages visible files.
 
 **AI commit messages are optional and off by default.** When enabled, the changed
-files and their diffs are sent to the endpoint you configure; see the
+files and their diffs are sent to the endpoint you configure, together with the
+commit message rules you wrote or the built-in ones; see the
 [privacy guide](docs/privacy.md).
 
 **Copy for AI puts the conflict context on your clipboard.** It is for whatever
