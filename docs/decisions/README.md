@@ -37,3 +37,6 @@
 | [0031](0031-lfs.md) | Git LFS 检测与状态 |
 | [0032](0032-ai-conflict-context.md) | 复制冲突上下文给外部 AI |
 | [0033](0033-large-repo-performance.md) | 大仓库的 Log 首屏与提交详情 |
+| [0034](0034-window-geometry.md) | 记住窗口位置（含副屏） |
+| [0035](0035-ai-prompt-rules.md) | 可自定义的提交信息规则 |
+| [0036](0036-repository-discovery.md) | 从父目录发现并批量导入仓库 |

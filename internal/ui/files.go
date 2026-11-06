@@ -99,11 +99,16 @@ type dirNode struct {
 	files []string
 }
 
-// rebuild turns the filtered paths into tree rows. With a filter active every
-// directory is expanded so matches stay visible; without one, folded
+// rebuild turns the filtered paths into tree rows. A changed filter opens the
+// whole tree once, so its matches are visible instead of staying hidden inside
+// a folded directory; folds the user makes after that are kept, and folded
 // directories are skipped with their whole subtree.
 func (v *filesView) rebuild() {
 	q := strings.ToLower(strings.TrimSpace(v.filter.String()))
+	if q != v.query {
+		clear(v.collapsed)
+		v.rootOpen = true
+	}
 	v.query = q
 	root := &dirNode{dirs: map[string]*dirNode{}}
 	for _, p := range v.entries {
@@ -131,20 +136,20 @@ func (v *filesView) rebuild() {
 	depth := 0
 	if v.rootName != "" {
 		v.rows = append(v.rows, fileRow{key: projectRootKey, name: v.rootName, hint: v.rootHint, dir: true, root: true, depth: 0})
-		if v.rootOpen || q != "" {
+		if v.rootOpen {
 			depth = 1
 		} else {
 			v.sel = projectRootKey
 			return
 		}
 	}
-	v.appendRows(root, depth, q == "")
+	v.appendRows(root, depth)
 	if v.sel != "" && v.rowIndex(v.sel) < 0 {
 		v.sel = projectRootKey
 	}
 }
 
-func (v *filesView) appendRows(n *dirNode, depth int, respectFolds bool) {
+func (v *filesView) appendRows(n *dirNode, depth int) {
 	dirs := make([]*dirNode, 0, len(n.dirs))
 	for _, d := range n.dirs {
 		dirs = append(dirs, d)
@@ -152,10 +157,10 @@ func (v *filesView) appendRows(n *dirNode, depth int, respectFolds bool) {
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].name < dirs[j].name })
 	for _, d := range dirs {
 		v.rows = append(v.rows, fileRow{key: d.path + "/", name: d.name, path: d.path, dir: true, depth: depth})
-		if respectFolds && v.collapsed[d.path] {
+		if v.collapsed[d.path] {
 			continue
 		}
-		v.appendRows(d, depth+1, respectFolds)
+		v.appendRows(d, depth+1)
 	}
 	// entries is already sorted, so a directory's files stay in order.
 	for _, p := range n.files {

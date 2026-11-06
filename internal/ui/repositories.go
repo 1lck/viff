@@ -49,6 +49,7 @@ var (
 	idRepositoriesPath     ui.ID
 	idRepositoriesAdd      ui.ID
 	idRepositoriesBrowse   ui.ID
+	idRepositoriesFind     ui.ID
 	idRepositoriesRefresh  ui.ID
 	idRepositoriesRemove   ui.ID
 	idRepositoriesList     ui.ID
@@ -69,6 +70,7 @@ func init() {
 	idRepositoriesPath = tree.ID(scRepositories, "path")
 	idRepositoriesAdd = tree.ID(scRepositories, "add")
 	idRepositoriesBrowse = tree.ID(scRepositories, "browse")
+	idRepositoriesFind = tree.ID(scRepositories, "find")
 	idRepositoriesRefresh = tree.ID(scRepositories, "refresh")
 	idRepositoriesRemove = tree.ID(scRepositories, "remove")
 	idRepositoriesList = tree.ID(scRepositories, "list")
@@ -227,12 +229,20 @@ func (w *Window) paintRepositories(f *form, v *repositoriesView) {
 	f.gap(8)
 	f.custom(28, func(r ui.Rect) {
 		_, ok := w.repositoryAt(v.sel)
-		if w.button(idRepositoriesRemove, rect(r.X, r.Y, w.buttonWidth("Remove from Workspace"), buttonH), "Remove from Workspace", btnNormal, !ok) {
+		rw := w.buttonWidth("Remove from Workspace")
+		x := r.X
+		if w.button(idRepositoriesRemove, rect(x, r.Y, rw, buttonH), "Remove from Workspace", btnNormal, !ok) {
 			w.after(func() { w.removeRepository(v) })
 		}
+		x += rw + 8
+		fw := w.buttonWidth(w.t(i18n.DiscoverFind))
+		if w.button(idRepositoriesFind, rect(x, r.Y, fw, buttonH), w.t(i18n.DiscoverFind), btnNormal, false) {
+			w.after(func() { w.browseDiscoveryRoot() })
+		}
+		x += fw + 8
 		note := w.t(i18n.ReposActiveOnly)
 		nw := w.p.width(note, fontSmall, regular)
-		if nw < r.Width-220 {
+		if x+8+nw < right(r) {
 			w.p.text(note, rect(right(r)-nw, r.Y, nw, buttonH), fontSmall, regular, w.pal.TextDisable)
 		}
 	})
@@ -624,6 +634,13 @@ func (w *Window) addRepository(v *repositoriesView) {
 		w.after(func() {
 			v.adding = false
 			if err != nil {
+				if vapp.IsNotRepository(err) {
+					// The typed folder is not a repository but may contain
+					// several: switch to the discovery dialog instead of
+					// showing the raw error.
+					w.openRepositoryDiscovery(dir)
+					return
+				}
 				v.err = w.t(i18n.ReposCannotAdd, repositoryOneLine(w.ws.ErrorText(err)))
 				w.Invalidate()
 				return

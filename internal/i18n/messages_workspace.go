@@ -89,6 +89,36 @@ const (
 	WorkspaceAINotConfigured        = Key("workspace.ai.notConfigured")
 	WorkspaceAIOpenSettings         = Key("workspace.ai.openSettings")
 
+	// The AI button's right-click menu picks the rules the generated message
+	// follows, and edits the rules themselves.
+	WorkspaceAIRulesTitle           = Key("workspace.aiRules.title")
+	WorkspaceAIRulesNew             = Key("workspace.aiRules.new")
+	WorkspaceAIRulesNewTitle        = Key("workspace.aiRules.newTitle")
+	WorkspaceAIRulesCreate          = Key("workspace.aiRules.create")
+	WorkspaceAIRulesEdit            = Key("workspace.aiRules.edit")
+	WorkspaceAIRulesEditTitle       = Key("workspace.aiRules.editTitle")
+	WorkspaceAIRulesSave            = Key("workspace.aiRules.save")
+	WorkspaceAIRulesRename          = Key("workspace.aiRules.rename")
+	WorkspaceAIRulesRenameTitle     = Key("workspace.aiRules.renameTitle")
+	WorkspaceAIRulesDelete          = Key("workspace.aiRules.delete")
+	WorkspaceAIRulesDeleteTitle     = Key("workspace.aiRules.deleteTitle")
+	WorkspaceAIRulesDeleteBody      = Key("workspace.aiRules.deleteBody")
+	WorkspaceAIRulesRestore         = Key("workspace.aiRules.restore")
+	WorkspaceAIRulesBuiltinName     = Key("workspace.aiRules.builtinName")
+	WorkspaceAIRulesName            = Key("workspace.aiRules.name")
+	WorkspaceAIRulesNamePlaceholder = Key("workspace.aiRules.namePlaceholder")
+	WorkspaceAIRulesRules           = Key("workspace.aiRules.rules")
+	WorkspaceAIRulesPlaceholder     = Key("workspace.aiRules.placeholder")
+	WorkspaceAIRulesNameRequired    = Key("workspace.aiRules.nameRequired")
+	WorkspaceAIRulesTextRequired    = Key("workspace.aiRules.textRequired")
+	WorkspaceAIRulesCannotSelect    = Key("workspace.aiRules.cannotSelect")
+	WorkspaceAIRulesCannotDelete    = Key("workspace.aiRules.cannotDelete")
+	WorkspaceAIRulesRightClickHint  = Key("workspace.aiRules.rightClickHint")
+	WorkspaceAITipWithRule          = Key("workspace.ai.tipWithRule")
+	WorkspaceAIConfirmToggle        = Key("workspace.ai.confirmToggle")
+	WorkspaceAIConfirmAsk           = Key("workspace.ai.confirmAsk")
+	WorkspaceAIConfirmGenerate      = Key("workspace.ai.confirmGenerate")
+
 	WorkspaceHintPush          = Key("workspace.hint.push")
 	WorkspaceHintUpdateProject = Key("workspace.hint.updateProject")
 	WorkspaceHintBranches      = Key("workspace.hint.branches")
@@ -242,6 +272,34 @@ func init() {
 		WorkspaceAINotConfigured:        "Set the AI endpoint and model in the settings first",
 		WorkspaceAIOpenSettings:         "Open settings…",
 
+		WorkspaceAIRulesTitle:           "Commit message rules",
+		WorkspaceAIRulesNew:             "New Rules…",
+		WorkspaceAIRulesNewTitle:        "New Commit Message Rules",
+		WorkspaceAIRulesCreate:          "Create",
+		WorkspaceAIRulesEdit:            "Edit Rules…",
+		WorkspaceAIRulesEditTitle:       "Edit Commit Message Rules",
+		WorkspaceAIRulesSave:            "Save",
+		WorkspaceAIRulesRename:          "Rename…",
+		WorkspaceAIRulesRenameTitle:     "Rename Rules",
+		WorkspaceAIRulesDelete:          "Delete…",
+		WorkspaceAIRulesDeleteTitle:     "Delete Rules",
+		WorkspaceAIRulesDeleteBody:      "Delete the rules \"%s\"? Repositories that use them go back to the built-in rules. Your other rules are kept.",
+		WorkspaceAIRulesRestore:         "Use Built-in Rules",
+		WorkspaceAIRulesBuiltinName:     "Default (read-only)",
+		WorkspaceAIRulesName:            "Name:",
+		WorkspaceAIRulesNamePlaceholder: "Enter a name",
+		WorkspaceAIRulesRules:           "Rules:",
+		WorkspaceAIRulesPlaceholder:     "Instructions the model receives: the format, the wording, what to ignore.",
+		WorkspaceAIRulesNameRequired:    "A name is required.",
+		WorkspaceAIRulesTextRequired:    "The rules text cannot be empty.",
+		WorkspaceAIRulesCannotSelect:    "Cannot change the commit message rules",
+		WorkspaceAIRulesCannotDelete:    "Cannot delete the commit message rules",
+		WorkspaceAIRulesRightClickHint:  "AI commit message; right-click to pick the rules",
+		WorkspaceAITipWithRule:          "AI commit message · rules: %s; right-click to pick the rules",
+		WorkspaceAIConfirmToggle:        "Ask before generating",
+		WorkspaceAIConfirmAsk:           "Generate a commit message with AI?",
+		WorkspaceAIConfirmGenerate:      "Generate",
+
 		WorkspaceHintPush:          "Push",
 		WorkspaceHintUpdateProject: "Update Project",
 		WorkspaceHintBranches:      "Branches",
@@ -311,7 +369,7 @@ func init() {
 
 	register(ZHCN, map[Key]string{
 		WorkspacePanelCommit:  "提交",
-		WorkspacePanelStash:   "暂存",
+		WorkspacePanelStash:   "储藏",
 		WorkspacePanelChanges: "变更",
 
 		WorkspaceAreaStaged:    "已暂存",
@@ -319,24 +377,24 @@ func init() {
 		WorkspaceAreaUntracked: "未跟踪文件",
 		WorkspaceAreaConflicts: "合并冲突",
 
-		WorkspaceStashChanges:        "暂存更改…",
-		WorkspaceStashApply:          "应用暂存",
-		WorkspaceStashPop:            "弹出暂存（应用并删除）",
-		WorkspaceStashDrop:           "删除暂存…",
-		WorkspaceStashAsBranch:       "从暂存创建分支…",
-		WorkspaceStashEmpty:          "没有暂存",
-		WorkspaceStashEmptyHint:      "把当前更改暂存起来，稍后再处理",
-		WorkspaceStashList:           "暂存",
+		WorkspaceStashChanges:        "储藏更改…",
+		WorkspaceStashApply:          "应用储藏",
+		WorkspaceStashPop:            "弹出储藏（应用并删除）",
+		WorkspaceStashDrop:           "删除储藏…",
+		WorkspaceStashAsBranch:       "从储藏创建分支…",
+		WorkspaceStashEmpty:          "没有储藏",
+		WorkspaceStashEmptyHint:      "把当前更改储藏起来，稍后再处理",
+		WorkspaceStashList:           "储藏",
 		WorkspaceStashApplyIndex:     "应用（含索引）",
-		WorkspaceStashPopMenu:        "弹出暂存",
+		WorkspaceStashPopMenu:        "弹出储藏",
 		WorkspaceStashCopyRev:        "复制修订号",
 		WorkspaceStashDropMenu:       "删除…",
-		WorkspaceStashDropTitle:      "删除暂存",
+		WorkspaceStashDropTitle:      "删除储藏",
 		WorkspaceStashDropBody:       "删除 %s \"%s\"？一段时间内仍可在引用日志里找到它的提交，但 Viff 里不再显示。",
 		WorkspaceStashDropButton:     "删除",
-		WorkspaceSmartCheckoutTitle:  "暂存更改并检出",
-		WorkspaceSmartCheckoutBody:   "检出 %s 会覆盖你的本地更改。\n\nViff 可以把这些更改（含未跟踪文件）暂存起来，检出后再恢复；若恢复时冲突，它们会留在暂存里。",
-		WorkspaceSmartCheckoutButton: "暂存并检出",
+		WorkspaceSmartCheckoutTitle:  "储藏更改并检出",
+		WorkspaceSmartCheckoutBody:   "检出 %s 会覆盖你的本地更改。\n\nViff 可以把这些更改（含未跟踪文件）储藏起来，检出后再恢复；若恢复时冲突，它们会留在储藏里。",
+		WorkspaceSmartCheckoutButton: "储藏并检出",
 
 		WorkspaceDropCommitTitle: "丢弃提交",
 		WorkspaceDropCommitBody:  "丢弃 %s \"%s\"？\n\n它的更改会从分支上消失，其后的提交会在去掉这些更改后重放。旧提交会留在引用日志里直到过期。",
@@ -367,7 +425,7 @@ func init() {
 		WorkspaceActionExpandAll:        "全部展开",
 		WorkspaceActionCollapseAll:      "全部折叠",
 
-		WorkspaceActionStashChanges: "暂存改动…",
+		WorkspaceActionStashChanges: "储藏更改…",
 
 		WorkspaceActionCopyPath:         "复制路径",
 		WorkspaceActionCopyRelativePath: "复制相对路径",
@@ -385,6 +443,34 @@ func init() {
 		WorkspaceAIGenerateFailed:       "AI 没能生成提交说明",
 		WorkspaceAINotConfigured:        "请先在设置里填写 AI 端点和模型",
 		WorkspaceAIOpenSettings:         "打开设置…",
+
+		WorkspaceAIRulesTitle:           "提交信息规则",
+		WorkspaceAIRulesNew:             "新建规则…",
+		WorkspaceAIRulesNewTitle:        "新建提交信息规则",
+		WorkspaceAIRulesCreate:          "创建",
+		WorkspaceAIRulesEdit:            "编辑规则…",
+		WorkspaceAIRulesEditTitle:       "编辑提交信息规则",
+		WorkspaceAIRulesSave:            "保存",
+		WorkspaceAIRulesRename:          "重命名…",
+		WorkspaceAIRulesRenameTitle:     "重命名规则",
+		WorkspaceAIRulesDelete:          "删除…",
+		WorkspaceAIRulesDeleteTitle:     "删除规则",
+		WorkspaceAIRulesDeleteBody:      "删除规则“%s”？使用它的仓库会回到内置规则，你的其他规则不受影响。",
+		WorkspaceAIRulesRestore:         "使用内置规则",
+		WorkspaceAIRulesBuiltinName:     "默认（不可修改）",
+		WorkspaceAIRulesName:            "名称：",
+		WorkspaceAIRulesNamePlaceholder: "输入名称",
+		WorkspaceAIRulesRules:           "规则：",
+		WorkspaceAIRulesPlaceholder:     "模型收到的指令：格式、措辞、需要忽略的内容。",
+		WorkspaceAIRulesNameRequired:    "名称不能为空。",
+		WorkspaceAIRulesTextRequired:    "规则内容不能为空。",
+		WorkspaceAIRulesCannotSelect:    "无法切换提交信息规则",
+		WorkspaceAIRulesCannotDelete:    "无法删除提交信息规则",
+		WorkspaceAIRulesRightClickHint:  "AI 生成提交信息；右键选择规则",
+		WorkspaceAITipWithRule:          "AI 生成提交信息 · 当前规则：%s；右键选择规则",
+		WorkspaceAIConfirmToggle:        "生成前先确认",
+		WorkspaceAIConfirmAsk:           "确认使用 AI 生成提交说明？",
+		WorkspaceAIConfirmGenerate:      "生成",
 
 		WorkspaceHintPush:          "推送",
 		WorkspaceHintUpdateProject: "更新项目",
