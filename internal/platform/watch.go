@@ -67,7 +67,7 @@ func (d *debouncer) close() {
 // metadata (refs, HEAD, index, operation state) or the working tree.
 func classify(repo domain.Repo, path string) (relevant, meta bool) {
 	path = filepath.ToSlash(path)
-	for _, dir := range []string{repo.GitDir, repo.CommonDir} {
+	for _, dir := range []string{repo.MetaDir, repo.CommonDir} {
 		if dir == "" {
 			continue
 		}
@@ -96,7 +96,7 @@ func (p *pollWatcher) Close() { p.once.Do(func() { close(p.stop) }) }
 
 func gitFingerprint(repo domain.Repo) string {
 	var b strings.Builder
-	for _, dir := range []string{repo.GitDir, repo.CommonDir} {
+	for _, dir := range []string{repo.MetaDir, repo.CommonDir} {
 		for _, name := range []string{"HEAD", "index", "packed-refs", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "FETCH_HEAD"} {
 			if st, err := os.Stat(filepath.Join(dir, name)); err == nil {
 				b.WriteString(name)

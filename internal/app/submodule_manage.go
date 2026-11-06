@@ -34,7 +34,11 @@ func (w *Workspace) AddSubmodule(url, path string, done func(error)) {
 	}
 	var runErr error
 	w.Run("Add submodule", func(ctx context.Context, repo domain.Repo, progress func(string)) error {
-		return w.Git.AddSubmodule(ctx, repo, url, path, progress)
+		sm, serr := w.submodules()
+		if serr != nil {
+			return serr
+		}
+		return sm.AddSubmodule(ctx, repo, url, path, progress)
 	}, RunOptions{
 		Success:     w.tr(i18n.AppNoticeSubmoduleAdded),
 		SuccessBody: path,
@@ -55,7 +59,11 @@ func (w *Workspace) AddSubmodule(url, path string, done func(error)) {
 // must confirm that first and call again with force.
 func (w *Workspace) RemoveSubmodule(path string, force bool, done func(error)) {
 	w.submoduleWrite("Remove submodule", w.tr(i18n.AppNoticeSubmoduleRemoved), path, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
-		return w.Git.RemoveSubmodule(ctx, repo, path, force)
+		sm, serr := w.submodules()
+		if serr != nil {
+			return serr
+		}
+		return sm.RemoveSubmodule(ctx, repo, path, force)
 	}, done)
 }
 
@@ -64,7 +72,11 @@ func (w *Workspace) RemoveSubmodule(path string, force bool, done func(error)) {
 // changes are refused unless the caller confirmed force.
 func (w *Workspace) DeinitSubmodule(path string, force bool, done func(error)) {
 	w.submoduleWrite("Deinit submodule", w.tr(i18n.AppNoticeSubmoduleDeinitialized), path, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
-		return w.Git.DeinitSubmodule(ctx, repo, path, force)
+		sm, serr := w.submodules()
+		if serr != nil {
+			return serr
+		}
+		return sm.DeinitSubmodule(ctx, repo, path, force)
 	}, done)
 }
 
@@ -104,7 +116,16 @@ func (w *Workspace) DirectSubmodules(done func(map[string]bool, error)) {
 	}
 	repo := rs.Repo
 	go func() {
-		paths, err := w.Git.DirectSubmodulePaths(context.Background(), repo)
+		sm, serr := w.submodules()
+		if serr != nil {
+			w.post(func() {
+				if w.Repo == rs {
+					done(nil, serr)
+				}
+			})
+			return
+		}
+		paths, err := sm.DirectSubmodulePaths(context.Background(), repo)
 		w.post(func() {
 			if w.Repo != rs {
 				return
@@ -127,7 +148,16 @@ func (w *Workspace) SubmoduleDirty(path string, done func(bool, error)) {
 	}
 	repo := rs.Repo
 	go func() {
-		dirty, err := w.Git.SubmoduleDirty(context.Background(), repo, path)
+		sm, serr := w.submodules()
+		if serr != nil {
+			w.post(func() {
+				if w.Repo == rs {
+					done(false, serr)
+				}
+			})
+			return
+		}
+		dirty, err := sm.SubmoduleDirty(context.Background(), repo, path)
 		w.post(func() {
 			if w.Repo != rs {
 				return

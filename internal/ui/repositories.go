@@ -366,7 +366,7 @@ func (w *Window) paintRepositoryRow(v *repositoriesView, i int, s repositorySumm
 // short status summary, or the failure that hides the status.
 func (w *Window) repositorySubtitle(s repositorySummary) string {
 	if s.Err != nil {
-		return "Status error: " + repositoryOneLine(vapp.ErrorText(s.Err))
+		return "Status error: " + repositoryOneLine(w.ws.ErrorText(s.Err))
 	}
 	branch := repositoryBranchLabel(s.Status)
 	if !s.Loaded {
@@ -457,7 +457,7 @@ func (w *Window) paintRepositoryDetails(v *repositoriesView, s repositorySummary
 	if s.Err != nil {
 		br := rect(inner.X, inner.Y, inner.Width, 24)
 		w.p.fill(br, w.pal.BannerError)
-		msg := w.t(i18n.ReposCannotReadStatus, repositoryOneLine(vapp.ErrorText(s.Err)))
+		msg := w.t(i18n.ReposCannotReadStatus, repositoryOneLine(w.ws.ErrorText(s.Err)))
 		w.p.text(msg, rect(br.X+8, br.Y, br.Width-16, br.Height), fontSmall, regular, w.pal.Error)
 		filesTop += 24
 	}
@@ -637,11 +637,11 @@ func (w *Window) addRepository(v *repositoriesView) {
 				if vapp.IsNotRepository(err) {
 					// The typed folder is not a repository but may contain
 					// several: switch to the discovery dialog instead of
-					// showing Git's raw error.
+					// showing the raw error.
 					w.openRepositoryDiscovery(dir)
 					return
 				}
-				v.err = w.t(i18n.ReposCannotAdd, repositoryOneLine(vapp.ErrorText(err)))
+				v.err = w.t(i18n.ReposCannotAdd, repositoryOneLine(w.ws.ErrorText(err)))
 				w.Invalidate()
 				return
 			}
@@ -679,7 +679,7 @@ func (w *Window) removeRepository(v *repositoriesView) {
 		return
 	}
 	if err := w.ws.RemoveRepository(s.Root); err != nil {
-		v.err = w.t(i18n.ReposCannotRemove, repositoryOneLine(vapp.ErrorText(err)))
+		v.err = w.t(i18n.ReposCannotRemove, repositoryOneLine(w.ws.ErrorText(err)))
 		w.Invalidate()
 		return
 	}

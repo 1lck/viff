@@ -55,7 +55,7 @@ func (w *Workspace) checkoutBlocked(b CheckoutBlocked) bool {
 	if w.ConfirmCheckout != nil && w.ConfirmCheckout(b) {
 		return true
 	}
-	w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutBlockedBody, ErrorText(b.Err)))
+	w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutBlockedBody, w.ErrorText(b.Err)))
 	return true
 }
 
@@ -89,7 +89,13 @@ func (w *Workspace) SmartCheckout(b CheckoutBlocked) {
 // in both outcomes: after a successful checkout they follow the user, and
 // after a failed one they belong to the branch that is still checked out.
 func (w *Workspace) checkoutStashing(ctx context.Context, repo domain.Repo, b CheckoutBlocked) (stashCheckoutResult, error) {
-	if err := w.Git.StashPush(ctx, repo, "viff: checkout "+b.label(), true, false); err != nil {
+	sw, serr := w.stash()
+	if serr != nil {
+		// A backend without stash cannot move local changes aside; the caller
+		// then reports the block instead of silently discarding work.
+		return stashNotCreated, serr
+	}
+	if err := sw.StashPush(ctx, repo, "viff: checkout "+b.label(), true, false); err != nil {
 		return stashNotCreated, fmt.Errorf("stash local changes: %w", err)
 	}
 	var checkoutErr error
@@ -100,7 +106,7 @@ func (w *Workspace) checkoutStashing(ctx context.Context, repo domain.Repo, b Ch
 	}
 	// git stash pop removes the entry only when it applies cleanly, so a
 	// conflict leaves the changes in the stash and the user can recover them.
-	if _, popErr := w.Git.StashApply(ctx, repo, "stash@{0}", true, false); popErr != nil {
+	if _, popErr := sw.StashApply(ctx, repo, "stash@{0}", true, false); popErr != nil {
 		return stashKept, checkoutErr
 	}
 	return stashRestored, checkoutErr
@@ -111,13 +117,13 @@ func (w *Workspace) checkoutStashing(ctx context.Context, repo domain.Repo, b Ch
 func (w *Workspace) reportStashCheckout(label string, res stashCheckoutResult, err error) {
 	switch {
 	case res == stashNotCreated:
-		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutStashNotCreatedBody, ErrorText(err)))
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutStashNotCreatedBody, w.ErrorText(err)))
 	case res == stashKept && err != nil:
-		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoreFailedBody, ErrorText(err)))
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoreFailedBody, w.ErrorText(err)))
 	case res == stashKept:
 		w.Notify(NoticeWarning, w.tr(i18n.AppNoticeCheckedOut, label), w.tr(i18n.AppNoticeCheckoutStashKeptBody))
 	case err != nil:
-		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoredBody, ErrorText(err)))
+		w.Notify(NoticeError, w.tr(i18n.AppNoticeCheckoutFailed), w.tr(i18n.AppNoticeCheckoutRestoredBody, w.ErrorText(err)))
 	default:
 		w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeCheckedOut, label), w.tr(i18n.AppNoticeCheckoutStashedBody))
 	}

@@ -37,12 +37,18 @@ func uiMergeConflict(t *testing.T, f *uiFixture, path, base, ours, theirs string
 	}
 }
 
+// conflictWait bounds the condition waits below. The work they wait for takes
+// milliseconds, but a shared Windows runner can stall for seconds: a 20s
+// ceiling once expired on CI while every other shard passed. The ceiling is
+// raised rather than the condition relaxed, so a real regression still fails.
+const conflictWait = 45 * time.Second
+
 // uiWaitConflicts waits until the workspace has the unmerged entry.
 func uiWaitConflicts(t *testing.T, f *uiFixture) {
 	t.Helper()
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		return f.ws.Repo != nil && len(f.ws.Repo.Entries(domain.AreaConflicts)) > 0
-	}, 20*time.Second); err != nil {
+	}, conflictWait); err != nil {
 		t.Fatalf("conflict never appeared: %v", err)
 	}
 }
@@ -54,7 +60,7 @@ func uiWaitFile(t *testing.T, f *uiFixture, name, want string) {
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		data, err := os.ReadFile(filepath.Join(f.dir, filepath.FromSlash(name)))
 		return err == nil && string(data) == want
-	}, 20*time.Second); err != nil {
+	}, conflictWait); err != nil {
 		t.Fatalf("%s never became %q: %v", name, want, err)
 	}
 	f.settleTab()
@@ -97,14 +103,14 @@ func TestConflictResolveAcceptsSideInApp(t *testing.T) {
 	f.click("Mark as Resolved")
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		return f.ws.Repo != nil && len(f.ws.Repo.Entries(domain.AreaConflicts)) == 0
-	}, 20*time.Second); err != nil {
+	}, conflictWait); err != nil {
 		t.Fatalf("conflicts left after Mark as Resolved: %v", err)
 	}
 	f.settle()
 	f.click("Continue")
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		return f.ws.Repo != nil && !f.ws.Repo.Operation.Active()
-	}, 20*time.Second); err != nil {
+	}, conflictWait); err != nil {
 		t.Fatalf("merge did not continue: %v (%+v)", err, f.ws.Repo.Operation)
 	}
 	f.settle()
@@ -195,7 +201,7 @@ func TestConflictResolveRefusesStaleView(t *testing.T) {
 	f.click("Accept Ours")
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		return len(f.ws.Notifications) > notifications
-	}, 20*time.Second); err != nil {
+	}, conflictWait); err != nil {
 		t.Fatal("stale resolution was not reported")
 	}
 	if got := string(f.read("conflict.txt")); got != external {

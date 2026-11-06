@@ -121,7 +121,14 @@ func (w *Window) buildRows() {
 	v := &w.cm
 	v.rows = v.rows[:0]
 	tree := w.ws.Settings.CommitTree
+	// A backend without a staging area (Subversion) reports every change in
+	// the unstaged column, so a "Staged" group would always be empty. Skipping
+	// it keeps one list instead of a permanent dead section.
+	indexable := w.ws.Caps.Index
 	for _, a := range areaOrder {
+		if a == domain.AreaStaged && !indexable {
+			continue
+		}
 		entries := w.changeListEntries(a)
 		if len(entries) == 0 && a != domain.AreaStaged && a != domain.AreaUnstaged {
 			continue
@@ -166,7 +173,14 @@ func (w *Window) buildRows() {
 
 func (w *Window) paintCommitWindow(r ui.Rect) {
 	w.island(r)
-	content, ax := w.toolHeader(r, idBanner, []string{w.t(i18n.WorkspacePanelCommit), w.t(i18n.WorkspacePanelStash)}, w.commitTab, func(i int) { w.commitTab = i })
+	// Subversion has no stash, so the tab is absent rather than empty. The
+	// second tab's index stays 1 whenever it exists, which is what commitTab
+	// and paintStash rely on.
+	tabs := []string{w.t(i18n.WorkspacePanelCommit)}
+	if w.ws.Caps.Stash != nil {
+		tabs = append(tabs, w.t(i18n.WorkspacePanelStash))
+	}
+	content, ax := w.toolHeader(r, idBanner, tabs, w.commitTab, func(i int) { w.commitTab = i })
 	if w.action(idHideCommit, ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, w.t(i18n.WorkspaceActionHide)+"\t⇧⎋", actOpts{}) {
 		w.after(func() { w.commitOpen = false })
 	}
@@ -233,8 +247,11 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 		})
 	}
 	x += actionSize + 2
-	if w.action(idCmStash, x, y, icons.Shelve, w.t(i18n.WorkspaceActionStashChanges), actOpts{disabled: rs.Status.Clean()}) {
-		w.after(w.openStashDialog)
+	if w.ws.Caps.Stash != nil {
+		if w.action(idCmStash, x, y, icons.Shelve, w.t(i18n.WorkspaceActionStashChanges), actOpts{disabled: rs.Status.Clean()}) {
+			w.after(w.openStashDialog)
+		}
+		x += actionSize + 2
 	}
 
 	// Change-list bar: the active filter and how many files it shows. It also
@@ -545,6 +562,13 @@ func (w *Window) rowAction(i int, row changeRow, hl ui.Rect) {
 	if !(w.hovered(scChangeRows.At(i)) || w.hovered(id)) {
 		return
 	}
+	// Without an index only scheduling is left: `svn add` takes an untracked
+	// file under version control, while an already-versioned file is committed
+	// as it stands and `svn add` on it fails with E200009. The action is
+	// hidden rather than offered and refused.
+	if !w.ws.Caps.Index && row.area != domain.AreaUntracked {
+		return
+	}
 	var pair icons.Pair
 	var tip string
 	switch row.area {
@@ -800,6 +824,11 @@ func (w *Window) toggleStageSelection() {
 				unstage = append(unstage, r.entry.OrigPath)
 			}
 		case domain.AreaUnstaged, domain.AreaUntracked:
+			// A modified file is already under version control where there is
+			// no index, so scheduling it again would only fail.
+			if !w.ws.Caps.Index && r.area == domain.AreaUnstaged {
+				continue
+			}
 			stage = append(stage, r.entry.Path)
 		case domain.AreaConflicts:
 			w.markResolved(r.entry.Path)
@@ -1009,10 +1038,14 @@ func (w *Window) setClipboardText(s string) error {
 func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	v := &w.cm
 	rs := w.repo()
-	// Amend + options row.
+	// Amend + options row. A backend that cannot rewrite a committed revision
+	// (Subversion) does not offer Amend at all, so the checkbox is absent and
+	// v.amend can never be set from the window.
 	top := rect(r.X+10, r.Y+6, r.Width-20, 28)
-	if w.checkbox(idCmAmend, top.X, top.Y, top.Height, w.t(i18n.WorkspaceCheckAmend), v.amend, !rs.HasHead()) {
-		w.after(w.toggleAmend)
+	if w.ws.Caps.Amend {
+		if w.checkbox(idCmAmend, top.X, top.Y, top.Height, w.t(i18n.WorkspaceCheckAmend), v.amend, !rs.HasHead()) {
+			w.after(w.toggleAmend)
+		}
 	}
 	aiTip := w.promptRuleTip()
 	if v.aiBusy {
@@ -1071,9 +1104,10 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 
 	// Buttons.
 	by := bottom(mr) + 10
-	staged, _, _, conflicts := rs.Status.Counts()
+	committable := w.ws.CommittableCount()
+	_, _, _, conflicts := rs.Status.Counts()
 	empty := strings.TrimSpace(value) == ""
-	can := !empty && (staged > 0 || v.amend) && conflicts == 0
+	can := !empty && (committable > 0 || v.amend) && conflicts == 0
 	label := w.t(i18n.WorkspaceButtonCommit)
 	if v.amend {
 		label = w.t(i18n.WorkspaceButtonAmendCommit)
@@ -1085,8 +1119,12 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	switch {
 	case conflicts > 0:
 		w.tip(idCmCommit, w.t(i18n.WorkspaceTipResolveBeforeCommit))
-	case staged == 0 && !v.amend:
-		w.tip(idCmCommit, w.t(i18n.WorkspaceTipStageToCommit))
+	case committable == 0 && !v.amend:
+		if w.ws.Caps.Index {
+			w.tip(idCmCommit, w.t(i18n.WorkspaceTipStageToCommit))
+		} else {
+			w.tip(idCmCommit, w.t(i18n.WorkspaceTipNoChangesToCommit))
+		}
 	case empty:
 		w.tip(idCmCommit, w.t(i18n.WorkspaceTipEnterMessage))
 	default:
@@ -1096,9 +1134,13 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	if v.amend {
 		pl = w.t(i18n.WorkspaceButtonAmendCommitAndPush)
 	}
-	pw := w.buttonWidth(pl)
-	if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
-		w.after(func() { w.doCommit(true) })
+	// Without a separate publish step the commit already reached the server,
+	// so a second button would either repeat the commit or do nothing.
+	if w.ws.Caps.SeparatePush {
+		pw := w.buttonWidth(pl)
+		if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
+			w.after(func() { w.doCommit(true) })
+		}
 	}
 }
 
@@ -1210,12 +1252,27 @@ func (w *Window) toggleAmend() {
 func (w *Window) doCommit(push bool) {
 	v := &w.cm
 	rs := w.repo()
-	staged, _, _, conflicts := rs.Status.Counts()
+	committable := w.ws.CommittableCount()
+	_, _, _, conflicts := rs.Status.Counts()
 	msg := strings.TrimSpace(v.msg.String())
-	if msg == "" || conflicts > 0 || (staged == 0 && !v.amend) {
+	if msg == "" || conflicts > 0 || (committable == 0 && !v.amend) {
 		return
 	}
-	req := vapp.CommitRequest{Message: v.msg.String(), Amend: v.amend, SignOff: v.signOff, NoVerify: v.noVerify}
+	// A backend without an index commits the rows the user checked; without
+	// them svn commit takes the whole working copy, so the boxes would be
+	// decoration. Checked rows that the backend cannot schedule (untracked and
+	// ignored files) are left out, so the commit never fails over a file that
+	// was never under version control.
+	var paths []string
+	if !w.ws.Caps.Index {
+		for _, row := range w.selectedEntries() {
+			if row.entry.Untracked() || row.entry.Ignored() {
+				continue
+			}
+			paths = append(paths, row.entry.Path)
+		}
+	}
+	req := vapp.CommitRequest{Message: v.msg.String(), Amend: v.amend, SignOff: v.signOff, NoVerify: v.noVerify, Paths: paths}
 	w.ws.Commit(req, func() {
 		setText(v.msg, "")
 		v.msg.ClearHistory()

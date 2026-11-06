@@ -397,7 +397,7 @@ func (w *Window) paintEditor(r ui.Rect) {
 	}
 	switch {
 	case t.err != nil:
-		w.paintCentered(r, w.t(i18n.WorkspaceErrorCannotShowDiff), vapp.ErrorText(t.err), w.pal.Error)
+		w.paintCentered(r, w.t(i18n.WorkspaceErrorCannotShowDiff), w.ws.ErrorText(t.err), w.pal.Error)
 	case t.res == nil:
 		if t.loading {
 			w.paintCentered(r, w.t(i18n.WorkspaceStateLoading), "", w.pal.TextSecond)
@@ -503,12 +503,18 @@ func (w *Window) paintEditorEmpty(r ui.Rect) {
 	hints := [][2]string{
 		{w.t(i18n.WorkspaceHintProject), "⌘1"},
 		{w.t(i18n.WorkspacePanelCommit), "⌘K"},
-		{w.t(i18n.WorkspaceHintPush), "⇧⌘K"},
-		{w.t(i18n.WorkspaceHintUpdateProject), "⌘T"},
-		{w.t(i18n.WorkspaceHintBranches), "⌥⇧`"},
-		{w.t(i18n.WorkspaceHintOpenFile), "⇧⌘O"},
-		{w.t(i18n.WorkspaceHintDiffSelection), "⌘D"},
 	}
+	// The shortcut list is the only place that names Push to a user who has not
+	// scrolled the toolbar, so it follows the same capability as the button.
+	if w.ws.Caps.SeparatePush {
+		hints = append(hints, [2]string{w.t(i18n.WorkspaceHintPush), "⇧⌘K"})
+	}
+	hints = append(hints,
+		[2]string{w.t(i18n.WorkspaceHintUpdateProject), "⌘T"},
+		[2]string{w.t(i18n.WorkspaceHintBranches), "⌥⇧`"},
+		[2]string{w.t(i18n.WorkspaceHintOpenFile), "⇧⌘O"},
+		[2]string{w.t(i18n.WorkspaceHintDiffSelection), "⌘D"},
+	)
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
 		hints = [][2]string{{w.t(i18n.WorkspaceHintProject), "⌘1"}, {w.t(i18n.WorkspacePanelCommit), "⌘K"}, {w.t(i18n.WorkspaceHintBranches), "⌥⇧`"}, {w.t(i18n.WorkspaceHintOpenFile), "⇧⌘O"}, {w.t(i18n.WorkspaceHintDiffSelection), "⌘D"}}

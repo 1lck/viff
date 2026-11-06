@@ -52,12 +52,23 @@ type contentSearch struct {
 // dialog adds no second source of truth.
 func (w *Window) openQuickOpen() { w.openSearchDialog(searchPageFiles) }
 
-// openFindInFiles opens the same dialog on its Contents page.
-func (w *Window) openFindInFiles() { w.openSearchDialog(searchPageContents) }
+// openFindInFiles opens the same dialog on its Contents page. A backend
+// without content search has no such page; the entry is hidden, and a direct
+// call (a stale key binding) falls back to the file page instead of an error.
+func (w *Window) openFindInFiles() {
+	if !w.ws.SupportsContentSearch() {
+		w.openSearchDialog(searchPageFiles)
+		return
+	}
+	w.openSearchDialog(searchPageContents)
+}
 
 func (w *Window) openSearchDialog(page int) {
 	if w.repo() == nil {
 		return
+	}
+	if page == searchPageContents && !w.ws.SupportsContentSearch() {
+		page = searchPageFiles
 	}
 	w.ensureFiles()
 	v := &w.fm
@@ -137,8 +148,11 @@ func (w *Window) openSearchDialog(page int) {
 		width: 680,
 		focus: initialFocus,
 		body: func(f *form) {
-			dialogTabs(f, &page,
-				[]string{w.t(i18n.SearchTabFiles), w.t(i18n.SearchTabContents)},
+			tabs := []string{w.t(i18n.SearchTabFiles)}
+			if w.ws.SupportsContentSearch() {
+				tabs = append(tabs, w.t(i18n.SearchTabContents))
+			}
+			dialogTabs(f, &page, tabs,
 				func(i int) {
 					if i == searchPageContents {
 						w.focusDialogField(idSearchInput)
@@ -202,7 +216,7 @@ func (w *Window) openSearchDialog(page int) {
 						w.p.textCenter(w.t(i18n.WorkspaceStateLoading), inner, fontUI, regular, w.pal.TextSecond)
 						return
 					case v.err != nil:
-						w.p.textCenter(vapp.ErrorText(v.err), inner, fontUI, regular, w.pal.Error)
+						w.p.textCenter(w.ws.ErrorText(v.err), inner, fontUI, regular, w.pal.Error)
 						return
 					case len(v.entries) == 0:
 						w.p.textCenter("The working tree has no files", inner, fontUI, regular, w.pal.TextSecond)
@@ -297,7 +311,7 @@ func (w *Window) openSearchDialog(page int) {
 						w.p.textCenter(w.t(i18n.SearchRipgrepMissing), inner, fontUI, regular, w.pal.TextSecond)
 						return
 					case st.err != nil:
-						w.p.textCenter(vapp.ErrorText(st.err), inner, fontUI, regular, w.pal.Error)
+						w.p.textCenter(w.ws.ErrorText(st.err), inner, fontUI, regular, w.pal.Error)
 						return
 					case st.loading:
 						// The status line below carries the progress text; the

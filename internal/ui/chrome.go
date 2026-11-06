@@ -188,10 +188,16 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	ax -= actionSize + 14
 	w.p.vline(ax+actionSize+7, ay+5, actionSize-10, w.pal.Separator)
 	busy := w.ws.Busy()
-	if w.action(idTbPush, ax, ay, icons.Push, w.t(i18n.ChromeTbPush)+"\t⇧⌘K", actOpts{disabled: !rs.HasHead()}) {
-		w.after(w.openPush)
+	// A backend whose commit is itself the server operation has nothing to
+	// publish afterwards, so Push and Fetch are not drawn at all instead of
+	// being shown and doing nothing.
+	separatePush := w.ws.Caps.SeparatePush
+	if separatePush {
+		if w.action(idTbPush, ax, ay, icons.Push, w.t(i18n.ChromeTbPush)+"\t⇧⌘K", actOpts{disabled: !rs.HasHead()}) {
+			w.after(w.openPush)
+		}
+		ax -= actionSize + 4
 	}
-	ax -= actionSize + 4
 	if w.action(idTbCommit, ax, ay, icons.Commit, w.t(i18n.ChromeTbCommit)+"\t⌘K", actOpts{}) {
 		w.after(w.focusCommit)
 	}
@@ -199,9 +205,11 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	if w.action(idTbUpdate, ax, ay, icons.Update, w.t(i18n.ChromeTbUpdate)+"\t⌘T", actOpts{disabled: len(rs.Remotes) == 0}) {
 		w.after(w.openUpdate)
 	}
-	ax -= actionSize + 4
-	if w.action(idTbFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0 || busy && w.taskRunning("Fetch")}) {
-		w.after(func() { w.ws.Fetch(false) })
+	if separatePush {
+		ax -= actionSize + 4
+		if w.action(idTbFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0 || busy && w.taskRunning("Fetch")}) {
+			w.after(func() { w.ws.Fetch(false) })
+		}
 	}
 }
 
@@ -290,8 +298,13 @@ func (w *Window) projectMenu() []item {
 			undo.run = w.ws.Undo
 		}
 		out = append(out, sep(), undo,
-			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
-			item{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles},
+			item{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen})
+		// Content search is a backend capability; Subversion has no equivalent,
+		// so the entry is absent instead of failing after being pressed.
+		if w.ws.SupportsContentSearch() {
+			out = append(out, item{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles})
+		}
+		out = append(out,
 			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, run: func() { revealPath(cur) }},
 			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: w.openTerminal},
 			item{title: w.t(i18n.ChromeMenuOpenSystemTerm), icon: icons.Shell, run: func() { openTerminal(cur) }},

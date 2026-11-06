@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -16,175 +15,48 @@ import (
 	"time"
 
 	"viff/internal/process"
+	"viff/internal/vcs"
 )
 
 // stderrLimit bounds the stderr kept for an error message.
 const stderrLimit = 64 << 10
 
-// ErrorKind classifies a Git failure so the UI can offer the right action.
-type ErrorKind uint8
-
-const (
-	ErrOther ErrorKind = iota
-	ErrCancelled
-	ErrAuth
-	ErrLocked
-	ErrNotRepository
-	ErrConflict
-	ErrNotFound
-	ErrRejected // push rejected (non-fast-forward)
-	ErrUntrackedOverwrite
-	ErrLocalChangesOverwrite
-	ErrNotMerged
-	ErrNothingToCommit
-	ErrHookFailed
-	ErrNoGit
+// The error model lives in internal/vcs so a second backend reports failures
+// through the same kinds and the same stable codes. These aliases keep the
+// existing gitcli call sites and tests compiling unchanged; new code should
+// use vcs directly.
+type (
+	// ErrorKind classifies a failure so the UI can offer the right action.
+	ErrorKind = vcs.ErrorKind
+	// Error is a failed invocation with the context needed to diagnose it.
+	Error = vcs.Error
 )
 
-// Error is a failed Git invocation with the context needed to diagnose it.
-type Error struct {
-	Kind     ErrorKind
-	Args     []string
-	ExitCode int
-	Stderr   string
-	Stdout   string
-	Err      error
-}
-
-func (e *Error) Error() string {
-	msg := strings.TrimSpace(e.Stderr)
-	if msg == "" {
-		msg = strings.TrimSpace(e.Stdout)
-	}
-	if msg == "" && e.Err != nil {
-		msg = e.Err.Error()
-	}
-	return fmt.Sprintf("git %s: %s", firstArg(e.Args), msg)
-}
-
-// Message is the Git output meant for the user, without the command prefix.
-func (e *Error) Message() string {
-	msg := strings.TrimSpace(e.Stderr)
-	if msg == "" {
-		msg = strings.TrimSpace(e.Stdout)
-	}
-	if msg == "" && e.Err != nil {
-		msg = e.Err.Error()
-	}
-	return msg
-}
-
-func (e *Error) Unwrap() error { return e.Err }
-
-func firstArg(args []string) string {
-	for i := 0; i < len(args); i++ {
-		if args[i] == "-c" || args[i] == "-C" {
-			i++
-			continue
-		}
-		return args[i]
-	}
-	return ""
-}
+const (
+	ErrOther                 = vcs.ErrOther
+	ErrCancelled             = vcs.ErrCancelled
+	ErrAuth                  = vcs.ErrAuth
+	ErrLocked                = vcs.ErrLocked
+	ErrNotRepository         = vcs.ErrNotRepository
+	ErrConflict              = vcs.ErrConflict
+	ErrNotFound              = vcs.ErrNotFound
+	ErrRejected              = vcs.ErrRejected
+	ErrUntrackedOverwrite    = vcs.ErrUntrackedOverwrite
+	ErrLocalChangesOverwrite = vcs.ErrLocalChangesOverwrite
+	ErrNotMerged             = vcs.ErrNotMerged
+	ErrNothingToCommit       = vcs.ErrNothingToCommit
+	ErrHookFailed            = vcs.ErrHookFailed
+	ErrNoGit                 = vcs.ErrNoGit
+)
 
 // KindOf returns the error kind of err, ErrOther for foreign errors.
-func KindOf(err error) ErrorKind {
-	var ge *Error
-	if errors.As(err, &ge) {
-		return ge.Kind
-	}
-	if errors.Is(err, context.Canceled) {
-		return ErrCancelled
-	}
-	return ErrOther
-}
+func KindOf(err error) ErrorKind { return vcs.KindOf(err) }
 
-// String is the stable name of the kind written to logs next to the code. It
-// is a log format: rename one only together with the log format.
-func (k ErrorKind) String() string {
-	switch k {
-	case ErrCancelled:
-		return "cancelled"
-	case ErrAuth:
-		return "auth"
-	case ErrLocked:
-		return "locked"
-	case ErrNotRepository:
-		return "not_repository"
-	case ErrConflict:
-		return "conflict"
-	case ErrNotFound:
-		return "not_found"
-	case ErrRejected:
-		return "rejected"
-	case ErrUntrackedOverwrite:
-		return "untracked_overwrite"
-	case ErrLocalChangesOverwrite:
-		return "local_changes"
-	case ErrNotMerged:
-		return "not_merged"
-	case ErrNothingToCommit:
-		return "nothing_to_commit"
-	case ErrHookFailed:
-		return "hook_failed"
-	case ErrNoGit:
-		return "no_git"
-	}
-	return "other"
-}
+// CodeOf returns the stable error code for err, "" for nil.
+func CodeOf(err error) string { return vcs.CodeOf(err) }
 
-// Code is the stable, user-facing error code for the kind. It is what the UI,
-// the log and the diagnostics bundle show, so users can paste one token into
-// an issue and be understood. It never changes without a migration plan.
-func (k ErrorKind) Code() string {
-	switch k {
-	case ErrAuth:
-		return "auth.failed"
-	case ErrLocked:
-		return "repo.locked"
-	case ErrNotRepository:
-		return "repo.not_a_repository"
-	case ErrConflict:
-		return "git.conflict"
-	case ErrNotFound:
-		return "git.not_found"
-	case ErrRejected:
-		return "push.rejected"
-	case ErrUntrackedOverwrite:
-		return "worktree.untracked_overwrite"
-	case ErrLocalChangesOverwrite:
-		return "worktree.local_changes"
-	case ErrNotMerged:
-		return "branch.not_merged"
-	case ErrNothingToCommit:
-		return "commit.empty"
-	case ErrHookFailed:
-		return "hook.failed"
-	case ErrNoGit:
-		return "git.missing"
-	case ErrCancelled:
-		return "git.cancelled"
-	}
-	return "git.failed"
-}
-
-// Code returns the error code of e, "git.failed" for a nil error.
-func (e *Error) Code() string {
-	if e == nil {
-		return "git.failed"
-	}
-	return e.Kind.Code()
-}
-
-// CodeOf returns the stable error code for err: the code of its kind, with
-// "git.failed" for errors Viff did not classify and "" for nil. Callers pass
-// the result to the UI and to log events; a failure event always has a code.
-func CodeOf(err error) string {
-	if err == nil {
-		return ""
-	}
-	return KindOf(err).Code()
-}
+// firstArg is re-exported for the message format kept below.
+func firstArg(args []string) string { return vcs.FirstArg(args) }
 
 func classify(stderr string, exit int, ctxErr error) ErrorKind {
 	if ctxErr != nil {
@@ -220,22 +92,15 @@ func classify(stderr string, exit int, ctxErr error) ErrorKind {
 	return ErrOther
 }
 
-// Config is the Git configuration Viff passes to its own invocations. It
-// comes from the user's settings and never changes files on disk: empty
-// fields are left out so Git's configuration and defaults still apply.
-type Config struct {
-	SSHCommand       string // GIT_SSH_COMMAND
-	GPGProgram       string // gpg.program
-	SigningKey       string // user.signingkey
-	SignFormat       string // gpg.format: "openpgp" or "ssh"
-	CommitSigning    bool   // commit.gpgsign=true
-	CredentialHelper string // credential.helper
-}
+// Config is the configuration Viff passes to its own invocations. It is shared
+// with every backend and lives in internal/vcs, so the settings page can push
+// one value regardless of which one is active.
+type Config = vcs.Config
 
-// args renders the configuration as -c arguments. Git applies them after the
-// system and user configuration and before the command, so they win without
-// editing the repository or the user's config.
-func (c Config) args() []string {
+// configArgs renders the configuration as -c arguments. Git applies them after
+// the system and user configuration and before the command, so they win
+// without editing the repository or the user's config.
+func configArgs(c Config) []string {
 	var out []string
 	add := func(key, value string) {
 		if value != "" {
@@ -306,6 +171,11 @@ func (r *Runner) SetPath(path string) {
 	r.resolveMu.Unlock()
 }
 
+// SetCommandLog installs the hook that records finished commands. The
+// application layer uses it to fill the console and the event log; nil turns
+// recording off.
+func (r *Runner) SetCommandLog(fn vcs.CommandLog) { r.Log = fn }
+
 func (r *Runner) git() (string, error) {
 	r.resolveMu.Lock()
 	defer r.resolveMu.Unlock()
@@ -345,7 +215,7 @@ func (r *Runner) command(ctx context.Context, dir string, args []string) (*exec.
 	cfg := r.config()
 	full := make([]string, 0, len(baseArgs)+len(args)+8)
 	full = append(full, baseArgs...)
-	full = append(full, cfg.args()...)
+	full = append(full, configArgs(cfg)...)
 	full = append(full, args...)
 	cmd := exec.CommandContext(ctx, git, full...)
 	// A GUI build has no console; without this every Git command would open

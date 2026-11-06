@@ -45,9 +45,13 @@ flowchart TB
     accTitle: Viff Desktop Architecture Overview
     accDescr: Viva 界面通过应用层访问 Git；外部变化触发重新查询，缓存不作为仓库事实来源。
     desktop_ui["Viva 界面与视图模型"] --> application["应用用例与任务调度"]
-    application --> domain["Git 领域模型与状态规则"]
-    application --> git_adapter["Git CLI 适配器"]
+    application --> vcs_contract["VCS 契约层（internal/vcs）"]
+    vcs_contract --> domain["Git 领域模型与状态规则"]
     application --> storage["设置与有界缓存"]
+    git_adapter["Git CLI 适配器"] --> vcs_contract
+    svn_adapter["Subversion CLI 适配器"] --> vcs_contract
+    bootstrap["cmd/viff 组合根：探测后选择后端"] --> git_adapter
+    bootstrap --> svn_adapter
     git_adapter --> repository["Git 与工作区"]
     platform["系统事件与文件监听"] --> application
     external_ai["外部 AI 工具"] --> repository
@@ -57,10 +61,13 @@ flowchart TB
 
 图中的箭头表示运行时调用或数据通知；源码依赖由应用层定义的小接口约束，具体适配器在启动入口组装。初期使用单 Go module 和模块化单体，不创建微服务、通用消息总线或自研组件框架。
 
+自 Subversion 支持起，`app` 不再直接依赖具体适配器，而是依赖 `internal/vcs` 里的契约：依赖方向为 `ui → app → vcs → domain`，`gitcli` 与 `svncli` 都实现 `vcs` 的接口，`cmd/viff` 探测仓库类型后选择后端。`internal/vcs` 只依赖 `domain` 与标准库，不导入 Viva、不起子进程、也不读 `.git`/`.svn`。详见 [0025](decisions/0025-svn-support.md)。
+
 | 建议目录            | 职责                                           | 依赖约束                       |
 | ------------------- | ---------------------------------------------- | ------------------------------ |
 | `cmd/viff`          | 启动、依赖组装、退出与资源回收                 | 不承载 Git 业务规则            |
 | `internal/domain`   | 仓库身份、引用、提交、差异、冲突、操作状态     | 不导入 Viva，不启动进程        |
+| `internal/vcs`      | 后端契约：必备接口、可选能力、共享值类型与错误分类 | 只依赖 `domain` 与标准库，不导入 Viva，不起进程，不读 `.git`/`.svn` |
 | `internal/i18n`     | 界面文案表、语言枚举与缺失回退                 | 零依赖，不导入 Viva / domain   |
 | `internal/ai`       | 提交信息的模型调用与 Git 上下文组装            | 零内部依赖，只出网到配置端点   |
 | `internal/app`      | 用例、查询、命令、调度、状态版本、缓存失效     | 通过窄接口访问外部资源         |

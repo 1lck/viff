@@ -160,7 +160,7 @@ func (w *Window) paintMultiCommitFiles(r ui.Rect, v *multiCommitView) {
 	// Show the failure reason above the rows. The selection panel also keeps
 	// a fixed partial-results label visible while this list scrolls.
 	if err := v.summary.Err; err != nil {
-		msg := w.p.truncateMiddle("Partial results: "+multiCommitErrorLine(err), fontSmall, regular, max(0, r.Width-24))
+		msg := w.p.truncateMiddle("Partial results: "+w.multiCommitErrorLine(err), fontSmall, regular, max(0, r.Width-24))
 		w.p.text(msg, rect(r.X+12, y, r.Width-24, 20), fontSmall, regular, w.pal.Error)
 		y += 20
 	}
@@ -313,8 +313,8 @@ func (w *Window) multiCommitRowRect(i int) ui.Rect {
 
 // multiCommitErrorLine is the first line of a query failure, short enough to
 // sit in the list header.
-func multiCommitErrorLine(err error) string {
-	msg := vapp.ErrorText(err)
+func (w *Window) multiCommitErrorLine(err error) string {
+	msg := w.ws.ErrorText(err)
 	if i := strings.IndexByte(msg, '\n'); i >= 0 {
 		msg = msg[:i]
 	}

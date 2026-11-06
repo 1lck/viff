@@ -714,8 +714,8 @@ func TestScenarioSubmodule(t *testing.T) {
 	if openErr != nil || w2.Repo == nil || w2.Repo.Repo.Root != sub {
 		t.Fatalf("open submodule: err=%v repo=%+v", openErr, w2.Repo)
 	}
-	if !strings.Contains(w2.Repo.Repo.GitDir, filepath.Join(".git", "modules")) {
-		t.Fatalf("submodule git dir = %s", w2.Repo.Repo.GitDir)
+	if !strings.Contains(w2.Repo.Repo.MetaDir, filepath.Join(".git", "modules")) {
+		t.Fatalf("submodule git dir = %s", w2.Repo.Repo.MetaDir)
 	}
 	w2.Close()
 }
@@ -731,7 +731,7 @@ func TestScenarioLinkedWorktree(t *testing.T) {
 	f.dir = wt // drive the linked worktree
 	f.open()
 	rs := f.w.Repo
-	if rs.Repo.Root != wt || rs.Repo.GitDir == rs.Repo.CommonDir || rs.CurrentBranch() != "feature" {
+	if rs.Repo.Root != wt || rs.Repo.MetaDir == rs.Repo.CommonDir || rs.CurrentBranch() != "feature" {
 		t.Fatalf("linked worktree repo = %+v branch=%q", rs.Repo, rs.CurrentBranch())
 	}
 	f.write("wt.txt", "in worktree\n")

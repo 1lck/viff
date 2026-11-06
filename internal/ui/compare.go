@@ -57,7 +57,7 @@ func (w *Window) openCompareCommits(from, to string) {
 					w.p.textCenter(w.t(i18n.CompareLoading), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case loadErr != nil:
-					w.p.textCenter(vapp.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
+					w.p.textCenter(w.ws.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
 					return
 				case len(changes) == 0:
 					w.p.textCenter(w.t(i18n.CompareNoDiff), inner, fontUI, regular, w.pal.TextSecond)

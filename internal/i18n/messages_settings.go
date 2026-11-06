@@ -12,6 +12,7 @@ const (
 
 	SettingsGroupAppearance  = Key("settings.group.appearance")
 	SettingsGroupGitExec     = Key("settings.group.gitExec")
+	SettingsGroupSVNExec     = Key("settings.group.svnExec")
 	SettingsGroupTools       = Key("settings.group.tools")
 	SettingsGroupDiagnostics = Key("settings.group.diagnostics")
 	SettingsGroupUpdates     = Key("settings.group.updates")
@@ -22,6 +23,7 @@ const (
 	SettingsLabelTheme        = Key("settings.label.theme")
 	SettingsLabelFontSize     = Key("settings.label.fontSize")
 	SettingsLabelGitPath      = Key("settings.label.gitPath")
+	SettingsLabelSVNPath      = Key("settings.label.svnPath")
 	SettingsLabelEditor       = Key("settings.label.editor")
 	SettingsLabelLanguage     = Key("settings.label.language")
 	SettingsLabelFetchMins    = Key("settings.label.fetchMinutes")
@@ -81,6 +83,7 @@ func init() {
 
 		SettingsGroupAppearance:  "Appearance",
 		SettingsGroupGitExec:     "Git executable",
+		SettingsGroupSVNExec:     "Subversion executable",
 		SettingsGroupTools:       "Tools",
 		SettingsGroupDiagnostics: "Diagnostics",
 		SettingsGroupUpdates:     "Updates",
@@ -91,6 +94,7 @@ func init() {
 		SettingsLabelTheme:        "Theme:",
 		SettingsLabelFontSize:     "Editor font size:",
 		SettingsLabelGitPath:      "Path to Git:",
+		SettingsLabelSVNPath:      "Path to svn:",
 		SettingsLabelEditor:       "External editor command:",
 		SettingsLabelLanguage:     "Language:",
 		SettingsLabelFetchMins:    "Every (minutes):",
@@ -149,6 +153,7 @@ func init() {
 
 		SettingsGroupAppearance:  "外观",
 		SettingsGroupGitExec:     "Git 可执行文件",
+		SettingsGroupSVNExec:     "Subversion 可执行文件",
 		SettingsGroupTools:       "工具",
 		SettingsGroupDiagnostics: "诊断",
 		SettingsGroupUpdates:     "更新",
@@ -159,6 +164,7 @@ func init() {
 		SettingsLabelTheme:        "主题：",
 		SettingsLabelFontSize:     "编辑器字号：",
 		SettingsLabelGitPath:      "Git 路径：",
+		SettingsLabelSVNPath:      "svn 路径：",
 		SettingsLabelEditor:       "外部编辑器命令：",
 		SettingsLabelLanguage:     "语言：",
 		SettingsLabelFetchMins:    "间隔（分钟）：",

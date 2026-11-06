@@ -76,7 +76,7 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	if t.annotate && t.blameErr != nil {
 		br := splitTop(&r, 30)
 		w.p.fill(br, w.pal.Banner)
-		w.p.text(w.t(i18n.FileviewCannotAnnotate, vapp.ErrorText(t.blameErr)), rect(br.X+12, br.Y, br.Width-24, br.Height), fontUI, regular, w.pal.Error)
+		w.p.text(w.t(i18n.FileviewCannotAnnotate, w.ws.ErrorText(t.blameErr)), rect(br.X+12, br.Y, br.Width-24, br.Height), fontUI, regular, w.pal.Error)
 	}
 
 	cellW, lineH, _ := w.metrics()

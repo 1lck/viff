@@ -22,7 +22,7 @@ func (r *Runner) Discover(ctx context.Context, dir string) (domain.Repo, error) 
 	if len(lines) < 3 {
 		return domain.Repo{}, &Error{Kind: ErrNotRepository, Args: []string{"rev-parse"}, Stderr: "not a git repository (bare repositories are not supported)"}
 	}
-	repo := domain.Repo{Root: filepath.Clean(lines[0]), GitDir: filepath.Clean(lines[1]), CommonDir: filepath.Clean(lines[2])}
+	repo := domain.Repo{Root: filepath.Clean(lines[0]), Kind: domain.KindGit, MetaDir: filepath.Clean(lines[1]), CommonDir: filepath.Clean(lines[2])}
 	return repo, nil
 }
 
@@ -172,7 +172,7 @@ func parseBranchHeader(b *domain.BranchStatus, line string) {
 
 // Operation reads the in-progress operation from the Git directory.
 func (r *Runner) Operation(ctx context.Context, repo domain.Repo) domain.Operation {
-	gd := repo.GitDir
+	gd := repo.MetaDir
 	read := func(name string) string {
 		b, err := os.ReadFile(filepath.Join(gd, name))
 		if err != nil {
