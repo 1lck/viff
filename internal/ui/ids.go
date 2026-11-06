@@ -105,11 +105,10 @@ var (
 	idDiffWords   = tree.ID(fDiff, "words")
 	idDiffSync    = tree.ID(fDiff, "sync")
 	// The right edge of the diff: the change ruler (which doubles as the
-	// scroll bar) and the optional code map beside it.
+	// scroll bar) and the optional code map in the file viewer.
 	idDiffMarks       = tree.ID(fDiff, "change-marks")
 	idDiffCodemap     = tree.ID(fDiff, "codemap")
 	idDiffMarksBtn    = tree.ID(fDiff, "change-marks-toggle")
-	idDiffCodemapBtn  = tree.ID(fDiff, "codemap-toggle")
 	idDiffOpen        = tree.ID(fDiff, "open-file")
 	idDiffJumpSource  = tree.ID(fDiff, "jump-source")
 	idDiffSettings    = tree.ID(fDiff, "settings")
@@ -118,6 +117,7 @@ var (
 	idDiffScrollR     = tree.ID(fDiff, "scroll-right")
 	idFileAnnotate    = tree.ID(fDiff, "annotate")
 	idFileHistory     = tree.ID(fDiff, "file-history")
+	idFileCodemap     = tree.ID(fDiff, "file-codemap")
 	idAnnotations     = tree.ID(fDiff, "annotations")
 	scDiffBlockA      = tree.Sub(fDiff, tree.Name("block-a"))
 	scDiffBlockB      = tree.Sub(fDiff, tree.Name("block-b"))

@@ -118,8 +118,8 @@ func init() {
 		SettingsCheckAutoFetch:  "Fetch in the background",
 		SettingsCheckAskUpdate:  "Ask for the update type",
 		SettingsCheckMarks:      "Show change marks beside the diff",
-		SettingsCheckCodemap:    "Show the code map beside the diff",
-		SettingsHintCodemap:     "A narrow column of the whole file, tinted by syntax. Off by default: the change marks already show where the edits are.",
+		SettingsCheckCodemap:    "Show the code map in the file viewer",
+		SettingsHintCodemap:     "A narrow column of the whole file in the file viewer, tinted by syntax; drag the frame or click the map to move. Off by default.",
 		SettingsHintAskUpdate:   "Off: updating from the shortcut uses the method above without asking.",
 
 		SettingsThemeDark:   "Islands Dark",
@@ -190,8 +190,8 @@ func init() {
 		SettingsCheckAutoFetch:  "后台自动抓取",
 		SettingsCheckAskUpdate:  "询问更新方式",
 		SettingsCheckMarks:      "在 diff 旁显示改动标记",
-		SettingsCheckCodemap:    "在 diff 旁显示代码缩略图",
-		SettingsHintCodemap:     "把整份文件压成一条窄列，按语法着色。默认关闭：改动位置已经由改动标记给出。",
+		SettingsCheckCodemap:    "在文件查看器右侧显示代码缩略图",
+		SettingsHintCodemap:     "在文件查看器右侧把整份文件压成一条窄列，按语法着色；拖动视口框或点击缩略图即可定位。默认关闭。",
 		SettingsHintAskUpdate:   "关闭后：使用快捷键更新时直接按上面的方式执行，不再询问。",
 
 		SettingsThemeDark:   "Islands 深色",

@@ -27,12 +27,15 @@ type Window struct {
 	deferred []func()
 	paints   int
 	painting bool
-	pal      *Palette
-	theme    ui.Theme
-	p        pen
-	c        *ui.Canvas
-	size     ui.Size
-	mono     ui.MonoFace
+	// codemapSeq identifies each rasterized code map, so the renderer can tell
+	// one uploaded bitmap from the next.
+	codemapSeq uint64
+	pal        *Palette
+	theme      ui.Theme
+	p          pen
+	c          *ui.Canvas
+	size       ui.Size
+	mono       ui.MonoFace
 	// tr speaks the language the settings chose.
 	tr *i18n.Translator
 	// native is the window the application opened; nil in headless runs.
@@ -59,6 +62,9 @@ type Window struct {
 	inputs   map[ui.ID]*app.TextInput
 	areas    map[ui.ID]ui.Rect
 	modalTop int // scroll regions below this index are covered by a modal
+	// codemapLast is the viewport mask the map painted last, so the handle's
+	// position can be asserted without recomputing the rule in a test.
+	codemapLast codemapHandle
 
 	drag      *dragState
 	mouse     ui.Point
