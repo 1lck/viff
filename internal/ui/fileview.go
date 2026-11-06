@@ -88,18 +88,20 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	}
 	content := float32(len(t.newDisp)+3) * lineH
 	t.y = clampF(t.y, 0, max(0, content-r.Height))
+	// Scroll events cover the whole viewer: the annotation column and the map
+	// columns are cut off the painting rect below, but the wheel has to keep
+	// working over them.
 	area := r
 	if t.annotate && t.blame != nil {
 		ar := splitLeft(&r, w.annotationWidth(t))
 		w.paintAnnotations(t, ar, t.y, lineH)
 	}
-	_ = area
 	// The code map takes its column off the text area's trailing edge, followed by
 	// an independent scrollbar column on the outermost right edge.
-	// Layout (left to right): [Code Editor] | [Codemap 72px] | [Scrollbar 14px]
+	// Layout (left to right): [Code Editor] | [Codemap 72px] | [Scrollbar 12px]
 	codemapRect := ui.Rect{}
 	scrollRect := ui.Rect{}
-	showMap := w.ws.Settings.DiffCodemap && !t.annotate
+	showMap := w.ws.Settings.DiffCodemap && !t.annotate && len(t.codeMap) > 0
 	if showMap {
 		scrollRect = splitRight(&r, codemapBarW)
 		codemapRect = splitRight(&r, codemapWidth)
@@ -109,14 +111,14 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	gutter := w.gutterWidth(len(t.newDisp), cellW)
 	maxX := max(0, float32(t.maxCells)*cellW+40-(r.Width-gutter))
 	t.x = clampF(t.x, 0, maxX)
-	w.onScrollIn(r, func(dx, dy float32) {
+	w.onScrollIn(area, func(dx, dy float32) {
 		t.x = clampF(t.x+dx, 0, maxX)
 		t.y += dy
 	})
 	w.diffKeys(t, idDiffRight, lineH, r.Height)
 	w.paintPane(t, r, false, t.y, gutter, idDiffRight)
 	if showMap {
-		w.paintCodemap(t, codemapRect, t.codeMap, t.y, r.Height, lineH, content)
+		w.paintCodemap(t, codemapRect, t.codeMap, t.y, r.Height, content)
 	}
 	w.vbar(idDiffScrollR, scrollRect, &scroller{Y: t.y}, content)
 	w.wrapBarDrag(idDiffScrollR, func(y float32) { t.y = y }, func() float32 { return t.y }, content, r.Height)
@@ -138,6 +140,17 @@ func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
 	if w.button(idFileHistory, rect(x, r.Y+(r.Height-26)/2, hw, 26), w.t(i18n.FileviewShowHistory), btnBorderless, false) {
 		p := t.src.Path
 		w.after(func() { w.showPathHistory(p) })
+	}
+	x += hw + 6
+	// The map belongs to this viewer alone, so its switch lives here; the diff
+	// toolbar switch it replaced toggled the setting without changing what was
+	// on screen.
+	if w.action(idFileCodemap, x, r.Y+(r.Height-actionSize)/2, icons.Preview, w.t(i18n.FileviewCodemap), actOpts{toggled: w.ws.Settings.DiffCodemap}) {
+		w.after(func() {
+			w.ws.Settings.DiffCodemap = !w.ws.Settings.DiffCodemap
+			w.saveSettings()
+			w.rebuildDiffEdge()
+		})
 	}
 	rx := right(r) - 8
 	if t.src.Commit == "" {

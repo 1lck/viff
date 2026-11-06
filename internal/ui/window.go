@@ -62,6 +62,9 @@ type Window struct {
 	inputs   map[ui.ID]*app.TextInput
 	areas    map[ui.ID]ui.Rect
 	modalTop int // scroll regions below this index are covered by a modal
+	// codemapLast is the viewport mask the map painted last, so the handle's
+	// position can be asserted without recomputing the rule in a test.
+	codemapLast codemapHandle
 
 	drag      *dragState
 	mouse     ui.Point

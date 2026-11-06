@@ -748,14 +748,6 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 		})
 	}
 	x += actionSize + 2
-	if w.action(idDiffCodemapBtn, x, y, icons.Preview, w.t(i18n.DiffActionCodemap), actOpts{toggled: s.DiffCodemap}) {
-		w.after(func() {
-			s.DiffCodemap = !s.DiffCodemap
-			w.saveSettings()
-			w.rebuildDiffEdge()
-		})
-	}
-	x += actionSize + 2
 
 	// Right side: counts and file actions.
 	rx := right(r) - 8

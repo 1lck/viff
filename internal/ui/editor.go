@@ -314,10 +314,10 @@ func (w *Window) prepareTab(t *diffTab) {
 	if w.ws.Settings.DiffMarks {
 		t.marksUni = buildMarksUnified(t)
 	}
-	if w.ws.Settings.DiffCodemap {
+	if w.ws.Settings.DiffCodemap && t.src.View {
 		// The map belongs to the file viewer, which shows one version of the
 		// file, so its shape comes from that side alone.
-		t.codeMap = buildCodemap(t.newDisp, t.newSyn, nil)
+		t.codeMap = buildCodemap(t.newDisp, t.newSyn)
 	}
 }
 

@@ -58,11 +58,11 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 
 | Work                  | What Viff provides                                                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, picture previews, change marks on the right edge, and an optional code map   |
+| Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, picture previews, change marks on the right edge   |
 | Build a commit        | Check files, folders, or groups; stage files, hunks, or lines; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
 | Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, named ChangeLists, and discovery of repositories below a parent folder |
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |
-| Browse files          | Project tool window with folders, status colours, Quick Open, read-only viewing, blame, and file history                                                      |
+| Browse files          | Project tool window with folders, status colours, Quick Open, read-only viewing with an optional code map, blame, and file history                                                      |
 | Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                                                              |
 | Undo mistakes         | Command-Z reverses the last local commit, merge, rebase, checkout, or branch change from this session                                                         |
 | Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, explicit mark-as-resolved, and a copyable context for an external AI tool                  |

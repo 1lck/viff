@@ -25,12 +25,11 @@ const (
 	DiffActionStageFile      = Key("diff.action.stageFile")
 	DiffActionUnstageFile    = Key("diff.action.unstageFile")
 
-	DiffActionMarks   = Key("diff.action.marks")
-	DiffMarksLabel    = Key("diff.marks.label")
-	DiffMarksTip      = Key("diff.marks.tip")
-	DiffActionCodemap = Key("diff.action.codemap")
-	DiffCodemapLabel  = Key("diff.codemap.label")
-	DiffCodemapTip    = Key("diff.codemap.tip")
+	DiffActionMarks  = Key("diff.action.marks")
+	DiffMarksLabel   = Key("diff.marks.label")
+	DiffMarksTip     = Key("diff.marks.tip")
+	DiffCodemapLabel = Key("diff.codemap.label")
+	DiffCodemapTip   = Key("diff.codemap.tip")
 
 	DiffTipStageChange         = Key("diff.tip.stageChange")
 	DiffTipStageSelectedOne    = Key("diff.tip.stageSelectedLine")
@@ -133,12 +132,11 @@ func init() {
 		DiffActionStageFile:      "Stage File",
 		DiffActionUnstageFile:    "Unstage File",
 
-		DiffActionMarks:   "Change Marks",
-		DiffMarksLabel:    "Change marks",
-		DiffMarksTip:      "Every change in this file on one ruler; drag to scroll",
-		DiffActionCodemap: "Code Map",
-		DiffCodemapLabel:  "Code map",
-		DiffCodemapTip:    "The whole file at a glance; drag to scroll",
+		DiffActionMarks:  "Change Marks",
+		DiffMarksLabel:   "Change marks",
+		DiffMarksTip:     "Every change in this file on one ruler; drag to scroll",
+		DiffCodemapLabel: "Code map",
+		DiffCodemapTip:   "The whole file at a glance; drag to scroll",
 
 		DiffTipStageChange:         "Stage Change",
 		DiffTipStageSelectedOne:    "Stage %d Selected Line",
@@ -239,12 +237,11 @@ func init() {
 		DiffActionStageFile:      "暂存文件",
 		DiffActionUnstageFile:    "取消暂存文件",
 
-		DiffActionMarks:   "改动标记",
-		DiffMarksLabel:    "改动标记",
-		DiffMarksTip:      "整份文件的改动都在这一条上；拖动可滚动",
-		DiffActionCodemap: "代码缩略图",
-		DiffCodemapLabel:  "代码缩略图",
-		DiffCodemapTip:    "整份文件一览；拖动可滚动",
+		DiffActionMarks:  "改动标记",
+		DiffMarksLabel:   "改动标记",
+		DiffMarksTip:     "整份文件的改动都在这一条上；拖动可滚动",
+		DiffCodemapLabel: "代码缩略图",
+		DiffCodemapTip:   "整份文件一览；拖动可滚动",
 
 		DiffTipStageChange:         "暂存此更改",
 		DiffTipStageSelectedOne:    "暂存所选 %d 行",

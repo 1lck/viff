@@ -42,3 +42,4 @@
 | [0036](0036-repository-discovery.md) | 从父目录发现并批量导入仓库 |
 | [0037](0037-content-search.md) | 在文件中查找：按需内容搜索 |
 | [0038](0038-wsl-repositories.md) | 在 Windows 版直接打开 WSL 仓库 |
+| [0039](0039-codemap-in-file-viewer.md) | 代码缩略图只属于只读文件查看器 |

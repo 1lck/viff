@@ -65,7 +65,7 @@ func openFileViewTab(t *testing.T, f *uiFixture, path string) *diffTab {
 	f.s.Settle(80*time.Millisecond, time.Second)
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
 		tab := f.win.ed.cur()
-		return tab != nil && !tab.loading && tab.src.View
+		return tab != nil && !tab.loading && tab.src.View && tab.src.Path == path
 	}, 10*time.Second); err != nil {
 		t.Fatalf("the file viewer did not open %s: %v", path, err)
 	}

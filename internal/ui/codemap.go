@@ -50,6 +50,10 @@ const (
 	// codemapThumbMin is the shortest the map's scroll handle may get, so a
 	// file of thousands of lines still leaves something to grab.
 	codemapThumbMin = 24
+	// codemapMinRows and codemapRowsStep size the raster: it is built on a
+	// step grid so dragging a window edge does not rebuild it every frame.
+	codemapMinRows  = 16
+	codemapRowsStep = 16
 )
 
 // codemapRun is one stretch of non-blank characters, in character columns.
@@ -60,29 +64,26 @@ type codemapRun struct {
 
 // codemapLine is the cached shape of one display line.
 type codemapLine struct {
-	runs  []codemapRun
-	block int32
+	runs []codemapRun
 }
 
-// codemapCols reports how many character columns fit in width.
-func codemapCols(width float32) int {
-	n := int((width - 2*codemapGutter) / codemapCharW)
-	return max(codemapMinCols, min(n, codemapMaxCols))
+// codemapMaxChars is how many character columns fit in a panel of width points.
+// The raster is drawn one pixel per point, so this is also the column count at
+// which a line is truncated: characters further right have no pixel to land on.
+func codemapMaxChars(width float32) int {
+	return max(codemapMinCols, min(int((width-2*codemapGutter)/codemapCharW), codemapMaxCols))
 }
 
-// buildCodemap compresses display lines, their syntax spans and their diff
-// blocks into character columns. Blank characters advance the cursor and emit
-// nothing, which is what leaves the indentation visible.
-func buildCodemap(disp []string, syn [][]span, blk []int32) []codemapLine {
+// buildCodemap compresses display lines and their syntax spans into character
+// columns. Blank characters advance the cursor and emit nothing, which is what
+// leaves the indentation visible.
+func buildCodemap(disp []string, syn [][]span) []codemapLine {
 	if len(disp) == 0 {
 		return nil
 	}
 	out := make([]codemapLine, len(disp))
 	for i, line := range disp {
-		ml := codemapLine{block: -1}
-		if i < len(blk) {
-			ml.block = blk[i]
-		}
+		ml := codemapLine{}
 		col := 0
 		// add records [from, to) of painted characters, merging into the
 		// previous run when the kind matches so a line of many small tokens
@@ -155,47 +156,42 @@ func (w *Window) codemapColor(k tokKind) ui.Color {
 
 // codemapImage is the rasterized map and what it was built for.
 type codemapImage struct {
-	bmp    *ui.Bitmap
-	cols   int
-	rows   int
-	dark   bool
-	lines  int
-	width  float32
-	height float32
+	bmp   *ui.Bitmap
+	cols  int
+	rows  int
+	dark  bool
+	lines int
 }
 
-// paintCodemap draws the map into r and lays its scroll handle over it. top is
-// the editor's scroll offset in pixels, view its visible height, lineH its line
-// height, and content the total scrollable height, so the handle is computed by
-// the same rule the overlay scroll bar uses and the two always agree: they read
-// and write the same t.y.
+// paintCodemap draws the minimap into r and lays a viewport mask over it,
+// matching an editor's minimap: the mask frames the visible range, dragging it
+// scrolls proportionally, and a press elsewhere jumps there.
 //
-// A press on the handle drags it proportionally; a press anywhere else on the
-// map jumps there, which is the quick way to reach a far part of a long file.
-// paintCodemap draws the minimap into r and lays a visible viewport mask
-// over it, matching VS Code / Sublime Text minimap behavior.
-//
-// The viewport mask represents the currently visible portion of the document.
-// Dragging inside this mask smoothly scrolls the editor (proportional tracking),
-// while clicking outside jumps the viewport to that position.
-func (w *Window) paintCodemap(t *diffTab, r ui.Rect, lines []codemapLine, top, view, lineH, content float32) {
+// top is the editor's scroll offset in pixels, view its visible height and
+// content the total scrollable height, so the mask is computed by the same rule
+// the overlay scroll bar uses and the two always agree: they read and write the
+// same t.y.
+func (w *Window) paintCodemap(t *diffTab, r ui.Rect, lines []codemapLine, top, view, content float32) {
 	if len(lines) == 0 || r.Width <= 0 || r.Height <= 0 {
 		return
 	}
-	// Background matches editor background; left border subtly separates from code
+	// The panel background separates the map from the code above it.
 	w.p.fill(r, w.pal.Island)
-	w.p.vline(r.X, r.Y, r.Height, w.pal.Border)
 	if bmp := w.codemapBitmap(t, lines, r.Width, r.Height); bmp != nil {
 		w.c.DrawBitmap(*bmp, r)
 	}
 
-	// Elevate the compositing layer so the viewport mask definitely paints
-	// above the bitmap texture in Viva's Direct3D/Vulkan backend.
+	// Elevate the compositing layer: Viva uploads bitmaps after the rectangle
+	// batch of the same layer, so the mask and the divider would otherwise be
+	// covered by the map texture. The number stays below the layers the menus,
+	// dialogs, popups and tooltips use.
 	w.c.PushLayer(1)
-	index := w.codemapHandle(r, top, view, lineH, content)
+	w.p.vline(r.X, r.Y, r.Height, w.pal.Border)
+	index := w.codemapHandle(r, top, view, content)
 	w.c.PopLayer()
+	w.codemapLast = index
 
-	w.c.HitWithOptions(idDiffCodemap, r, w.t(i18n.DiffCodemapLabel), ui.HitOptions{SkipFocus: true, SkipTab: true})
+	w.c.HitWithOptions(idDiffCodemap, r, w.t(i18n.DiffCodemapLabel), ui.HitOptions{SkipFocus: true, SkipTab: true, Cursor: ui.PointerCursorHand})
 	w.areas[idDiffCodemap] = r
 	w.tip(idDiffCodemap, w.t(i18n.DiffCodemapTip))
 
@@ -252,46 +248,32 @@ func (h codemapHandle) onHandle(y float32) bool {
 }
 
 // codemapHandle calculates and draws the prominent viewport mask.
-func (w *Window) codemapHandle(r ui.Rect, top, view, lineH, content float32) codemapHandle {
+func (w *Window) codemapHandle(r ui.Rect, top, view, content float32) codemapHandle {
 	h := codemapHandle{}
 	if content <= 0 || view <= 0 {
 		return h
 	}
 
-	// Calculate viewport mask height and Y position proportional to visible document area
+	// The mask height follows the visible share of the document, never taller
+	// than the panel itself: a short file would otherwise push it past the top
+	// edge and over the toolbar above.
 	ratio := view / content
-	if ratio >= 1.0 {
-		// All content fits: cover the entire minimap height
-		h.thumbH = r.Height
+	h.thumbH = min(max(r.Height*ratio, codemapThumbMin), r.Height)
+	if h.thumbH >= r.Height {
 		h.y = r.Y
 	} else {
-		h.thumbH = max(r.Height*ratio, codemapThumbMin)
 		h.y = r.Y + (r.Height-h.thumbH)*(top/max(content-view, 1))
 	}
 
 	hot := w.hovered(idDiffCodemap) || w.hovered(idDiffScrollR) ||
 		(w.drag != nil && (w.drag.id == idDiffCodemap || w.drag.id == idDiffScrollR))
 
-	// Prominent viewport mask like VS Code / Sublime minimap:
-	// A distinct, semi-transparent highlight block that clearly frames the visible range
-	// with a visible border and prominent top line.
-	var maskFill, borderCol, accentCol ui.Color
-	if w.pal.Dark {
-		maskFill = ui.RGB24(0xFFFFFF).WithAlpha(0.24)
-		borderCol = ui.RGB24(0xFFFFFF).WithAlpha(0.50)
-		accentCol = ui.RGB24(0x56A8F5) // Solid light-blue top accent line
-		if hot {
-			maskFill = ui.RGB24(0xFFFFFF).WithAlpha(0.35)
-			borderCol = ui.RGB24(0xFFFFFF).WithAlpha(0.75)
-		}
-	} else {
-		maskFill = ui.RGB24(0x000000).WithAlpha(0.16)
-		borderCol = ui.RGB24(0x000000).WithAlpha(0.40)
-		accentCol = ui.RGB24(0x2F5EB9)
-		if hot {
-			maskFill = ui.RGB24(0x000000).WithAlpha(0.24)
-			borderCol = ui.RGB24(0x000000).WithAlpha(0.60)
-		}
+	// The mask frames the visible range, so it uses the same tokens as the
+	// scroll bar it mirrors: the thumb colour reads as "this is the viewport",
+	// and the focus colour marks the leading edge in both themes.
+	maskFill, borderCol, accentCol := w.pal.ScrollThumb, w.pal.Separator, w.pal.Focus
+	if hot {
+		maskFill, borderCol = w.pal.ScrollThumbHover, w.pal.ScrollThumbHover
 	}
 
 	maskRect := rect(r.X, h.y, r.Width, h.thumbH)
@@ -306,9 +288,13 @@ func (w *Window) codemapHandle(r ui.Rect, top, view, lineH, content float32) cod
 
 // codemapBitmap returns the rasterized map, rebuilding it only when the shape
 // it was built for changed: the palette, the size of the column, or the lines.
+// The raster is built at one pixel per point, so a character cell is the two
+// points the constants describe instead of a stretched fraction of them.
 func (w *Window) codemapBitmap(t *diffTab, lines []codemapLine, width, height float32) *ui.Bitmap {
-	cols := codemapCols(width)
-	rows := int(height)
+	cols := int(width)
+	// Quantizing the height keeps a window resize from rebuilding the whole
+	// raster on every frame; the renderer stretches the small remainder.
+	rows := max(codemapMinRows, (int(height)+codemapRowsStep-1)/codemapRowsStep*codemapRowsStep)
 	if rows <= 0 || cols <= 0 {
 		return nil
 	}
@@ -362,7 +348,7 @@ func (w *Window) codemapBitmap(t *diffTab, lines []codemapLine, width, height fl
 		}
 	}
 	bmp := &ui.Bitmap{Pix: pix, Width: cols, Height: rows, Stride: cols * 4, ID: w.codemapID(), Version: 1}
-	t.codemapImg = &codemapImage{bmp: bmp, cols: cols, rows: rows, dark: w.pal.Dark, lines: len(lines), width: width, height: height}
+	t.codemapImg = &codemapImage{bmp: bmp, cols: cols, rows: rows, dark: w.pal.Dark, lines: len(lines)}
 	return bmp
 }
 
@@ -399,8 +385,8 @@ func (w *Window) rebuildDiffEdge() {
 			t.marksNew = buildMarks(t.newBlk, t.res.Blocks)
 			t.marksUni = buildMarksUnified(t)
 		}
-		if s.DiffCodemap {
-			t.codeMap = buildCodemap(t.newDisp, t.newSyn, nil)
+		if s.DiffCodemap && t.src.View {
+			t.codeMap = buildCodemap(t.newDisp, t.newSyn)
 		}
 	}
 	w.Invalidate()

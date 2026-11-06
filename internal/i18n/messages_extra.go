@@ -39,6 +39,7 @@ const (
 	FileviewCopyRev          = Key("fileview.copyRevision")
 	FileviewOpenExternal     = Key("fileview.openExternal")
 	FileviewShowHistory      = Key("fileview.showHistory")
+	FileviewCodemap          = Key("fileview.codemap")
 
 	RevisionTitle   = Key("revision.title")
 	RevisionFilter  = Key("revision.filter")
@@ -86,6 +87,7 @@ func init() {
 		FileviewCopyRev:          "Copy Revision Number",
 		FileviewOpenExternal:     "Open in External Editor",
 		FileviewShowHistory:      "Show History",
+		FileviewCodemap:          "Code Map",
 
 		RevisionTitle:   "Repository at %s",
 		RevisionFilter:  "Filter files",
@@ -131,6 +133,7 @@ func init() {
 		FileviewCopyRev:          "复制提交哈希",
 		FileviewOpenExternal:     "用外部编辑器打开",
 		FileviewShowHistory:      "显示历史",
+		FileviewCodemap:          "代码缩略图",
 
 		RevisionTitle:   "%s 的仓库内容",
 		RevisionFilter:  "筛选文件",

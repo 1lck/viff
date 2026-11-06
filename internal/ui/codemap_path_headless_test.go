@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vivaui/viva/app"
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
@@ -135,28 +134,56 @@ func TestCodemapHandleFollowsScroll(t *testing.T) {
 	if content <= area.Height {
 		t.Fatalf("the fixture file is too short to scroll: content=%.0f view=%.0f", content, area.Height)
 	}
-	// The handle's top edge, by the same rule the scroll bar uses.
-	handleTop := func() float32 {
-		thumbH := max(area.Height*area.Height/content, codemapThumbMin)
-		return area.Y + (area.Height-thumbH)*(tab.y/(content-area.Height))
-	}
-	top := handleTop()
+	// Scrolling moves the mask the map actually painted.
+	top := f.win.codemapLast.y
 	tab.y = (content - area.Height) / 2
 	f.win.Invalidate()
 	f.s.Settle(60*time.Millisecond, time.Second)
-	if mid := handleTop(); mid <= top {
-		t.Fatalf("the handle did not follow the scroll: %.1f -> %.1f", top, mid)
+	mid := f.win.codemapLast.y
+	if mid <= top {
+		t.Fatalf("the mask did not follow the scroll: %.1f -> %.1f", top, mid)
 	}
-	// Dragging the map moves the file: the two share one offset.
-	if err := f.s.Press(area.X+area.Width/2, bottom(area)-3); err != nil {
-		t.Fatalf("press on the map: %v", err)
+	maxScroll := content - area.Height
+	// Dragging the mask scrolls the file: the two share one offset. The press
+	// lands inside the mask, so this exercises the proportional drag rather
+	// than the click-to-jump branch.
+	before := tab.y
+	if err := f.s.Press(area.X+area.Width/2, mid+2); err != nil {
+		t.Fatalf("press on the mask: %v", err)
 	}
-	if err := f.s.Release(area.X+area.Width/2, bottom(area)-3); err != nil {
-		t.Fatalf("release on the map: %v", err)
+	if err := f.s.Move(area.X+area.Width/2, bottom(area)-4); err != nil {
+		t.Fatalf("drag the mask: %v", err)
+	}
+	if err := f.s.Release(area.X+area.Width/2, bottom(area)-4); err != nil {
+		t.Fatalf("release the mask: %v", err)
 	}
 	f.s.Settle(60*time.Millisecond, time.Second)
-	if tab.y <= 0 {
-		t.Fatalf("pressing the map did not scroll the file: y=%v", tab.y)
+	if tab.y <= before {
+		t.Fatalf("dragging the mask did not scroll the file: %.0f -> %.0f", before, tab.y)
+	}
+	// A press at either end jumps to that end instead of dragging.
+	if err := f.s.Press(area.X+area.Width/2, area.Y+2); err != nil {
+		t.Fatalf("press at the top: %v", err)
+	}
+	if err := f.s.Move(area.X+area.Width/2, area.Y+2); err != nil {
+		t.Fatalf("drag at the top: %v", err)
+	}
+	if err := f.s.Release(area.X+area.Width/2, area.Y+2); err != nil {
+		t.Fatalf("release at the top: %v", err)
+	}
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if tab.y != 0 {
+		t.Fatalf("pressing the top of the map left y = %.0f, want 0", tab.y)
+	}
+	if err := f.s.Press(area.X+area.Width/2, bottom(area)-2); err != nil {
+		t.Fatalf("press at the bottom: %v", err)
+	}
+	if err := f.s.Release(area.X+area.Width/2, bottom(area)-2); err != nil {
+		t.Fatalf("release at the bottom: %v", err)
+	}
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if tab.y < maxScroll*0.9 {
+		t.Fatalf("pressing the bottom of the map left y = %.0f, want close to %.0f", tab.y, maxScroll)
 	}
 	f.assertIdle()
 }
@@ -203,6 +230,3 @@ func TestCodemapToggleInFileView(t *testing.T) {
 	}
 	f.assertIdle()
 }
-
-// The imports above exist for the helpers this file uses through the fixture.
-var _ = app.Snapshot{}
