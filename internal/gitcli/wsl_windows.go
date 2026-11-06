@@ -22,9 +22,13 @@ import (
 // interpolation can reinterpret a path. --cd places Git at the repository
 // because cmd.Dir cannot name a Linux directory.
 //
-// The Windows git path (Runner.Path) does not participate: a WSL repository is
-// served by the distro's own git, whose configuration, credentials and hooks
-// live on the Linux side (ADR 0038).
+// Neither the Windows git path (Runner.Path) nor the settings that configure
+// it participate. Those values name Windows programs and Windows file system
+// paths — gpg.program, credential.helper and GIT_SSH_COMMAND point at
+// executables the distro cannot run — so handing them over would replace the
+// Linux side's own configuration with broken copies of the Windows one. A WSL
+// repository is served by the distro's git, whose configuration, credentials,
+// signing and hooks live on the Linux side (ADR 0038).
 func (r *Runner) wslCommand(ctx context.Context, dir string, args []string) (*exec.Cmd, error) {
 	distro, linuxDir, ok := wslpath.Split(dir)
 	if !ok {
@@ -37,11 +41,9 @@ func (r *Runner) wslCommand(ctx context.Context, dir string, args []string) (*ex
 	if err != nil {
 		return nil, err
 	}
-	cfg := r.config()
 	full := make([]string, 0, len(args)+len(baseArgs)+16)
 	full = append(full, "-d", distro, "--cd", linuxDir, "--exec", "git")
 	full = append(full, baseArgs...)
-	full = append(full, cfg.args()...)
 	full = append(full, args...)
 	cmd := exec.CommandContext(ctx, wsl, full...)
 	// A GUI build has no console; without this every Git command would open
@@ -60,20 +62,21 @@ func (r *Runner) wslCommand(ctx context.Context, dir string, args []string) (*ex
 		"LC_ALL=C",
 		"LANGUAGE=C",
 	)
+	// r.Env carries the test and caller environment as-is: it is not one of the
+	// settings above, and a test that stubs a program needs it inside the
+	// distro too.
 	cmd.Env = append(cmd.Env, r.Env...)
-	if cfg.SSHCommand != "" {
-		// After Env so the setting wins; Git hands this to its ssh invocation.
-		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND="+cfg.SSHCommand)
-	}
 	cmd.WaitDelay = 2 * time.Second
 	return cmd, nil
 }
 
 // wslEnvForward merges the environment names Viff needs inside the distro
 // into WSLENV. Flags are /u (Win32 to WSL only); a name the user already
-// forwards is left untouched so their flags survive.
+// forwards is left untouched so their flags survive. GIT_SSH_COMMAND is absent
+// on purpose: the value comes from the Windows settings and names a Windows
+// program, so the distro keeps its own.
 func wslEnvForward(existing string) string {
-	names := []string{"GIT_TERMINAL_PROMPT", "GIT_OPTIONAL_LOCKS", "LC_ALL", "LANGUAGE", "GIT_SSH_COMMAND"}
+	names := []string{"GIT_TERMINAL_PROMPT", "GIT_OPTIONAL_LOCKS", "LC_ALL", "LANGUAGE"}
 	have := map[string]bool{}
 	for _, e := range strings.Split(existing, ":") {
 		// Each entry is NAME or NAME/flags; compare the name only.

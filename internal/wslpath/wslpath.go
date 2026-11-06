@@ -16,6 +16,8 @@
 package wslpath
 
 import (
+	"errors"
+	"fmt"
 	"path"
 	"strings"
 )
@@ -59,10 +61,15 @@ func Split(p string) (distro, linuxPath string, ok bool) {
 
 // FromLinux maps a Linux absolute path inside distro back to the Windows
 // identity domain: distro paths become \\wsl.localhost UNC paths and /mnt/<x>
-// drive paths become "<x>:\" drive paths. A non-absolute path maps to "".
+// drive paths become "<x>:\" drive paths. A non-absolute path, or one whose
+// distro is unknown, maps to "", so a missing distro can never produce the
+// \\wsl.localhost\\path spelling that names no distribution.
 func FromLinux(distro, linuxPath string) string {
-	linuxPath = strings.TrimSpace(linuxPath)
-	if !strings.HasPrefix(linuxPath, "/") {
+	distro = strings.TrimSpace(distro)
+	// Output arrives with a trailing newline; a trailing space is part of the
+	// name on a file system that allows it, so only the line breaks go.
+	linuxPath = strings.Trim(linuxPath, "\r\n")
+	if distro == "" || !strings.HasPrefix(linuxPath, "/") {
 		return ""
 	}
 	if rest, ok := strings.CutPrefix(linuxPath, mountPrefix); ok {
@@ -74,52 +81,91 @@ func FromLinux(distro, linuxPath string) string {
 	return unc(distro, linuxPath)
 }
 
+// ErrOutsideDistro reports a path a Git process running in a distro cannot
+// open. A UNC path names another machine or another distribution, which the
+// Linux side has no mount for; passing it through would make Git treat the
+// text as a relative path and create or read a literal directory with that
+// name instead of failing.
+var ErrOutsideDistro = errors.New("path is outside the distro")
+
 // ToLinuxArg maps an absolute path p to a form usable by Git running in
 // distro, for position arguments such as a worktree path: a same-distro UNC
 // path becomes its Linux path, a Windows drive path becomes /mnt/<x>/..., a
 // path that is already Linux-absolute (or relative) passes through unchanged.
-// A UNC path of a different distro cannot be reached from distro and passes
-// through unchanged so Git itself reports the failure.
-func ToLinuxArg(distro, p string) string {
-	if d, rest, ok := split(p); ok {
-		if d == distro {
-			return linuxOf(rest)
-		}
-		return p
-	}
+// A path the distro cannot reach is an error rather than a silently literal
+// argument.
+func ToLinuxArg(distro, p string) (string, error) {
+	p = strings.Trim(p, "\r\n")
 	if strings.HasPrefix(p, "/") {
-		return p
+		// Already the spelling the Linux side uses.
+		return p, nil
 	}
-	// A Windows drive path ("C:\Users\...") maps onto the distro's drive
-	// mounts so a worktree can live on the Windows file system.
-	if len(p) >= 2 && p[1] == ':' && isDriveLetter(p[0]) {
-		drive := p[0]
+	s := stripPrefixes(strings.ReplaceAll(p, "/", `\`))
+	if d, rest, ok := split(s); ok {
+		if d != strings.ToLower(strings.TrimSpace(distro)) {
+			return "", fmt.Errorf("%w: %s is in distro %s, not %s", ErrOutsideDistro, p, d, distro)
+		}
+		return linuxOf(rest), nil
+	}
+	// A Windows drive path ("C:\Users\...") maps onto the distro's drive mounts
+	// so a worktree can live on the Windows file system.
+	if len(s) >= 2 && s[1] == ':' && isDriveLetter(s[0]) {
+		drive := s[0]
 		if drive >= 'A' && drive <= 'Z' {
 			drive += 'a' - 'A'
 		}
-		tail := strings.ReplaceAll(strings.TrimPrefix(p[2:], `\`), `\`, "/")
+		tail := strings.ReplaceAll(strings.TrimLeft(s[2:], `\`), `\`, "/")
 		if tail == "" {
-			return mountPrefix + string(drive)
+			return mountPrefix + string(drive), nil
 		}
-		return mountPrefix + string(drive) + "/" + tail
+		return mountPrefix + string(drive) + "/" + tail, nil
 	}
-	return p
+	if strings.HasPrefix(s, `\\`) {
+		return "", fmt.Errorf("%w: %s is not a path inside distro %s", ErrOutsideDistro, p, distro)
+	}
+	return p, nil
 }
 
 // split parses the UNC aliases. It returns the distro lowercased and the
 // remainder below the distro root with original separators ("" for none).
 func split(p string) (distro, rest string, ok bool) {
-	s := strings.ReplaceAll(p, "/", `\`)
-	rest = ""
-	lower := strings.ToLower(s)
-	for _, host := range []string{uncHost, uncHostOld} {
-		prefix := `\\` + host + `\`
-		if len(lower) > len(prefix) && strings.HasPrefix(lower, prefix) {
-			d, r, _ := strings.Cut(s[len(prefix):], `\`)
-			return strings.ToLower(d), r, d != ""
+	parts := uncParts(p)
+	if len(parts) < 2 || parts[1] == "" {
+		return "", "", false
+	}
+	if !strings.EqualFold(parts[0], uncHost) && !strings.EqualFold(parts[0], uncHostOld) {
+		return "", "", false
+	}
+	return strings.ToLower(parts[1]), strings.Join(parts[2:], `\`), true
+}
+
+// uncParts returns the components of a UNC path, or nil when p is not one. It
+// folds separators and strips the prefixes Windows tools add, so that
+// \\?\UNC\wsl.localhost\Ubuntu\home, \\wsl.localhost\\ubuntu\home and
+// \\wsl.localhost\ubuntu\home are the same path. Dropping empty components is
+// what folds the doubled separators; the distro component being empty is
+// rejected by the caller, because \\wsl.localhost\\home names no distro.
+func uncParts(p string) []string {
+	s := stripPrefixes(strings.ReplaceAll(p, "/", `\`))
+	if !strings.HasPrefix(s, `\\`) {
+		return nil
+	}
+	return strings.FieldsFunc(s[2:], func(r rune) bool { return r == '\\' })
+}
+
+// stripPrefixes removes the extended-length and device prefixes Windows tools
+// emit, turning \\?\UNC\server\share into \\server\share. Inputs are already
+// backslash-separated.
+func stripPrefixes(s string) string {
+	if len(s) >= len(`\\?\UNC\`) && strings.EqualFold(s[:len(`\\?\UNC\`)], `\\?\UNC\`) {
+		return `\\` + s[len(`\\?\UNC\`):]
+	}
+	for _, prefix := range []string{`\\?\`, `\\.\`} {
+		if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+			return s[len(prefix):]
 		}
 	}
-	return "", "", false
+	return s
 }
 
 // unc rebuilds the canonical UNC form from a distro and its internal rest.

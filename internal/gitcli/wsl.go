@@ -40,12 +40,15 @@ func toWinPath(dir, p string) string {
 // toGitPath converts an absolute path p of the Windows identity domain into
 // the spelling a Git process running in dir can open: same-distro UNC paths
 // become Linux paths, drive paths become /mnt/<x>/... and already-Linux or
-// relative paths pass through. Repositories outside WSL pass paths through
-// unchanged — the conversion is only defined against a distro.
-func toGitPath(dir, p string) string {
+// relative paths pass through. A path the distro cannot reach — a UNC path of
+// another distro or another machine — is an error, because Git would otherwise
+// read that text as a relative path and create or open a directory named after
+// it instead of failing. Repositories outside WSL pass paths through
+// unchanged: the conversion is only defined against a distro.
+func toGitPath(dir, p string) (string, error) {
 	distro := wslDistroOf(dir)
 	if distro == "" {
-		return p
+		return p, nil
 	}
 	return wslpath.ToLinuxArg(distro, p)
 }

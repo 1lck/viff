@@ -54,9 +54,11 @@ Windows 版 Viff 原先只能打开 Windows 本地路径的仓库。用户希望
 
 ### 2. 环境、编码与错误分类
 
-- 显式设置 `WSL_UTF8=1`；固定 Git 环境经 `WSLENV` 转发（`GIT_TERMINAL_PROMPT`、`GIT_OPTIONAL_LOCKS`、`LC_ALL`、`LANGUAGE`、`GIT_SSH_COMMAND`），用户已有的 `WSLENV` 条目与标志位保留。
-- 新增三个稳定错误码，按语言无关标记分类：`wsl.unavailable`、`wsl.distro_missing`、`wsl.git_missing`。设置项 `GitPath` 不作用于 WSL 仓库。
+- 显式设置 `WSL_UTF8=1`；固定 Git 环境经 `WSLENV` 转发（`GIT_TERMINAL_PROMPT`、`GIT_OPTIONAL_LOCKS`、`LC_ALL`、`LANGUAGE`），用户已有的 `WSLENV` 条目与标志位保留。
+- 新增三个稳定错误码，按语言无关标记分类：`wsl.unavailable`、`wsl.distro_missing`、`wsl.git_missing`。
+- **设置里针对 Windows git 的取值不注入发行版 git**（`GitPath`、`GPGProgram`、`SigningKey`、`SignFormat`、`CredentialHelper`、`SSHCommand`）。这些值指向 Windows 程序或 Windows 路径（`gpg.program=C:\Program Files\...\gpg.exe`、`credential.helper=manager`），交给 Linux git 只会把它原本可用的配置换成无法执行的副本：HTTPS fetch 报 `git: 'credential-manager' is not a git command`，签名直接失败。认证、签名、hooks 与凭据按 ADR 的设计取自 Linux 侧，这也让「同一仓库在终端能提交、在 Viff 里不能」不再出现。代价：用户无法在 Viff 设置里为 WSL 仓库指定 Linux 侧程序，需要在发行版里配置。
 - 能力探测（`wsl.exe -d <distro> --exec git --version`）收口在 `Discover`，成功结果按发行版缓存、失败不缓存。
+- 设置页回显的 git 路径只读探测缓存（`CachedExecutableIn`），不在绘制线程里起 `wsl.exe`：打开仓库时已经跑过命令、缓存就绪，而首次探测最坏要等发行版启动。
 
 ### 3. 复用既有机制
 

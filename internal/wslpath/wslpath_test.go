@@ -1,6 +1,9 @@
 package wslpath
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestIs(t *testing.T) {
 	cases := []struct {
@@ -12,10 +15,17 @@ func TestIs(t *testing.T) {
 		{`\\WSL$\Ubuntu\repo`, true},          // alias case-insensitive
 		{`//wsl.localhost/Ubuntu/repo`, true}, // forward slashes
 		{`\\wsl.localhost\Ubuntu`, true},
+		// The extended-length and device prefixes Windows tools add, and the
+		// doubled separators a join can produce, name the same repository.
+		{`\\?\UNC\wsl.localhost\Ubuntu\home\momo\repo`, true},
+		{`\\?\UNC\wsl$\Ubuntu\repo`, true},
+		{`\\wsl.localhost\\Ubuntu\home\momo\repo`, true},
+		{`\\wsl.localhost\Ubuntu\`, true},
 		{`C:\Users\momo\repo`, false},
 		{`\\server\share\repo`, false},
 		{`\\wsl.localhost\`, false}, // no distro
 		{`\\wsl$`, false},           // no distro
+		{`\\?\UNC\wsl.localhost\`, false},
 		{`/home/momo/repo`, false},
 		{``, false},
 	}
@@ -38,6 +48,10 @@ func TestNormalize(t *testing.T) {
 		{`\\wsl.localhost\Ubuntu\repo\..\other`, `\\wsl.localhost\ubuntu\other`},
 		{`\\wsl.localhost\Ubuntu\`, `\\wsl.localhost\ubuntu`},
 		{`\\wsl.localhost\Ubuntu\Repo`, `\\wsl.localhost\ubuntu\Repo`}, // path case preserved
+		// Every spelling of one repository normalizes to one identity, which is
+		// what keeps the workspace list and the write lock from splitting it.
+		{`\\?\UNC\wsl.localhost\Ubuntu\home\repo`, `\\wsl.localhost\ubuntu\home\repo`},
+		{`\\wsl.localhost\\Ubuntu\home\repo`, `\\wsl.localhost\ubuntu\home\repo`},
 	}
 	for _, c := range cases {
 		got, ok := Normalize(c.path)
@@ -89,6 +103,12 @@ func TestFromLinux(t *testing.T) {
 		{"ubuntu", "/mnt/d/data", `D:\data`},
 		// A distro directory named like a drive letter is not a mount.
 		{"ubuntu", "/mnt/repo", `\\wsl.localhost\ubuntu\mnt\repo`},
+		// A trailing space is part of the name on a Linux file system; only the
+		// line breaks command output adds are stripped.
+		{"ubuntu", "/home/momo/repo \n", `\\wsl.localhost\ubuntu\home\momo\repo `},
+		// Without a distro the UNC spelling would name no distribution at all.
+		{"", "/home/momo/repo", ""},
+		{"  ", "/home/momo/repo", ""},
 		{"ubuntu", "relative/path", ""},
 		{"ubuntu", "", ""},
 	}
@@ -106,20 +126,42 @@ func TestToLinuxArg(t *testing.T) {
 		// Same distro UNC -> Linux path for execution.
 		{"ubuntu", `\\wsl.localhost\Ubuntu\home\momo\repo`, "/home/momo/repo"},
 		{"ubuntu", `\\wsl$\ubuntu\repo`, "/repo"},
+		{"ubuntu", `\\?\UNC\wsl.localhost\Ubuntu\repo`, "/repo"},
 		// Already a Linux path passes through.
 		{"ubuntu", "/home/momo/repo", "/home/momo/repo"},
 		// Windows drive paths map to the distro's drive mounts, so a worktree
-		// can live on the Windows file system.
+		// can live on the Windows file system. Both separators appear in what
+		// Windows hands over.
 		{"ubuntu", `C:\Users\momo\repo`, "/mnt/c/Users/momo/repo"},
 		{"ubuntu", `d:\data`, "/mnt/d/data"},
+		{"ubuntu", "C:/Users/momo/repo", "/mnt/c/Users/momo/repo"},
+		{"ubuntu", `C:\`, "/mnt/c"},
+		{"ubuntu", "c:", "/mnt/c"},
 		// Relative paths are resolved by Git against its cwd.
 		{"ubuntu", "sub/dir", "sub/dir"},
-		// Another distro is unreachable; Git reports the failure.
-		{"debian", `\\wsl.localhost\ubuntu\repo`, `\\wsl.localhost\ubuntu\repo`},
 	}
 	for _, c := range cases {
-		if got := ToLinuxArg(c.distro, c.path); got != c.want {
+		got, err := ToLinuxArg(c.distro, c.path)
+		if err != nil {
+			t.Errorf("ToLinuxArg(%q, %q): %v", c.distro, c.path, err)
+			continue
+		}
+		if got != c.want {
 			t.Errorf("ToLinuxArg(%q, %q) = %q, want %q", c.distro, c.path, got, c.want)
+		}
+	}
+	// A path this distro cannot reach is refused: Git would read the text as a
+	// relative path and act on a directory named after it.
+	for _, p := range []string{
+		`\\wsl.localhost\ubuntu\repo`, // another distro
+		`\\wsl$\ubuntu\repo`,
+		`\\server\share\repo`, // another machine
+		`\\?\UNC\server\share\repo`,
+	} {
+		if got, err := ToLinuxArg("debian", p); err == nil {
+			t.Errorf("ToLinuxArg(debian, %q) = %q, want an error", p, got)
+		} else if !errors.Is(err, ErrOutsideDistro) {
+			t.Errorf("ToLinuxArg(debian, %q) = %v, want ErrOutsideDistro", p, err)
 		}
 	}
 }

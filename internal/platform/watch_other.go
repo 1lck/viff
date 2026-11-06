@@ -21,7 +21,10 @@ import (
 func Watch(repo domain.Repo, changed func(meta bool)) (Watcher, error) {
 	interval, worktreeEvery := 2*time.Second, 3
 	if wslpath.Is(repo.Root) {
-		interval, worktreeEvery = 5*time.Second, 3
+		// Every poll here already round-trips 9P, so the working tree is not
+		// sampled less often than the Git directory: the documented five
+		// seconds is what both get.
+		interval, worktreeEvery = 5*time.Second, 1
 	}
 	return startPolling(repo, interval, worktreeEvery, changed), nil
 }

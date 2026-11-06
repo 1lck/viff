@@ -374,6 +374,20 @@ func (r *Runner) cachedWSLGit(distro string) string {
 	return r.wslGitPath[distro]
 }
 
+// CachedExecutableIn reports the Git binary the commands of the repository at
+// root run without starting a process: a WSL repository answers with the git
+// inside its distribution when an earlier probe recorded it, "" when this
+// process has not probed the distro yet. It exists for callers that paint,
+// where running wsl.exe — a round trip that can wait on the distribution
+// booting — would stall the frame.
+func (r *Runner) CachedExecutableIn(root string) (string, error) {
+	distro := wslDistroOf(root)
+	if distro == "" {
+		return r.Executable()
+	}
+	return r.cachedWSLGit(distro), nil
+}
+
 func (r *Runner) setWSLGit(distro, exe string) {
 	r.wslMu.Lock()
 	if r.wslGitPath == nil {

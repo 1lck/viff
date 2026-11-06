@@ -49,7 +49,14 @@ func TestSettingsGitPathEchoFollowsTheRepository(t *testing.T) {
 		t.Skipf("cannot resolve the distro git: %v", err)
 	}
 	want := strings.TrimSpace(string(linuxGit))
-	f.ws.Repo = &vapp.RepoState{Repo: domain.Repo{Root: `\\wsl.localhost\` + distro + `\home\momo\repo`}}
+	root := `\\wsl.localhost\` + distro + `\home\momo\repo`
+	f.ws.Repo = &vapp.RepoState{Repo: domain.Repo{Root: root}}
+	// Opening a repository runs its commands, which is what records the
+	// distro's git; the settings page only reads that record, so the dialog
+	// never waits on wsl.exe. Resolve once here, as opening the repository does.
+	if _, err := f.ws.Git.ExecutableIn(t.Context(), root); err != nil {
+		t.Skipf("cannot probe the distro git: %v", err)
+	}
 
 	f.win.openSettings()
 	f.win.Invalidate()
