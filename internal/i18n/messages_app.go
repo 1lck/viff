@@ -113,6 +113,7 @@ const (
 
 	AppNoticeChangeListsUnavailable = Key("app.notice.changeListsUnavailable")
 	AppNoticeChangeLists            = Key("app.notice.changeLists")
+	AppNoticePromptRulesUnavailable = Key("app.notice.promptRulesUnavailable")
 	AppNoticeCancelled              = Key("app.notice.cancelled")
 
 	AppNoticeRepositoryGone   = Key("app.notice.repositoryGone")
@@ -314,6 +315,7 @@ func init() {
 		AppNoticeEditHitConflictBody:  "The edit hit a conflict. Viff aborted the rebase and left the branch as it was.",
 
 		AppNoticeChangeListsUnavailable: "Change lists are unavailable",
+		AppNoticePromptRulesUnavailable: "Commit message rules are unavailable",
 		AppNoticeChangeLists:            "Change lists",
 		AppNoticeCancelled:              "Cancelled",
 
@@ -512,6 +514,7 @@ func init() {
 		AppNoticeEditHitConflictBody:  "该编辑遇到冲突。Viff 已中止变基，分支保持原状。",
 
 		AppNoticeChangeListsUnavailable: "变更列表不可用",
+		AppNoticePromptRulesUnavailable: "提交信息规则不可用",
 		AppNoticeChangeLists:            "变更列表",
 		AppNoticeCancelled:              "已取消",
 
