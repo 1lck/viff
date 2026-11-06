@@ -272,6 +272,56 @@ func TestFilesMenuOffersReadOnlyActions(t *testing.T) {
 	}
 }
 
+// The English default cannot show whether a label goes through the message
+// table: a hardcoded string reads exactly the same. Chinese is the case that
+// fails, so this is the regression test for the panel's own menus.
+func TestProjectPanelSpeaksTheChosenLanguage(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+	if err := f.s.Keys("cmd+1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool { return f.win.projectOpen && f.win.fm.loaded }, 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	f.ws.Settings.Language = "zh-CN"
+	f.win.applyLanguage()
+
+	assertMenuTitles(t, "file menu", f.win.filesMenu(fileRow{path: "README.md", name: "README.md"}), []string{
+		"打开", "用外部编辑器打开", "用 Git blame 注解", "显示历史",
+		"复制路径", "复制相对路径", "在文件管理器中显示",
+	})
+	assertMenuTitles(t, "tool window menu", f.win.projectWindowMenu(), []string{
+		"打开文件…", "在文件中查找…", "全部展开", "全部折叠", "隐藏项目",
+	})
+}
+
+// assertMenuTitles fails when one of want is missing from the menu's titles, so
+// a label that kept its English text shows up as the missing one.
+func assertMenuTitles(t *testing.T, what string, menu []item, want []string) {
+	t.Helper()
+	var titles []string
+	for _, it := range menu {
+		if it.title != "" {
+			titles = append(titles, it.title)
+		}
+	}
+	for _, w := range want {
+		found := false
+		for _, got := range titles {
+			if got == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("%s: %q missing from %v", what, w, titles)
+		}
+	}
+}
+
 func hasFilePath(list []string, p string) bool {
 	for _, x := range list {
 		if x == p {

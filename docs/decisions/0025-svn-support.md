@@ -163,8 +163,8 @@ Props byte
 - 查询一律用 `svn log --xml -r 1:HEAD <URL>`（S1），分页用 `-l`。**禁止**不带 `-r` 的默认调用。
 - SVN 历史是线性序列，`domain.Commit.Parents` 只放**该路径日志中的前一条**，不得合成 `revision-1`——仓库修订号是全局自增，路径日志会出现 r3、r7、r9 这样的跳号。
 - `domain/graph.go` 对 SVN 退化为单车道渲染，不引入第二套绘图算法。
-- 缓存落 `internal/storage`，带 schema 版本、字节配额、LRU 淘汰、TTL；损坏可重建，不阻止打开仓库。
-- 视图必须能表达三态：`Live`（刚查）、`Cache`（未核对）、`Stale`（超时/离线）。复用并扩展 `RepoState.StatusTime`。**离线时显示缓存必须显式标注**，不能冒充最新。
+- 缓存目前是进程内、按仓库键的有界（按条数）内存缓存，**没有**落 `internal/storage`、没有 schema 版本、字节配额、LRU 与 TTL。这是与本节原计划的偏离，记录为延后项：下次改动历史读取前，要么补上落盘与配额，要么按实测数据决定继续保留内存缓存，并把结论写回本节。
+- 视图目前只有两态：刚查到的结果，或者错误。计划中的 `Live`/`Cache`/`Stale` 三态与「离线显示缓存必须显式标注」**尚未实现**，因此离线时宁可报错，也不展示可能过期的内容。复审条件：一旦启用缓存回退，就必须同时落地陈旧标注，两者不可分开交付。
 
 ### 7. 写操作
 
@@ -197,8 +197,8 @@ Props byte
 | 历史（线性） | 有（DAG） | 有（线性，需缓存） |
 | update / commit（含部分提交）/ revert / add / delete | 有 | 有 |
 | 分支（切换、创建、删除） | 有 | 有（目录 + `switch`，语义不同） |
-| 属性编辑（`svn:ignore`、`svn:eol-style`） | 不适用 | 有 |
-| lock / unlock | 不适用 | 有 |
+| 属性编辑（`svn:ignore`、`svn:eol-style`） | 不适用 | **尚未实现** |
+| lock / unlock | 不适用 | **尚未实现** |
 | 冲突只读展示 + 标记已解决 | 有 | 有（复用 markers 解析） |
 | **rebase / cherry-pick / reset / 交互式 rebase** | 有 | **不适用**（无提交改写） |
 | **stash** | 有 | **不适用**（`revert` 不是 stash） |
@@ -207,11 +207,13 @@ Props byte
 
 表中「不适用」不是暂缓，是 SVN 模型没有对应物；对应入口按 `Capabilities` 隐藏，而不是显示后报错。
 
+「尚未实现」是延后，不是不适用：`svncli` 里没有 `propset`/`propget`/`lock`/`unlock`，`Capabilities.Properties` 与 `Capabilities.Locks` 也没有界面消费点，所以界面上既不显示属性编辑也不显示加锁。复审条件：等到属性编辑或锁被排入版本时，先补 `svncli` 的实现与真实 svn 的测试，再把矩阵改回「有」。
+
 ## 代价
 
 - 新增一层抽象与一套后端，`internal/svncli` 的读取子集（status/log/diff/blame/属性）解析工作量与 Git 侧同量级。
-- 历史必须缓存，引入缓存失效、配额、schema 迁移与「陈旧态」展示，这是 Git 侧没有的复杂度；错误处理不当会让用户看到过期数据。
-- 状态与应用层需要同时承载两套语义（双列/单列、DAG/线性、Ahead-Behind/仅 Behind），测试矩阵扩大，CI 需增加安装 `svn` 的分片。
+- 历史需要缓存，引入缓存失效与陈旧态展示的复杂度，这是 Git 侧没有的；本轮只做了进程内缓存，落盘、配额与陈旧标注仍是延后项（见 §6）。
+- 状态与应用层需要同时承载两套语义（双列/单列、DAG/线性、Ahead-Behind/仅 Behind），测试矩阵扩大，CI 需增加安装 `svn` 的分片（本轮已加入 Ubuntu 分片）。
 - 依赖本机 SVN 可执行文件（设置里可配路径），与 Git 一样成为运行时依赖；未安装时功能需明确降级而不是崩溃。
 - 双语文档、README 定位（「Git 桌面客户端」）、`docs/features.zh-CN.md` 已知限制都需同步改动。
 - 依赖 SVN 的 auth cache（`%APPDATA%\Subversion\auth`、`~/.subversion/auth`），Viff 不自建凭据存储；凭据交互失败时的提示质量受 SVN 自身输出限制。

@@ -72,6 +72,36 @@ func (w *Workspace) pickBackend(dir string) Git {
 // when refreshing the rows of the repository list.
 func (w *Workspace) backendForRoot(root string) Git { return w.pickBackend(root) }
 
+// gitBackend is the adapter that serves Git repositories, whichever repository
+// is open. Creating a repository and pointing Viff at a git executable are
+// about Git, not about the backend of the working copy in front of the user.
+func (w *Workspace) gitBackend() Git {
+	for _, t := range w.backends {
+		if t.kind == domain.KindGit {
+			return t.backend
+		}
+	}
+	// A workspace that registered no backends keeps the single-adapter setup,
+	// where w.Git is the git runner.
+	if len(w.backends) == 0 {
+		return w.Git
+	}
+	return nil
+}
+
+// SetGitPath pushes the configured git executable to the Git adapter.
+//
+// It exists for the same reason SetSVNPath does: w.Git is whichever adapter
+// serves the open repository, so saving settings while a Subversion working
+// copy is open would set the Git path on the Subversion runner. stat accepts
+// any existing file, so the check would pass and every svn command would then
+// run `git --non-interactive info --xml`.
+func (w *Workspace) SetGitPath(path string) {
+	if b := w.gitBackend(); b != nil {
+		b.SetPath(path)
+	}
+}
+
 // SetSVNPath pushes the configured svn executable to the Subversion adapter.
 //
 // It exists because the registered backends are what the settings page can

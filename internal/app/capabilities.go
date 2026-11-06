@@ -62,6 +62,7 @@ func CapabilitiesOf(g Git) Capabilities {
 		Index:          true,
 		Amend:          true,
 		SeparatePush:   true,
+		BranchUpdate:   true,
 		Locks:          false,
 		OfflineHistory: false,
 		Properties:     false,
@@ -71,6 +72,7 @@ func CapabilitiesOf(g Git) Capabilities {
 		caps.Index = flags.Index
 		caps.Amend = flags.Amend
 		caps.SeparatePush = flags.SeparatePush
+		caps.BranchUpdate = flags.BranchUpdate
 		caps.Properties = flags.Properties
 		caps.Locks = flags.Locks
 		caps.OfflineHistory = flags.OfflineHistory

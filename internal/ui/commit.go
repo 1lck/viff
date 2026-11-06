@@ -562,6 +562,13 @@ func (w *Window) rowAction(i int, row changeRow, hl ui.Rect) {
 	if !(w.hovered(scChangeRows.At(i)) || w.hovered(id)) {
 		return
 	}
+	// Without an index only scheduling is left: `svn add` takes an untracked
+	// file under version control, while an already-versioned file is committed
+	// as it stands and `svn add` on it fails with E200009. The action is
+	// hidden rather than offered and refused.
+	if !w.ws.Caps.Index && row.area != domain.AreaUntracked {
+		return
+	}
 	var pair icons.Pair
 	var tip string
 	switch row.area {
@@ -817,6 +824,11 @@ func (w *Window) toggleStageSelection() {
 				unstage = append(unstage, r.entry.OrigPath)
 			}
 		case domain.AreaUnstaged, domain.AreaUntracked:
+			// A modified file is already under version control where there is
+			// no index, so scheduling it again would only fail.
+			if !w.ws.Caps.Index && r.area == domain.AreaUnstaged {
+				continue
+			}
 			stage = append(stage, r.entry.Path)
 		case domain.AreaConflicts:
 			w.markResolved(r.entry.Path)
@@ -1246,7 +1258,21 @@ func (w *Window) doCommit(push bool) {
 	if msg == "" || conflicts > 0 || (committable == 0 && !v.amend) {
 		return
 	}
-	req := vapp.CommitRequest{Message: v.msg.String(), Amend: v.amend, SignOff: v.signOff, NoVerify: v.noVerify}
+	// A backend without an index commits the rows the user checked; without
+	// them svn commit takes the whole working copy, so the boxes would be
+	// decoration. Checked rows that the backend cannot schedule (untracked and
+	// ignored files) are left out, so the commit never fails over a file that
+	// was never under version control.
+	var paths []string
+	if !w.ws.Caps.Index {
+		for _, row := range w.selectedEntries() {
+			if row.entry.Untracked() || row.entry.Ignored() {
+				continue
+			}
+			paths = append(paths, row.entry.Path)
+		}
+	}
+	req := vapp.CommitRequest{Message: v.msg.String(), Amend: v.amend, SignOff: v.signOff, NoVerify: v.noVerify, Paths: paths}
 	w.ws.Commit(req, func() {
 		setText(v.msg, "")
 		v.msg.ClearHistory()

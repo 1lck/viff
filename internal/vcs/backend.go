@@ -192,6 +192,11 @@ type ModelFlags struct {
 	// separate step (push, fetch). Off for a backend whose commit is itself
 	// the server operation.
 	SeparatePush bool
+	// BranchUpdate reports that a checked-out branch can be brought up to date
+	// with its upstream without switching away (git pull --ff-only on the local
+	// branch). Subversion updates the working copy, not a branch, so a branch
+	// that is not the working copy's own cannot be updated at all.
+	BranchUpdate bool
 }
 
 // ModelReporter is implemented by a backend that wants to declare its model
@@ -225,6 +230,9 @@ type Capabilities struct {
 	// Git has that split; Subversion does not, because svn commit itself is the
 	// server operation, so the UI offers no Push, Fetch or "Commit and Push".
 	SeparatePush bool
+	// BranchUpdate reports that a branch can be updated from its remote without
+	// switching the working copy to it.
+	BranchUpdate bool
 
 	// HistoryWriter merges, rebases and otherwise rewrites history.
 	HistoryWriter HistoryWriter

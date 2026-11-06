@@ -21,5 +21,9 @@ func (r *Runner) Model() vcs.ModelFlags {
 		// publish afterwards, so Push, Fetch and "Commit and Push" have no
 		// meaning and the UI hides them.
 		SeparatePush: false,
+		// svn update brings the working copy up to date; a branch that is not
+		// the working copy's own cannot be updated, so "Update from Remote" is
+		// hidden rather than offered and refused.
+		BranchUpdate: false,
 	}
 }

@@ -894,7 +894,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			s.Theme = theme
 			s.FontSize = float32(n)
 			s.GitPath = strings.TrimSpace(gitPath.String())
-			w.ws.Git.SetPath(s.GitPath)
+			w.ws.SetGitPath(s.GitPath)
 			s.SVNPath = strings.TrimSpace(svnPath.String())
 			w.ws.SetSVNPath(s.SVNPath)
 			s.ExternalEditor = strings.TrimSpace(editor.String())

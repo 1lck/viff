@@ -120,8 +120,8 @@ the reasoning is recorded in [0025](docs/decisions/0025-svn-support.md).
 | update / commit / revert / add / delete                           | Yes                       | Yes (partial commits via a target set)     |
 | Branch switching, creation, deletion                              | Yes                       | Yes (directories plus `switch`)            |
 | Conflict display (read-only)                                      | Yes                       | Yes                                        |
-| Property editing (`svn:ignore`, `svn:eol-style`)                  | Not applicable            | Yes                                        |
-| lock / unlock                                                     | Not applicable            | Yes                                        |
+| Property editing (`svn:ignore`, `svn:eol-style`)                  | Not applicable            | Not implemented yet                        |
+| lock / unlock                                                     | Not applicable            | Not implemented yet                        |
 | rebase, cherry-pick, reset, interactive rebase                    | Yes                       | Not applicable                             |
 | stash                                                             | Yes                       | Not applicable                             |
 | worktree, reflog, submodule                                       | Yes                       | Not applicable                             |
@@ -130,8 +130,10 @@ the reasoning is recorded in [0025](docs/decisions/0025-svn-support.md).
 **Subversion differs in three ways that matter day to day:**
 
 - **History needs the repository.** The working copy holds no history, so Viff
-  queries the repository and keeps a local cache. When the repository cannot be
-  reached, the cached history is shown marked as stale instead of passing for live data.
+  queries the repository and keeps the answer for the session. When the
+  repository cannot be reached the failure is reported rather than passed off as
+  current data; labelling a kept answer as stale is not implemented yet, so
+  nothing is shown as if it were live.
 - **No staging area.** Instead of staging, a commit takes an explicit set of
   target files, which you choose in the commit area.
 - **Commits are remote and atomic.** Nothing is committed locally, and an

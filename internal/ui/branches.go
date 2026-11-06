@@ -213,7 +213,10 @@ func (w *Window) refActions(r domain.Ref) []item {
 			item{title: w.t(i18n.ChromeMenuRename), icon: icons.Edit, disabled: !w.canWriteBranches(), run: func() { w.openRename(r) }},
 			item{title: w.t(i18n.ChromeActionDelete), icon: icons.Delete, disabled: !w.canWriteBranches(), run: func() { w.ws.DeleteBranch(r, false) }},
 		)
-		if len(rs.Remotes) > 0 {
+		// A backend whose Remotes list is a fixed placeholder must not offer
+		// this: the entry has to follow the capability, not the length of the
+		// list.
+		if w.ws.Caps.BranchUpdate && len(rs.Remotes) > 0 {
 			items = append(items, item{title: w.t(i18n.ChromeMenuUpdateFromRemote), icon: icons.Update, disabled: busy, run: func() { w.updateBranchFromRemote(r) }})
 		}
 	} else {

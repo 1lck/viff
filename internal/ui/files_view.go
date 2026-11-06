@@ -74,21 +74,22 @@ func (w *Window) paintProject(r ui.Rect) {
 	// Header: the tool window title and its actions, like IntelliJ's Project
 	// view. New/delete are absent because the panel is read-only.
 	hr := splitTop(&r, 40)
-	titleW := w.p.width("Project", fontUI, semibold)
+	panelTitle := w.t(i18n.WorkspaceHintProject)
+	titleW := w.p.width(panelTitle, fontUI, semibold)
 	title := rect(hr.X+8, hr.Y+6, titleW+32, hr.Height-12)
 	if w.hovered(idProjectMenu) {
 		w.p.round(title, 5, w.pal.ToolHover)
 	}
-	w.p.text("Project", rect(title.X+4, title.Y, titleW+2, title.Height), fontUI, semibold, w.pal.Text)
+	w.p.text(panelTitle, rect(title.X+4, title.Y, titleW+2, title.Height), fontUI, semibold, w.pal.Text)
 	w.p.iconIn(icons.ChevronDown, rect(title.X+titleW+8, title.Y+2, 16, title.Height-4))
-	w.c.HitWithOptions(idProjectMenu, title, "Project options", ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
+	w.c.HitWithOptions(idProjectMenu, title, w.t(i18n.WorkspaceTipProjectOptions), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
 	if w.clicked(idProjectMenu, nil) {
 		w.after(func() {
 			w.openMenuBelow(title, w.projectWindowMenu(), 220)
 		})
 	}
 	rx := right(hr) - 8 - actionSize
-	if w.action(idProjectHide, rx, hr.Y+(hr.Height-actionSize)/2, icons.Hide, "Hide\t⌘1", actOpts{}) {
+	if w.action(idProjectHide, rx, hr.Y+(hr.Height-actionSize)/2, icons.Hide, w.t(i18n.WorkspaceActionHide)+"\t⌘1", actOpts{}) {
 		w.after(w.toggleProject)
 	}
 	rx -= actionSize + 2
@@ -100,7 +101,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		w.after(w.openQuickOpen)
 	}
 	rx -= actionSize + 2
-	if w.action(idProjectExpand, rx, hr.Y+(hr.Height-actionSize)/2, icons.ExpandAll, "Expand All", actOpts{}) {
+	if w.action(idProjectExpand, rx, hr.Y+(hr.Height-actionSize)/2, icons.ExpandAll, w.t(i18n.WorkspaceActionExpandAll), actOpts{}) {
 		w.after(func() {
 			clear(w.fm.collapsed)
 			w.fm.rootOpen = true
@@ -108,7 +109,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		})
 	}
 	rx -= actionSize + 2
-	if w.action(idProjectCollapse, rx, hr.Y+(hr.Height-actionSize)/2, icons.CollapseAll, "Collapse All", actOpts{}) {
+	if w.action(idProjectCollapse, rx, hr.Y+(hr.Height-actionSize)/2, icons.CollapseAll, w.t(i18n.WorkspaceActionCollapseAll), actOpts{}) {
 		w.after(func() {
 			for _, row := range w.fm.rows {
 				if row.dir && !row.root {
@@ -119,7 +120,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		})
 	}
 	rx -= actionSize + 2
-	if w.action(idProjectRefresh, rx, hr.Y+(hr.Height-actionSize)/2, icons.Refresh, "Refresh", actOpts{}) {
+	if w.action(idProjectRefresh, rx, hr.Y+(hr.Height-actionSize)/2, icons.Refresh, w.t(i18n.WorkspaceActionRefresh), actOpts{}) {
 		w.after(func() {
 			// gen 0 never matches a live repository, so the next paint asks
 			// again even after a failed listing whose status time is unchanged.
@@ -129,7 +130,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		})
 	}
 	if v.loaded && v.err == nil {
-		info := plural(len(v.entries), "file", "files")
+		info := w.pluralT(len(v.entries), i18n.WorkspaceCountFilesOne, i18n.WorkspaceCountFilesMany)
 		iw := w.p.width(info, fontSmall, regular)
 		if rx-iw-10 > hr.X+140 {
 			w.p.text(info, rect(rx-iw-10, hr.Y, iw+2, hr.Height), fontSmall, regular, w.pal.TextSecond)
@@ -141,7 +142,7 @@ func (w *Window) paintProject(r ui.Rect) {
 
 	fr := splitTop(&r, 34)
 	field := rect(fr.X+8, fr.Y+4, fr.Width-16, 26)
-	if w.field(idProjectFilter, v.filter, field, fieldOpts{icon: icons.Search, placeholder: "Filter files"}) {
+	if w.field(idProjectFilter, v.filter, field, fieldOpts{icon: icons.Search, placeholder: w.t(i18n.RevisionFilter)}) {
 		if i := v.firstFile(); i >= 0 {
 			w.openRepoFile(v.rows[i].path, true)
 		}
@@ -156,7 +157,7 @@ func (w *Window) paintProject(r ui.Rect) {
 	r.Y++
 	r.Height--
 
-	w.list(idProjectList, scProjectRows, r, "Project")
+	w.list(idProjectList, scProjectRows, r, w.t(i18n.WorkspaceHintProject))
 	w.onKeys(idProjectList, w.projectKey)
 	content := float32(len(v.rows))*rowH + 8
 	v.scroll.clamp(content, r.Height)
@@ -167,16 +168,16 @@ func (w *Window) paintProject(r ui.Rect) {
 
 	switch {
 	case v.loading && !v.loaded:
-		w.p.textCenter("Loading files…", r, fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.WorkspaceLoadingFiles), r, fontUI, regular, w.pal.TextSecond)
 		return
 	case v.err != nil:
 		w.p.textCenter(w.ws.ErrorText(v.err), r, fontUI, regular, w.pal.Error)
 		return
 	case len(v.entries) == 0:
-		w.p.textCenter("No files in the working tree", r, fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.WorkspaceEmptyNoFiles), r, fontUI, regular, w.pal.TextSecond)
 		return
 	case len(v.rows) == 0:
-		w.p.textCenter("No files match the filter", r, fontUI, regular, w.pal.TextSecond)
+		w.p.textCenter(w.t(i18n.RevisionNoMatch), r, fontUI, regular, w.pal.TextSecond)
 		return
 	}
 
@@ -428,12 +429,12 @@ func (w *Window) projectWindowMenu() []item {
 	}
 	return append(out, []item{
 		sep(),
-		{title: "Expand All", icon: icons.ExpandAll, run: func() {
+		{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: func() {
 			clear(w.fm.collapsed)
 			w.fm.rootOpen = true
 			w.fm.rebuild()
 		}},
-		{title: "Collapse All", icon: icons.CollapseAll, run: func() {
+		{title: w.t(i18n.WorkspaceActionCollapseAll), icon: icons.CollapseAll, run: func() {
 			for _, r := range w.fm.rows {
 				if r.dir && !r.root {
 					w.fm.collapsed[r.path] = true
@@ -442,21 +443,21 @@ func (w *Window) projectWindowMenu() []item {
 			w.fm.rebuild()
 		}},
 		sep(),
-		{title: "Hide Project", shortcut: "⌘1", run: w.toggleProject},
-	}...)
+		{title: w.t(i18n.WorkspaceMenuHideProject), shortcut: "⌘1", run: w.toggleProject},
+	}
 }
 
 // filesMenu is the context menu of one Files row.
 func (w *Window) filesMenu(row fileRow) []item {
 	if row.root {
 		return []item{
-			{title: "Refresh", icon: icons.Refresh, run: func() { w.ws.Refresh(true) }},
-			{title: "Expand All", icon: icons.ExpandAll, run: func() {
+			{title: w.t(i18n.WorkspaceActionRefresh), icon: icons.Refresh, run: func() { w.ws.Refresh(true) }},
+			{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: func() {
 				clear(w.fm.collapsed)
 				w.fm.rootOpen = true
 				w.fm.rebuild()
 			}},
-			{title: "Collapse All", icon: icons.CollapseAll, run: func() {
+			{title: w.t(i18n.WorkspaceActionCollapseAll), icon: icons.CollapseAll, run: func() {
 				for _, r := range w.fm.rows {
 					if r.dir && !r.root {
 						w.fm.collapsed[r.path] = true
@@ -465,14 +466,14 @@ func (w *Window) filesMenu(row fileRow) []item {
 				w.fm.rebuild()
 			}},
 			sep(),
-			{title: "Copy Path", icon: icons.Copy, run: func() { w.copyText(w.repo().Repo.Root) }},
+			{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, run: func() { w.copyText(w.repo().Repo.Root) }},
 		}
 	}
 	if row.dir {
 		expanded := w.fm.query != "" || !w.fm.collapsed[row.path]
-		label := "Expand"
+		label := w.t(i18n.WorkspaceMenuExpand)
 		if expanded {
-			label = "Collapse"
+			label = w.t(i18n.WorkspaceMenuCollapse)
 		}
 		return []item{
 			{title: label, icon: icons.ChevronDown, run: func() {
@@ -480,20 +481,20 @@ func (w *Window) filesMenu(row fileRow) []item {
 				w.fm.rebuild()
 			}},
 			sep(),
-			{title: "Copy Relative Path", icon: icons.Copy, run: func() { w.copyText(row.path) }},
+			{title: w.t(i18n.WorkspaceActionCopyRelativePath), icon: icons.Copy, run: func() { w.copyText(row.path) }},
 		}
 	}
 	rs := w.repo()
 	full := path.Join(rs.Repo.Root, row.path)
 	return []item{
-		{title: "Open", icon: icons.OpenNewTab, run: func() { w.openRepoFile(row.path, true) }},
-		{title: "Open in External Editor", icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(row.path, 0) }},
+		{title: w.t(i18n.WorkspaceMenuOpen), icon: icons.OpenNewTab, run: func() { w.openRepoFile(row.path, true) }},
+		{title: w.t(i18n.WorkspaceMenuOpenInEditor), icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(row.path, 0) }},
 		sep(),
-		{title: "Annotate with Git Blame", icon: icons.Vcs, run: func() { w.openFileView(row.path, "", true) }},
+		{title: w.t(i18n.WorkspaceMenuAnnotate), icon: icons.Vcs, run: func() { w.openFileView(row.path, "", true) }},
 		{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(row.path) }},
 		sep(),
-		{title: "Copy Path", icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
-		{title: "Copy Relative Path", run: func() { w.copyText(row.path) }},
-		{title: "Show in Finder", icon: icons.Folder, run: func() { revealPath(full) }},
+		{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
+		{title: w.t(i18n.WorkspaceActionCopyRelativePath), run: func() { w.copyText(row.path) }},
+		{title: w.t(i18n.WorkspaceMenuRevealInFinder), icon: icons.Folder, run: func() { revealPath(full) }},
 	}
 }

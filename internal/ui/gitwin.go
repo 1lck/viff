@@ -776,10 +776,15 @@ func (w *Window) commitMenu() []item {
 	items = append(items, sep(),
 		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: !single || !w.canWriteBranches(), run: func() { w.openNewBranch(c.Hash, short) }},
 		item{title: w.t(i18n.ChromeMenuNewTag), icon: icons.BranchLabel, disabled: !single || w.ws.Caps.References == nil, run: func() { w.openNewTag(c.Hash, short) }},
-		// A merge commit has more than one history, so "up to" is ambiguous.
-		item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }},
-		item{title: w.t(i18n.ChromeMenuBrowseAtRevision), icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }},
 	)
+	// Publishing a commit is a Git-shaped step: a backend whose commit is the
+	// server operation has nothing to push, so the entry is left out instead of
+	// opening an action that fails.
+	if w.ws.Caps.SeparatePush {
+		// A merge commit has more than one history, so "up to" is ambiguous.
+		items = append(items, item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }})
+	}
+	items = append(items, item{title: w.t(i18n.ChromeMenuBrowseAtRevision), icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }})
 	// The service name comes from the remote, so the entry reads "Open Commit on
 	// GitHub" and names the host for a self-hosted instance. It is omitted, not
 	// disabled, when the remote has no web page at all.

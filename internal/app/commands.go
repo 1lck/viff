@@ -258,6 +258,11 @@ type CommitRequest struct {
 	Amend    bool
 	SignOff  bool
 	NoVerify bool
+	// Paths is the target set of this commit. A backend without an index
+	// (Subversion) has no other way to commit a subset: the paths the user
+	// checked are what gets committed. Empty means every scheduled change.
+	// A backend with an index ignores it and commits what is staged.
+	Paths []string
 	// Push pushes after a successful commit.
 	Push bool
 }
@@ -266,8 +271,18 @@ type CommitRequest struct {
 // a failing hook fails the commit and its output is shown.
 func (w *Workspace) Commit(req CommitRequest, after func()) {
 	staged, _, _, _ := w.Repo.Status.Counts()
+	// What the notice counts is what was committed. Without an index the
+	// staged count is always zero, so the notice would claim "0 files
+	// committed" for every Subversion commit.
+	committed := staged
+	if !w.Caps.Index {
+		committed = w.CommittableCount()
+		if len(req.Paths) > 0 {
+			committed = len(req.Paths)
+		}
+	}
 	subject := strings.SplitN(strings.TrimSpace(req.Message), "\n", 2)[0]
-	body := w.trPlural(staged, i18n.AppNoticeCommittedBody, i18n.AppNoticeCommittedBodyMany, staged, subject)
+	body := w.trPlural(committed, i18n.AppNoticeCommittedBody, i18n.AppNoticeCommittedBodyMany, committed, subject)
 	if req.Amend {
 		body = w.tr(i18n.AppNoticeAmendedBody, subject)
 	}
@@ -276,7 +291,7 @@ func (w *Workspace) Commit(req CommitRequest, after func()) {
 		spec.kind = undoAmend
 	}
 	w.run("Commit", spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.Commit(ctx, repo, gitcli.CommitOptions{Message: req.Message, Amend: req.Amend, SignOff: req.SignOff, NoVerify: req.NoVerify})
+		_, err := w.Git.Commit(ctx, repo, gitcli.CommitOptions{Message: req.Message, Amend: req.Amend, SignOff: req.SignOff, NoVerify: req.NoVerify, Paths: req.Paths})
 		return err
 	}, RunOptions{Success: w.tr(i18n.AppNoticeCommitted), SuccessBody: body, After: after})
 }
@@ -1170,12 +1185,19 @@ func (w *Workspace) Clone(url, parent, dir string, done func(error)) {
 }
 
 // Init creates a repository and opens it.
+//
+// It always creates a Git repository, whatever the open working copy is: a
+// Subversion working copy has no local repository to create, and the backend in
+// front of the user must not decide what appears in an unrelated directory.
 func (w *Workspace) Init(dir string, done func(error)) {
 	_, ctx, finish := w.startTask("Init", true)
 	go func() {
-		err := os.MkdirAll(dir, 0o755)
-		if err == nil {
-			err = w.Git.Init(ctx, dir)
+		b := w.gitBackend()
+		var err error
+		if b == nil {
+			err = ErrUnsupported
+		} else if err = os.MkdirAll(dir, 0o755); err == nil {
+			err = b.Init(ctx, dir)
 		}
 		w.post(func() {
 			finish()
