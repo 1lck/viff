@@ -39,6 +39,8 @@ const (
 	SettingsCheckAutoUpdate = Key("settings.check.autoUpdate")
 	SettingsCheckPrune      = Key("settings.check.prune")
 	SettingsCheckAutoFetch  = Key("settings.check.autoFetch")
+	SettingsCheckAskUpdate  = Key("settings.check.askUpdate")
+	SettingsHintAskUpdate   = Key("settings.hint.askUpdate")
 
 	SettingsThemeDark   = Key("settings.theme.dark")
 	SettingsThemeLight  = Key("settings.theme.light")
@@ -103,6 +105,8 @@ func init() {
 		SettingsCheckAutoUpdate: "Check for updates at startup",
 		SettingsCheckPrune:      "Prune remote branches on fetch",
 		SettingsCheckAutoFetch:  "Fetch in the background",
+		SettingsCheckAskUpdate:  "Ask for the update type",
+		SettingsHintAskUpdate:   "Off: updating from the shortcut uses the method above without asking.",
 
 		SettingsThemeDark:   "Islands Dark",
 		SettingsThemeLight:  "Islands Light",
@@ -166,6 +170,8 @@ func init() {
 		SettingsCheckAutoUpdate: "启动时检查更新",
 		SettingsCheckPrune:      "抓取时清理远程分支",
 		SettingsCheckAutoFetch:  "后台自动抓取",
+		SettingsCheckAskUpdate:  "询问更新方式",
+		SettingsHintAskUpdate:   "关闭后：使用快捷键更新时直接按上面的方式执行，不再询问。",
 
 		SettingsThemeDark:   "Islands 深色",
 		SettingsThemeLight:  "Islands 浅色",

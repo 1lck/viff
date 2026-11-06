@@ -133,6 +133,9 @@ const (
 	AppNoticeUpdateAvailable     = Key("app.notice.updateAvailable")
 	AppNoticeUpdateAvailableBody = Key("app.notice.updateAvailableBody")
 
+	AppNoticeUpdatingProject     = Key("app.notice.updatingProject")
+	AppNoticeUpdatingProjectBody = Key("app.notice.updatingProjectBody")
+
 	AppNoticeResolveConflictFailed = Key("app.notice.resolveConflictFailed")
 
 	AppNoticeSubmoduleAdded         = Key("app.notice.submoduleAdded")
@@ -332,6 +335,9 @@ func init() {
 		AppNoticeUpdateAvailable:     "Update available",
 		AppNoticeUpdateAvailableBody: "Viff %s is available (you have %s).",
 
+		AppNoticeUpdatingProject:     "Updating %s",
+		AppNoticeUpdatingProjectBody: "Updating from %s (%s).",
+
 		AppNoticeResolveConflictFailed: "Resolve conflict failed",
 
 		AppNoticeSubmoduleAdded:         "Submodule added",
@@ -526,6 +532,9 @@ func init() {
 
 		AppNoticeUpdateAvailable:     "有可用更新",
 		AppNoticeUpdateAvailableBody: "Viff %s 已发布（当前为 %s）。",
+
+		AppNoticeUpdatingProject:     "正在更新 %s",
+		AppNoticeUpdatingProjectBody: "从 %s 更新（%s）。",
 
 		AppNoticeResolveConflictFailed: "解决冲突失败",
 
