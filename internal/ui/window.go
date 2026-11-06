@@ -174,6 +174,30 @@ func (w *Window) applyTheme() {
 	w.theme = w.pal.viewTheme()
 }
 
+// windowControlsStyle is the look of the minimize, maximize and close buttons
+// Viva draws on the custom titlebar. Every color comes from the palette, so the
+// buttons stay legible in both themes and follow a theme switch mid-session.
+func (w *Window) windowControlsStyle() app.WindowControlsStyle {
+	p := w.pal
+	return app.WindowControlsStyle{
+		// The glyph sits on the frame strip, so it uses the same ink the toolbar
+		// text does: black on the light frame, near-white on the dark one.
+		Foreground: p.Text,
+		Hover:      p.ToolHover,
+		Pressed:    p.ToolPressed,
+		// Close keeps Viva's own red and white glyph. Those two are constants, not
+		// derived from the clear color, so the captured-at-creation bug above does
+		// not reach them; p.Error cannot stand in for the fill, because it is the
+		// pale red meant to read as text on a dark background, and white on it
+		// drops to 2.6:1.
+		// Viva's own names are English; the interface language decides these.
+		Minimize:  w.t(i18n.ChromeA11yMinimize),
+		Maximize:  w.t(i18n.ChromeA11yMaximize),
+		Restore:   w.t(i18n.ChromeA11yRestore),
+		CloseName: w.t(i18n.ChromeA11yCloseWindow),
+	}
+}
+
 // applyFont gives the chosen family to every window's interface text through
 // Viva's process-wide interface font and, when the system also lists that
 // family as fixed-pitch, to the diffs and the console. An empty EditorFont
@@ -279,6 +303,12 @@ func (w *Window) Config() app.Config {
 		WindowMode:     app.WindowCustomTitlebar,
 		TitlebarHeight: toolbarH,
 		ClearColor:     app.Color{Red: float64(w.pal.Frame.Red), Green: float64(w.pal.Frame.Green), Blue: float64(w.pal.Frame.Blue), Alpha: 1},
+		// Viva derives the window buttons' ink from ClearColor when no style is
+		// given, and it captures that color when the window is created. A window
+		// opened in the dark theme and then switched to the light one kept light
+		// glyphs on a light titlebar, which is unreadable. This callback runs at
+		// every paint, so the buttons follow the current palette instead.
+		WindowControls: w.windowControlsStyle,
 		Paint:          w.Paint,
 		OnPointer:      w.onPointer,
 		OnKey:          w.onKey,
