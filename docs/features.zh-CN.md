@@ -7,7 +7,7 @@
 ## 功能
 
 - **欢迎页**：最近项目（支持搜索和移除，不存在的路径标红）、打开、克隆、新建仓库，也可以把文件夹拖进窗口。
-- **多仓库工作区**：欢迎页或项目菜单的 Repositories 可添加仓库、统一查看分支与改动、切换和移除条目。点击文件会先切到所属仓库再查看 Diff；移除不删除磁盘文件，切换保留当前窗口内各仓库的提交说明草稿。
+- **多仓库工作区**：欢迎页或项目菜单的 Repositories 可添加仓库、统一查看分支与改动、切换和移除条目。打开不是仓库的父目录时，Viff 会提供发现对话框，扫描并勾选其中的子仓库批量导入（包括仓库内嵌套的仓库、submodule 与 linked worktree）；扫描在后台执行、可取消，结果不会自动改变工作区，见 [0036](decisions/0036-repository-discovery.md)。点击文件会先切到所属仓库再查看 Diff；移除不删除磁盘文件，切换保留当前窗口内各仓库的提交说明草稿。
 - **Commit 工具窗口**
   - 分组：Merge Conflicts / Staged / Changes / Unversioned Files，可按目录分组。
   - ChangeList：创建、重命名、删除清单，右键分配文件并按清单筛选。筛选仅影响未暂存和未跟踪文件；始终显示全部已暂存文件，提交仍包含全部暂存内容。筛选后的批量暂存只作用于可见文件。
@@ -97,7 +97,7 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 
 ## 已知限制
 
-- 多仓库写入操作只针对当前仓库；非活动仓库在打开总览或手动刷新时更新。ChangeList 是文件分组，不提供独立索引或跨仓库提交，见 [0020](decisions/0020-repositories-changelists.md)。
+- 多仓库写入操作只针对当前仓库；非活动仓库在打开总览或手动刷新时更新。ChangeList 是文件分组，不提供独立索引或跨仓库提交，见 [0020](decisions/0020-repositories-changelists.md)。从父目录发现仓库按名称跳过依赖/构建目录，默认深度 4、目录 2000、仓库 200；超出或跳过时对话框会提示，见 [0036](decisions/0036-repository-discovery.md)。
 - 已在 macOS，以及 Windows Server 2022 x64（Git 2.56.0.windows.4）上验证 Git 功能和 Viva 无头界面；Windows 10/11 的实际桌面交互、输入法及安装分发尚未验收。Linux 和 Windows 的文件监听仍是轮询，见 [0003](decisions/0003-file-watching.md)。
 - 界面字体默认为系统字体（SF Pro），没有使用 Inter；设置里可分别选择「界面字体」（全部已安装族）与「diff 字体」（仅等宽族，用于 diff、控制台与哈希），见 [0002](decisions/0002-fonts.md)。
 - 冲突支持逐块接受两侧内容；自由文本编辑、二进制或不可靠冲突标记仍需要外部编辑器，见 [0019](decisions/0019-git-issue-gaps.md)。Copy for AI 只写系统剪贴板，不调用模型、不发网络请求；单块 200 行 / 20 KB、全文 200 KB 截断，见 [0032](decisions/0032-ai-conflict-context.md)。
