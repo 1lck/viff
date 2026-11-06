@@ -1,6 +1,7 @@
 package viffui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -592,6 +593,30 @@ func (w *Window) openAbout() {
 
 func (w *Window) openSettings() { w.openSettingsAt(0) }
 
+// gitExecutableFor resolves the git the settings page echoes: the one the open
+// repository's commands run, or the machine default when no repository is
+// open. A WSL repository answers with the git inside its distribution, which is
+// what makes the echo true for the repository in front of the user.
+func gitExecutableFor(w *Window) (string, error) {
+	root := ""
+	if rs := w.repo(); rs != nil {
+		root = rs.Repo.Root
+	}
+	return w.ws.Git.ExecutableIn(context.Background(), root)
+}
+
+// gitPathPlaceholder is the text an empty Path to Git shows: the resolved
+// binary itself, so "automatic" never hides which one runs.
+func (w *Window) gitPathPlaceholder(exe string, err error) string {
+	switch {
+	case exe != "":
+		return exe
+	case err != nil:
+		return w.t(i18n.SettingsHintGitMissing)
+	}
+	return w.t(i18n.SettingsPlaceholderAuto)
+}
+
 // openSettingsAt opens the settings dialog on one page: 0 General, 1 Git, 2 AI.
 func (w *Window) openSettingsAt(page int) {
 	s := w.ws.Settings
@@ -606,9 +631,10 @@ func (w *Window) openSettingsAt(page int) {
 	monoFonts := app.MonospaceFamilies()
 	font := text.NewEditor(strconv.Itoa(int(s.FontSize)))
 	gitPath := text.NewEditor(s.GitPath)
-	// What an empty Path to Git resolved to, collected once when the dialog
-	// opens: the field must not hide which binary commands actually run.
-	gitExe, gitExeErr := w.ws.Git.Executable()
+	// The path the open repository's commands run, shown inside the empty
+	// field: a WSL repository runs the git inside its distribution, so the
+	// echo must not name the Windows default there.
+	gitExe, gitExeErr := gitExecutableFor(w)
 	editor := text.NewEditor(s.ExternalEditor)
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
 	autoUpdate, autoUpdateWas := s.AutoUpdateCheck, s.AutoUpdateCheck
@@ -681,27 +707,7 @@ func (w *Window) openSettingsAt(page int) {
 			f.field(w.t(i18n.SettingsLabelFontSize), font, "13", err != nil || n < 8 || n > 32)
 			f.gap(6)
 			f.bold(w.t(i18n.SettingsGroupGitExec))
-			f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.t(i18n.SettingsPlaceholderAuto), false)
-			f.custom(22, func(r ui.Rect) {
-				msg := ""
-				switch {
-				case strings.TrimSpace(gitPath.String()) != "":
-					// The field itself shows the configured path.
-				case gitExeErr != nil:
-					msg = w.t(i18n.SettingsHintGitMissing)
-				default:
-					msg = w.t(i18n.SettingsHintGitUsing, gitExe)
-				}
-				if msg != "" {
-					msg = w.p.truncateMiddle(msg, fontSmall, regular, r.Width-170)
-					w.p.text(msg, rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
-				}
-			})
-			f.custom(22, func(r ui.Rect) {
-				msg := w.t(i18n.SettingsHintGitWSLDistribution)
-				msg = w.p.truncateMiddle(msg, fontSmall, regular, r.Width-170)
-				w.p.text(msg, rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextDisable)
-			})
+			f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.gitPathPlaceholder(gitExe, gitExeErr), false)
 			f.gap(6)
 			f.bold(w.t(i18n.SettingsGroupTools))
 			f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)

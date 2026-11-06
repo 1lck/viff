@@ -300,6 +300,7 @@ type Runner struct {
 	// test seams (like LFSCommand).
 	wslMu          sync.Mutex
 	wslReady       map[string]bool
+	wslGitPath     map[string]string
 	wslExe         string
 	wslExeKnown    bool
 	wslExeErr      error
@@ -339,6 +340,51 @@ func (r *Runner) SetPath(path string) {
 // user can see what "automatic" resolved to.
 func (r *Runner) Executable() (string, error) {
 	return r.git()
+}
+
+// ExecutableIn reports the Git binary the commands of the repository at root
+// run: a WSL repository runs the git inside its distribution, anything else
+// uses Executable. The settings dialog asks this so the echoed path names the
+// binary that will really serve the open repository, not the Windows default.
+//
+// A distro this process has not probed yet is probed here; the answer is then
+// cached like every other probe, so opening the dialog is cheap.
+func (r *Runner) ExecutableIn(ctx context.Context, root string) (string, error) {
+	distro := wslDistroOf(root)
+	if distro == "" {
+		return r.Executable()
+	}
+	if exe := r.cachedWSLGit(distro); exe != "" {
+		return exe, nil
+	}
+	if err := r.probeWSL(ctx, distro); err != nil {
+		return "", err
+	}
+	if exe := r.cachedWSLGit(distro); exe != "" {
+		return exe, nil
+	}
+	// A probed distro always records its path; "git" is the lookup Git itself
+	// performs through PATH inside the distro.
+	return "git", nil
+}
+
+func (r *Runner) cachedWSLGit(distro string) string {
+	r.wslMu.Lock()
+	defer r.wslMu.Unlock()
+	return r.wslGitPath[distro]
+}
+
+func (r *Runner) setWSLGit(distro, exe string) {
+	r.wslMu.Lock()
+	if r.wslGitPath == nil {
+		r.wslGitPath = map[string]string{}
+	}
+	if r.wslReady == nil {
+		r.wslReady = map[string]bool{}
+	}
+	r.wslGitPath[distro] = exe
+	r.wslReady[distro] = true
+	r.wslMu.Unlock()
 }
 
 func (r *Runner) git() (string, error) {

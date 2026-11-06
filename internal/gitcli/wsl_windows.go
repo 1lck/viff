@@ -109,14 +109,32 @@ func (r *Runner) probeWSL(ctx context.Context, distro string) error {
 
 	err := r.runWSLProbe(ctx, distro)
 	if err == nil {
-		r.wslMu.Lock()
-		if r.wslReady == nil {
-			r.wslReady = map[string]bool{}
-		}
-		r.wslReady[distro] = true
-		r.wslMu.Unlock()
+		// Remember the binary as well, so the settings dialog can name it
+		// instead of the Windows default.
+		r.setWSLGit(distro, r.wslGitExecutable(ctx, distro))
 	}
 	return err
+}
+
+// wslGitExecutable asks the distro where its git lives. The script is a
+// constant: no path and no user input crosses into the shell, so the
+// argument-array discipline is not weakened for the commands that matter.
+func (r *Runner) wslGitExecutable(ctx context.Context, distro string) string {
+	wsl, err := r.wslExecutable()
+	if err != nil {
+		return ""
+	}
+	pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(pctx, wsl, "-d", distro, "--exec", "sh", "-c", "command -v git")
+	process.HideConsoleWindow(cmd)
+	cmd.Env = append(os.Environ(), "WSL_UTF8=1")
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // runWSLProbe runs `git --version` inside distro. Success proves that WSL is
