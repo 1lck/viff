@@ -123,13 +123,13 @@ func init() {
 
 		FileviewWorkingTree:      "工作区",
 		FileviewCannotAnnotate:   "无法注解：%s",
-		FileviewAnnotate:         "用 Git Blame 注解",
+		FileviewAnnotate:         "用 Git blame 注解",
 		FileviewCloseAnnotations: "关闭注解",
 		FileviewShowDiff:         "显示 diff",
 		FileviewShowInLog:        "在日志中显示",
 		FileviewAnnotateRev:      "注解提交 %s",
 		FileviewCopyRev:          "复制提交哈希",
-		FileviewOpenExternal:     "在外部编辑器中打开",
+		FileviewOpenExternal:     "用外部编辑器打开",
 		FileviewShowHistory:      "显示历史",
 
 		RevisionTitle:   "%s 的仓库内容",
