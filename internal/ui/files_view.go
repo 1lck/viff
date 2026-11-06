@@ -171,7 +171,7 @@ func (w *Window) paintProject(r ui.Rect) {
 		w.p.textCenter(w.t(i18n.WorkspaceLoadingFiles), r, fontUI, regular, w.pal.TextSecond)
 		return
 	case v.err != nil:
-		w.p.textCenter(vapp.ErrorText(v.err), r, fontUI, regular, w.pal.Error)
+		w.p.textCenter(w.ws.ErrorText(v.err), r, fontUI, regular, w.pal.Error)
 		return
 	case len(v.entries) == 0:
 		w.p.textCenter(w.t(i18n.WorkspaceEmptyNoFiles), r, fontUI, regular, w.pal.TextSecond)
@@ -419,9 +419,15 @@ func (w *Window) projectKey(e ui.KeyEvent) bool {
 
 // projectWindowMenu is the tool window's own menu, opened from its title.
 func (w *Window) projectWindowMenu() []item {
-	return []item{
+	out := []item{
 		{title: w.t(i18n.ChromeMenuOpenFile), icon: icons.Search, shortcut: "⇧⌘O", run: w.openQuickOpen},
-		{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles},
+	}
+	// Content search is a backend capability: Subversion has no equivalent,
+	// so the entry is absent rather than failing after being pressed.
+	if w.ws.SupportsContentSearch() {
+		out = append(out, item{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles})
+	}
+	return append(out, []item{
 		sep(),
 		{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: func() {
 			clear(w.fm.collapsed)
@@ -438,7 +444,7 @@ func (w *Window) projectWindowMenu() []item {
 		}},
 		sep(),
 		{title: w.t(i18n.WorkspaceMenuHideProject), shortcut: "⌘1", run: w.toggleProject},
-	}
+	}...)
 }
 
 // filesMenu is the context menu of one Files row.

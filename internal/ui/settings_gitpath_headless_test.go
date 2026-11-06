@@ -24,7 +24,7 @@ func TestSettingsEchoesResolvedGitPath(t *testing.T) {
 	f.click("General")
 	f.s.Settle(40*time.Millisecond, time.Second)
 
-	exe, err := f.ws.Git.ExecutableIn(t.Context(), "")
+	exe, err := f.ws.ExecutableIn(t.Context(), "")
 	if err != nil {
 		t.Fatalf("ExecutableIn: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestSettingsGitPathEchoFollowsTheRepository(t *testing.T) {
 	// Opening a repository runs its commands, which is what records the
 	// distro's git; the settings page only reads that record, so the dialog
 	// never waits on wsl.exe. Resolve once here, as opening the repository does.
-	if _, err := f.ws.Git.ExecutableIn(t.Context(), root); err != nil {
+	if _, err := f.ws.ExecutableIn(t.Context(), root); err != nil {
 		t.Skipf("cannot probe the distro git: %v", err)
 	}
 
@@ -89,7 +89,7 @@ func TestSettingsGitPathEchoStopsAtConfiguredPath(t *testing.T) {
 	if !strings.Contains(texts, "/custom/bin/git") {
 		t.Fatalf("the configured path is not shown\ntexts: %s", texts)
 	}
-	if exe, err := f.ws.Git.Executable(); err == nil && exe != "/custom/bin/git" && strings.Contains(texts, exe) {
+	if exe, err := f.ws.ExecutableIn(t.Context(), ""); err == nil && exe != "/custom/bin/git" && strings.Contains(texts, exe) {
 		t.Fatalf("the field also echoes the detected %q\ntexts: %s", exe, texts)
 	}
 }

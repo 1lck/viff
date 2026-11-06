@@ -93,9 +93,16 @@ const (
 
 func (w *Window) paintGitWindow(r ui.Rect) {
 	w.island(r)
-	content, ax := w.toolHeader(r, scGitTabs, []string{w.t(i18n.ChromeGitTabLog), w.t(i18n.ChromeGitTabConsole), w.t(i18n.ChromeGitTabReflog)}, w.gitTab, func(i int) {
+	// Subversion has no reflog, so the tab is absent rather than always empty.
+	tabs := []string{w.t(i18n.ChromeGitTabLog), w.t(i18n.ChromeGitTabConsole)}
+	reflogTab := -1
+	if w.ws.Caps.Reflog != nil {
+		reflogTab = len(tabs)
+		tabs = append(tabs, w.t(i18n.ChromeGitTabReflog))
+	}
+	content, ax := w.toolHeader(r, scGitTabs, tabs, w.gitTab, func(i int) {
 		w.gitTab = i
-		if i == 2 {
+		if i == reflogTab {
 			w.loadReflog()
 		}
 	})
@@ -216,10 +223,14 @@ func (w *Window) paintLogFilters(r ui.Rect) {
 	x += cw + 4
 	ax := right(r) - 8 - actionSize
 	ay := r.Y + (r.Height-actionSize)/2
-	if w.action(idLogFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
-		w.after(func() { w.ws.Fetch(false) })
+	// No separate publish step means no fetch either: the update already talks
+	// to the server, and a fetch button would silently do nothing.
+	if w.ws.Caps.SeparatePush {
+		if w.action(idLogFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
+			w.after(func() { w.ws.Fetch(false) })
+		}
+		ax -= actionSize + 2
 	}
-	ax -= actionSize + 2
 	if w.action(idLogRefresh, ax, ay, icons.Refresh, w.t(i18n.ChromeActionRefresh), actOpts{}) {
 		w.after(func() { w.ws.ReloadLog(); w.ws.Refresh(true) })
 	}
@@ -418,7 +429,7 @@ func (w *Window) paintLogTable(r ui.Rect) {
 		case l.Loading || !l.Loaded():
 			msg = w.t(i18n.ChromeCommonLoading)
 		case l.Err != nil:
-			msg = vapp.ErrorText(l.Err)
+			msg = w.ws.ErrorText(l.Err)
 		case l.Filter.Active():
 			msg = w.t(i18n.ChromeLogEmptyFiltered)
 		case !rs.HasHead():
@@ -736,20 +747,23 @@ func (w *Window) commitMenu() []item {
 			w.openCompareCommits(older.Hash, newer.Hash)
 		}})
 	}
+	// Rewriting committed history needs a backend that can rewrite it at all:
+	// a Subversion revision is immutable once committed.
+	canRewrite := w.ws.Caps.HistoryWriter != nil
 	items = append(items,
 		sep(),
-		item{title: w.t(i18n.ChromeMenuResetHere), icon: icons.Reset, disabled: !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
-		item{title: w.t(i18n.ChromeMenuRevert), icon: icons.Revert, disabled: rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
-		item{title: w.t(i18n.ChromeMenuInteractiveRebase), disabled: !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
+		item{title: w.t(i18n.ChromeMenuResetHere), icon: icons.Reset, disabled: !canRewrite || !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
+		item{title: w.t(i18n.ChromeMenuRevert), icon: icons.Revert, disabled: !canRewrite || rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
+		item{title: w.t(i18n.ChromeMenuInteractiveRebase), disabled: !canRewrite || !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
 	)
-	if single && isHead && len(c.Parents) == 1 && rs.Status.Branch.Ahead > 0 {
+	if canRewrite && single && isHead && len(c.Parents) == 1 && rs.Status.Branch.Ahead > 0 {
 		items = append(items, item{title: w.t(i18n.ChromeMenuUndoCommit), icon: icons.Undo, run: func() {
 			w.confirm(w.t(i18n.ChromeDialogUndoCommit), w.t(i18n.ChromeDialogUndoCommitMessage, c.Subject), w.t(i18n.ChromeDialogUndoCommit), func() {
 				w.ws.Reset(gitcli.ResetSoft, "HEAD~1")
 			})
 		}})
 	}
-	if single {
+	if canRewrite && single {
 		// Editing history replays the commits after the target, so it needs
 		// a commit with exactly one parent and no operation in flight.
 		canEdit := len(c.Parents) == 1 && !rs.Operation.Active()
@@ -760,12 +774,17 @@ func (w *Window) commitMenu() []item {
 		)
 	}
 	items = append(items, sep(),
-		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: !single, run: func() { w.openNewBranch(c.Hash, short) }},
-		item{title: w.t(i18n.ChromeMenuNewTag), icon: icons.BranchLabel, disabled: !single, run: func() { w.openNewTag(c.Hash, short) }},
-		// A merge commit has more than one history, so "up to" is ambiguous.
-		item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }},
-		item{title: w.t(i18n.ChromeMenuBrowseAtRevision), icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }},
+		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: !single || !w.canWriteBranches(), run: func() { w.openNewBranch(c.Hash, short) }},
+		item{title: w.t(i18n.ChromeMenuNewTag), icon: icons.BranchLabel, disabled: !single || w.ws.Caps.References == nil, run: func() { w.openNewTag(c.Hash, short) }},
 	)
+	// Publishing a commit is a Git-shaped step: a backend whose commit is the
+	// server operation has nothing to push, so the entry is left out instead of
+	// opening an action that fails.
+	if w.ws.Caps.SeparatePush {
+		// A merge commit has more than one history, so "up to" is ambiguous.
+		items = append(items, item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }})
+	}
+	items = append(items, item{title: w.t(i18n.ChromeMenuBrowseAtRevision), icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }})
 	// The service name comes from the remote, so the entry reads "Open Commit on
 	// GitHub" and names the host for a self-hosted instance. It is omitted, not
 	// disabled, when the remote has no web page at all.
@@ -875,8 +894,10 @@ func (w *Window) paintBranches(r ui.Rect) {
 		w.after(func() { w.openNewBranch("", rs.HeadLabel()) })
 	}
 	x += actionSize + 2
-	if w.action(idBrFetch, x, y, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
-		w.after(func() { w.ws.Fetch(false) })
+	if w.ws.Caps.SeparatePush {
+		if w.action(idBrFetch, x, y, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
+			w.after(func() { w.ws.Fetch(false) })
+		}
 	}
 	w.p.hline(r.X, r.Y, r.Width, w.pal.Border)
 	r.Y++

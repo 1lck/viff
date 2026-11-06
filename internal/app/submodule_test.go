@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"viff/internal/domain"
+	"viff/internal/gitcli"
 )
 
 // TestSubmoduleCommands drives the workspace commands the UI uses: list,
@@ -23,8 +24,11 @@ func TestSubmoduleCommands(t *testing.T) {
 	f.write("p.txt", "parent\n")
 	f.commitAll("parent")
 	// Local submodules use the file transport, which Git only allows when
-	// asked; production repositories use https or ssh.
-	f.w.Git.Env = append(f.w.Git.Env, "GIT_ALLOW_PROTOCOL=file")
+	// asked; production repositories use https or ssh. The workspace holds the
+	// backend contract, so the Git runner is addressed directly here: the test
+	// is about Git's own transport policy, not about the contract.
+	runner := f.w.Git.(*gitcli.Runner)
+	runner.Env = append(runner.Env, "GIT_ALLOW_PROTOCOL=file")
 	f.git("-c", "protocol.file.allow=always", "submodule", "add", child.dir, "deps/lib")
 	f.commitAll("add submodule")
 	f.open()

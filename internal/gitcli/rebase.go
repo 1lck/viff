@@ -9,35 +9,28 @@ import (
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/vcs"
 )
 
-// RebaseAction is the verb of one interactive-rebase step.
-type RebaseAction string
+// RebaseAction, RebaseStep and RebaseCommit are shared with every backend and
+// live in internal/vcs. They stay aliased here so existing call sites keep
+// compiling.
+type (
+	// RebaseAction is the verb of one interactive-rebase step.
+	RebaseAction = vcs.RebaseAction
+	// RebaseStep is one line of the rebase plan.
+	RebaseStep = vcs.RebaseStep
+	// RebaseCommit is a commit an interactive rebase would replay.
+	RebaseCommit = vcs.RebaseCommit
+)
 
 const (
-	RebasePick   RebaseAction = "pick"
-	RebaseReword RebaseAction = "reword"
-	RebaseSquash RebaseAction = "squash"
-	RebaseFixup  RebaseAction = "fixup"
-	RebaseDrop   RebaseAction = "drop"
+	RebasePick   = vcs.RebasePick
+	RebaseReword = vcs.RebaseReword
+	RebaseSquash = vcs.RebaseSquash
+	RebaseFixup  = vcs.RebaseFixup
+	RebaseDrop   = vcs.RebaseDrop
 )
-
-// RebaseStep is one line of the rebase plan.
-type RebaseStep struct {
-	Action RebaseAction
-	Hash   string
-	// Message replaces the commit message for RebaseReword.
-	Message string
-}
-
-// RebaseCommit is a commit an interactive rebase would replay.
-type RebaseCommit struct {
-	Hash    string
-	Subject string
-	Message string
-	Author  string
-	Merge   bool
-}
 
 // ErrRebaseMerges is returned when the range holds merge commits, which a
 // plain interactive rebase would silently flatten.
@@ -112,7 +105,7 @@ func (r *Runner) InteractiveRebase(ctx context.Context, repo domain.Repo, base s
 	if err := ValidateRebasePlan(steps); err != nil {
 		return Output{}, err
 	}
-	dir := filepath.Join(repo.GitDir, "viff-rebase")
+	dir := filepath.Join(repo.MetaDir, "viff-rebase")
 	os.RemoveAll(dir) // files of an earlier, finished or aborted rebase
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Output{}, err

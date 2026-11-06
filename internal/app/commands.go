@@ -65,17 +65,17 @@ func (w *Workspace) run(title string, undo *undoSpec, op Op, o RunOptions) {
 		}
 		var before gitcli.HeadState
 		capture := false
-		if undo != nil {
+		if undo != nil && w.hasUndo() {
 			// An unborn branch has no commit to go back to, so it is not
 			// recorded; undo needs a before state it can name.
-			if hs, err := w.Git.Head(ctx, repo); err == nil && hs.Head != "" {
+			if hs, err := w.HEAD(ctx, repo); err == nil && hs.Head != "" {
 				before, capture = hs, true
 			}
 		}
 		err := op(ctx, repo, func(line string) { w.setProgress(task, line) })
 		var entry *undoEntry
 		if err == nil && capture && (!undo.kind.needsRef() || undo.hash != "") {
-			if after, herr := w.Git.Head(ctx, repo); herr == nil {
+			if after, herr := w.HEAD(ctx, repo); herr == nil {
 				entry = &undoEntry{
 					kind: undo.kind, repoRoot: repo.Root, before: before, after: after,
 					name: undo.name, oldName: undo.oldName, hash: undo.hash,
@@ -258,6 +258,11 @@ type CommitRequest struct {
 	Amend    bool
 	SignOff  bool
 	NoVerify bool
+	// Paths is the target set of this commit. A backend without an index
+	// (Subversion) has no other way to commit a subset: the paths the user
+	// checked are what gets committed. Empty means every scheduled change.
+	// A backend with an index ignores it and commits what is staged.
+	Paths []string
 	// Push pushes after a successful commit.
 	Push bool
 }
@@ -266,8 +271,18 @@ type CommitRequest struct {
 // a failing hook fails the commit and its output is shown.
 func (w *Workspace) Commit(req CommitRequest, after func()) {
 	staged, _, _, _ := w.Repo.Status.Counts()
+	// What the notice counts is what was committed. Without an index the
+	// staged count is always zero, so the notice would claim "0 files
+	// committed" for every Subversion commit.
+	committed := staged
+	if !w.Caps.Index {
+		committed = w.CommittableCount()
+		if len(req.Paths) > 0 {
+			committed = len(req.Paths)
+		}
+	}
 	subject := strings.SplitN(strings.TrimSpace(req.Message), "\n", 2)[0]
-	body := w.trPlural(staged, i18n.AppNoticeCommittedBody, i18n.AppNoticeCommittedBodyMany, staged, subject)
+	body := w.trPlural(committed, i18n.AppNoticeCommittedBody, i18n.AppNoticeCommittedBodyMany, committed, subject)
 	if req.Amend {
 		body = w.tr(i18n.AppNoticeAmendedBody, subject)
 	}
@@ -276,7 +291,7 @@ func (w *Workspace) Commit(req CommitRequest, after func()) {
 		spec.kind = undoAmend
 	}
 	w.run("Commit", spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.Commit(ctx, repo, gitcli.CommitOptions{Message: req.Message, Amend: req.Amend, SignOff: req.SignOff, NoVerify: req.NoVerify})
+		_, err := w.Git.Commit(ctx, repo, gitcli.CommitOptions{Message: req.Message, Amend: req.Amend, SignOff: req.SignOff, NoVerify: req.NoVerify, Paths: req.Paths})
 		return err
 	}, RunOptions{Success: w.tr(i18n.AppNoticeCommitted), SuccessBody: body, After: after})
 }
@@ -325,11 +340,15 @@ func (w *Workspace) CheckoutRevision(rev string) {
 func (w *Workspace) NewBranch(name, start string, checkout, overwrite bool) {
 	spec := &undoSpec{kind: undoCreateBranch, name: name}
 	w.run("Create branch "+name, spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		branches, err := w.branches()
+		if err != nil {
+			return err
+		}
 		if overwrite {
 			// Remember what the overwrite replaces so undo can put it back.
 			spec.previous, _ = w.Git.ResolveRef(ctx, repo, "refs/heads/"+name)
 		}
-		if err := w.Git.CreateBranch(ctx, repo, name, start, checkout, overwrite); err != nil {
+		if err := branches.CreateBranch(ctx, repo, name, start, checkout, overwrite); err != nil {
 			return err
 		}
 		// Undo only deletes the branch while it still holds this commit; a
@@ -343,7 +362,11 @@ func (w *Workspace) NewBranch(name, start string, checkout, overwrite bool) {
 func (w *Workspace) RenameBranch(old, name string) {
 	spec := &undoSpec{kind: undoRenameBranch, name: name, oldName: old}
 	w.run("Rename branch", spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		if err := w.Git.RenameBranch(ctx, repo, old, name); err != nil {
+		branches, err := w.branches()
+		if err != nil {
+			return err
+		}
+		if err := branches.RenameBranch(ctx, repo, old, name); err != nil {
 			return err
 		}
 		// A rename keeps the commit, but recording it lets undo refuse when
@@ -358,17 +381,25 @@ func (w *Workspace) RenameBranch(old, name string) {
 func (w *Workspace) DeleteBranch(ref domain.Ref, force bool) {
 	if ref.Kind == domain.RefRemote {
 		w.Run("Delete "+ref.Short, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
-			return w.Git.DeleteRemoteBranch(ctx, repo, ref.Remote(), ref.BranchName(), progress)
+			refs, err := w.refs()
+			if err != nil {
+				return err
+			}
+			return refs.DeleteRemoteBranch(ctx, repo, ref.Remote(), ref.BranchName(), progress)
 		}, RunOptions{Success: w.tr(i18n.AppNoticeDeletedRemoteBranch, ref.Short)})
 		return
 	}
 	target := ref.Target
 	spec := &undoSpec{kind: undoDeleteBranch, name: ref.Short}
 	w.run("Delete "+ref.Short, spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		branches, err := w.branches()
+		if err != nil {
+			return err
+		}
 		// Read the tip Git is about to delete, not the one the last refresh
 		// showed: an external commit since then must be restorable too.
 		sha, _ := w.Git.ResolveRef(ctx, repo, "refs/heads/"+ref.Short)
-		if err := w.Git.DeleteBranch(ctx, repo, ref.Short, force); err != nil {
+		if err := branches.DeleteBranch(ctx, repo, ref.Short, force); err != nil {
 			return err
 		}
 		spec.hash = sha
@@ -393,35 +424,55 @@ func (w *Workspace) DeleteBranch(ref domain.Ref, force bool) {
 // CreateTag creates a tag.
 func (w *Workspace) CreateTag(name, rev, message string) {
 	w.Run("Create tag "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.CreateTag(ctx, repo, name, rev, message)
+		refs, err := w.refs()
+		if err != nil {
+			return err
+		}
+		return refs.CreateTag(ctx, repo, name, rev, message)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeCreatedTag, name)})
 }
 
 // DeleteTag deletes a local tag.
 func (w *Workspace) DeleteTag(name string) {
 	w.Run("Delete tag "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.DeleteTag(ctx, repo, name)
+		refs, err := w.refs()
+		if err != nil {
+			return err
+		}
+		return refs.DeleteTag(ctx, repo, name)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeDeletedTag, name)})
 }
 
 // PushTag pushes a tag.
 func (w *Workspace) PushTag(remote, name string) {
 	w.Run("Push tag "+name, func(ctx context.Context, repo domain.Repo, p func(string)) error {
-		return w.Git.PushTag(ctx, repo, remote, name, p)
+		refs, err := w.refs()
+		if err != nil {
+			return err
+		}
+		return refs.PushTag(ctx, repo, remote, name, p)
 	}, RunOptions{Success: w.tr(i18n.AppNoticePushedTag, name, remote)})
 }
 
 // DeleteRemoteTag deletes a tag on the remote. The local tag stays.
 func (w *Workspace) DeleteRemoteTag(remote, name string) {
 	w.Run("Delete remote tag "+name, func(ctx context.Context, repo domain.Repo, p func(string)) error {
-		return w.Git.DeleteRemoteTag(ctx, repo, remote, name, p)
+		refs, err := w.refs()
+		if err != nil {
+			return err
+		}
+		return refs.DeleteRemoteTag(ctx, repo, remote, name, p)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeDeletedRemoteTag, name, remote)})
 }
 
 // SetUpstream sets a branch's upstream.
 func (w *Workspace) SetUpstream(branch, upstream string) {
 	w.Run("Set upstream", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.SetUpstream(ctx, repo, branch, upstream)
+		refs, err := w.refs()
+		if err != nil {
+			return err
+		}
+		return refs.SetUpstream(ctx, repo, branch, upstream)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeTrackingUpstream, upstream)})
 }
 
@@ -561,7 +612,7 @@ func (w *Workspace) pushError(force bool) func(error) bool {
 		if force {
 			msg = w.tr(i18n.AppNoticePushRejectedStaleBody)
 		}
-		w.Notify(NoticeError, w.tr(i18n.AppNoticePushRejected), msg+"\n\n"+ErrorText(err),
+		w.Notify(NoticeError, w.tr(i18n.AppNoticePushRejected), msg+"\n\n"+w.ErrorText(err),
 			NoticeAction{Title: w.tr(i18n.AppActionUpdate), Run: func() { w.Pull(gitcli.PullMerge) }})
 		return true
 	}
@@ -581,7 +632,11 @@ func (w *Workspace) PushHeadTo(remote, branch string, forceWithLease bool) {
 
 func (w *Workspace) pushRef(title, remote, branch, src string, forceWithLease bool) {
 	w.Run(title, func(ctx context.Context, repo domain.Repo, p func(string)) error {
-		return w.Git.PushRef(ctx, repo, remote, src, branch, forceWithLease, p)
+		refs, rerr := w.refs()
+		if rerr != nil {
+			return rerr
+		}
+		return refs.PushRef(ctx, repo, remote, src, branch, forceWithLease, p)
 	}, RunOptions{
 		Success: w.tr(i18n.AppNoticePushedTo, pushSource(src), remote, branch),
 		OnError: w.pushError(forceWithLease),
@@ -641,7 +696,11 @@ func (w *Workspace) operationError(title string) func(error) bool {
 // Merge merges rev into the current branch.
 func (w *Workspace) Merge(rev string, noFF bool) {
 	w.run("Merge "+rev, &undoSpec{kind: undoMerge}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.Merge(ctx, repo, rev, noFF, false)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.Merge(ctx, repo, rev, noFF, false)
 		return err
 	}, RunOptions{OnError: w.operationError("Merge"), Success: w.tr(i18n.AppNoticeMerged, rev)})
 }
@@ -649,7 +708,11 @@ func (w *Workspace) Merge(rev string, noFF bool) {
 // Rebase rebases the current branch onto rev.
 func (w *Workspace) Rebase(onto string) {
 	w.run("Rebase onto "+onto, &undoSpec{kind: undoRebase}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.Rebase(ctx, repo, onto)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.Rebase(ctx, repo, onto)
 		return err
 	}, RunOptions{OnError: w.operationError("Rebase"), Success: w.tr(i18n.AppNoticeRebasedOnto, onto)})
 }
@@ -657,7 +720,11 @@ func (w *Workspace) Rebase(onto string) {
 // CherryPick applies commits onto HEAD.
 func (w *Workspace) CherryPick(hashes []string) {
 	w.run("Cherry-pick", &undoSpec{kind: undoCherryPick}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.CherryPick(ctx, repo, hashes)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.CherryPick(ctx, repo, hashes)
 		return err
 	}, RunOptions{OnError: w.operationError("Cherry-pick"), Success: w.trPlural(len(hashes), i18n.AppNoticeCherryPicked, i18n.AppNoticeCherryPickedMany, len(hashes))})
 }
@@ -665,7 +732,11 @@ func (w *Workspace) CherryPick(hashes []string) {
 // RevertCommits reverts commits with new commits.
 func (w *Workspace) RevertCommits(hashes []string) {
 	w.run("Revert commits", &undoSpec{kind: undoRevert}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.RevertCommits(ctx, repo, hashes)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.RevertCommits(ctx, repo, hashes)
 		return err
 	}, RunOptions{OnError: w.operationError("Revert"), Success: w.trPlural(len(hashes), i18n.AppNoticeReverted, i18n.AppNoticeRevertedMany, len(hashes))})
 }
@@ -677,7 +748,11 @@ func (w *Workspace) Reset(mode gitcli.ResetMode, rev string) {
 		before = w.Repo.Status.Branch.Head
 	}
 	w.run("Reset", &undoSpec{kind: undoReset}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.Reset(ctx, repo, mode, rev)
+		h, err := w.history()
+		if err != nil {
+			return err
+		}
+		return h.Reset(ctx, repo, mode, rev)
 	}, RunOptions{After: func() {
 		w.Notify(NoticeSuccess, w.tr(i18n.AppNoticeResetTo, domain.ShortHash(rev)), w.tr(i18n.AppNoticeResetBody, domain.ShortHash(before)),
 			NoticeAction{Title: w.tr(i18n.AppActionCreateBranchAtOldPosition), Run: func() {
@@ -695,7 +770,11 @@ func (w *Workspace) OperationAction(action string) {
 	kind := rs.Operation.Kind
 	title := strings.ToUpper(action[:1]) + action[1:] + " " + strings.ToLower(kind.Title())
 	w.Run(title, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.OperationCommand(ctx, repo, kind, action)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.OperationCommand(ctx, repo, kind, action)
 		return err
 	}, RunOptions{OnError: w.operationError(kind.Title())})
 }
@@ -703,7 +782,11 @@ func (w *Workspace) OperationAction(action string) {
 // StashPush stashes changes.
 func (w *Workspace) StashPush(message string, untracked, keepIndex bool) {
 	w.Run("Stash", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.StashPush(ctx, repo, message, untracked, keepIndex)
+		s, err := w.stash()
+		if err != nil {
+			return err
+		}
+		return s.StashPush(ctx, repo, message, untracked, keepIndex)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeChangesStashed)})
 }
 
@@ -714,7 +797,11 @@ func (w *Workspace) StashApply(s domain.Stash, pop, index bool) {
 		verb = "Pop"
 	}
 	w.Run(verb+" "+s.Ref, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.StashApply(ctx, repo, s.Ref, pop, index)
+		st, serr := w.stash()
+		if serr != nil {
+			return serr
+		}
+		_, err := st.StashApply(ctx, repo, s.Ref, pop, index)
 		return err
 	}, RunOptions{OnError: w.operationError("Unstash"), Success: w.tr(i18n.AppNoticeStashSucceeded, verb+" "+s.Ref)})
 }
@@ -723,35 +810,55 @@ func (w *Workspace) StashApply(s domain.Stash, pop, index bool) {
 func (w *Workspace) StashDrop(s domain.Stash) {
 	hash := s.Hash
 	w.Run("Drop "+s.Ref, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.StashDrop(ctx, repo, s.Ref)
+		st, err := w.stash()
+		if err != nil {
+			return err
+		}
+		return st.StashDrop(ctx, repo, s.Ref)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeStashDropped, s.Ref), SuccessBody: w.tr(i18n.AppNoticeStashDroppedBody, hash)})
 }
 
 // StashBranch creates a branch from a stash.
 func (w *Workspace) StashBranch(s domain.Stash, branch string) {
 	w.Run("Branch from stash", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.StashBranch(ctx, repo, branch, s.Ref)
+		st, err := w.stash()
+		if err != nil {
+			return err
+		}
+		return st.StashBranch(ctx, repo, branch, s.Ref)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeCreatedBranchFromStash, branch, s.Ref)})
 }
 
 // AddRemote adds a remote.
 func (w *Workspace) AddRemote(name, url string) {
 	w.Run("Add remote", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.AddRemote(ctx, repo, name, url)
+		refs, err := w.refs()
+		if err != nil {
+			return err
+		}
+		return refs.AddRemote(ctx, repo, name, url)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeAddedRemote, name)})
 }
 
 // RemoveRemote removes a remote.
 func (w *Workspace) RemoveRemote(name string) {
 	w.Run("Remove remote", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.RemoveRemote(ctx, repo, name)
+		refs, err := w.refs()
+		if err != nil {
+			return err
+		}
+		return refs.RemoveRemote(ctx, repo, name)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeRemovedRemote, name)})
 }
 
 // SetRemoteURL edits a remote.
 func (w *Workspace) SetRemoteURL(name, url string) {
 	w.Run("Edit remote", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.SetRemoteURL(ctx, repo, name, url)
+		refs, err := w.refs()
+		if err != nil {
+			return err
+		}
+		return refs.SetRemoteURL(ctx, repo, name, url)
 	}, RunOptions{Success: w.tr(i18n.AppNoticeUpdatedRemote, name)})
 }
 
@@ -763,7 +870,16 @@ func (w *Workspace) Reflog(done func([]domain.ReflogEntry, error)) {
 	}
 	repo := rs.Repo
 	go func() {
-		list, err := w.Git.Reflog(context.Background(), repo, 300)
+		r, rerr := w.reflog()
+		if rerr != nil {
+			w.post(func() {
+				if w.Repo == rs {
+					done(nil, rerr)
+				}
+			})
+			return
+		}
+		list, err := r.Reflog(context.Background(), repo, 300)
 		w.post(func() {
 			if w.Repo == rs {
 				done(list, err)
@@ -830,7 +946,7 @@ func (w *Workspace) ApplyPatchFile(path string, cached bool, done func(error)) {
 		Success:     w.tr(i18n.AppNoticePatchApplied),
 		SuccessBody: body,
 		OnError: func(err error) bool {
-			w.Notify(NoticeError, w.tr(i18n.AppNoticeCannotApplyPatch), ErrorText(err))
+			w.Notify(NoticeError, w.tr(i18n.AppNoticeCannotApplyPatch), w.ErrorText(err))
 			if done != nil {
 				done(err)
 			}
@@ -852,7 +968,16 @@ func (w *Workspace) Worktrees(done func([]domain.Worktree, error)) {
 	}
 	repo := rs.Repo
 	go func() {
-		list, err := w.Git.Worktrees(context.Background(), repo)
+		wt, werr := w.worktrees()
+		if werr != nil {
+			w.post(func() {
+				if w.Repo == rs && done != nil {
+					done(nil, werr)
+				}
+			})
+			return
+		}
+		list, err := wt.Worktrees(context.Background(), repo)
 		w.post(func() {
 			if w.Repo != rs {
 				return
@@ -879,7 +1004,7 @@ func (w *Workspace) AddWorktree(path, branch, start string, done func(error)) {
 	go func() {
 		lock := writeLock(repo)
 		lock.Lock()
-		err := w.Git.AddWorktree(ctx, repo, path, branch, start)
+		err := w.addWorktree(ctx, repo, path, branch, start)
 		lock.Unlock()
 		w.post(func() {
 			finish()
@@ -912,7 +1037,7 @@ func (w *Workspace) AddWorktreeExisting(path, branch string, done func(error)) {
 	go func() {
 		lock := writeLock(repo)
 		lock.Lock()
-		err := w.Git.AddWorktreeExisting(ctx, repo, path, branch)
+		err := w.addWorktreeExisting(ctx, repo, path, branch)
 		lock.Unlock()
 		w.post(func() {
 			finish()
@@ -943,7 +1068,7 @@ func (w *Workspace) RemoveWorktree(path string, force bool, done func(error)) {
 	go func() {
 		lock := writeLock(repo)
 		lock.Lock()
-		err := w.Git.RemoveWorktree(ctx, repo, path, force)
+		err := w.removeWorktree(ctx, repo, path, force)
 		lock.Unlock()
 		w.post(func() {
 			finish()
@@ -970,7 +1095,16 @@ func (w *Workspace) Submodules(done func([]domain.Submodule, error)) {
 	}
 	repo := rs.Repo
 	go func() {
-		list, err := w.Git.Submodules(context.Background(), repo)
+		sm, serr := w.submodules()
+		if serr != nil {
+			w.post(func() {
+				if w.Repo == rs {
+					done(nil, serr)
+				}
+			})
+			return
+		}
+		list, err := sm.Submodules(context.Background(), repo)
 		w.post(func() {
 			if w.Repo == rs {
 				done(list, err)
@@ -988,7 +1122,11 @@ func (w *Workspace) UpdateSubmodule(path string, init bool, done func(error)) {
 	}
 	var runErr error
 	w.Run("Update "+name, func(ctx context.Context, repo domain.Repo, progress func(string)) error {
-		return w.Git.UpdateSubmodule(ctx, repo, path, init, progress)
+		sm, serr := w.submodules()
+		if serr != nil {
+			return serr
+		}
+		return sm.UpdateSubmodule(ctx, repo, path, init, progress)
 	}, RunOptions{
 		Success: w.tr(i18n.AppNoticeUpdatedSubmodule, name),
 		OnError: func(err error) bool { runErr = err; return false },
@@ -1008,7 +1146,11 @@ func (w *Workspace) SyncSubmodules(path string, done func(error)) {
 	}
 	var runErr error
 	w.Run("Sync "+name, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		return w.Git.SyncSubmodules(ctx, repo, path)
+		sm, serr := w.submodules()
+		if serr != nil {
+			return serr
+		}
+		return sm.SyncSubmodules(ctx, repo, path)
 	}, RunOptions{
 		Success: w.tr(i18n.AppNoticeSyncedSubmodule, name),
 		OnError: func(err error) bool { runErr = err; return false },
@@ -1043,12 +1185,19 @@ func (w *Workspace) Clone(url, parent, dir string, done func(error)) {
 }
 
 // Init creates a repository and opens it.
+//
+// It always creates a Git repository, whatever the open working copy is: a
+// Subversion working copy has no local repository to create, and the backend in
+// front of the user must not decide what appears in an unrelated directory.
 func (w *Workspace) Init(dir string, done func(error)) {
 	_, ctx, finish := w.startTask("Init", true)
 	go func() {
-		err := os.MkdirAll(dir, 0o755)
-		if err == nil {
-			err = w.Git.Init(ctx, dir)
+		b := w.gitBackend()
+		var err error
+		if b == nil {
+			err = ErrUnsupported
+		} else if err = os.MkdirAll(dir, 0o755); err == nil {
+			err = b.Init(ctx, dir)
 		}
 		w.post(func() {
 			finish()
@@ -1134,7 +1283,16 @@ func (w *Workspace) RebaseCommits(from string, done func(list []gitcli.RebaseCom
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		list, base, err := w.Git.RebaseCommits(ctx, repo, from)
+		h, herr := w.history()
+		if herr != nil {
+			w.post(func() {
+				if w.Repo == rs {
+					done(nil, "", herr)
+				}
+			})
+			return
+		}
+		list, base, err := h.RebaseCommits(ctx, repo, from)
 		w.post(func() {
 			if w.Repo == rs {
 				done(list, base, err)
@@ -1148,7 +1306,11 @@ func (w *Workspace) RebaseCommits(from string, done func(list []gitcli.RebaseCom
 // Continue, Skip and Abort.
 func (w *Workspace) InteractiveRebase(base string, steps []gitcli.RebaseStep) {
 	w.run("Interactive rebase", &undoSpec{kind: undoRebase}, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.InteractiveRebase(ctx, repo, base, steps)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.InteractiveRebase(ctx, repo, base, steps)
 		return err
 	}, RunOptions{OnError: w.operationError("Rebase"), Success: w.tr(i18n.AppNoticeRebaseFinished)})
 }
@@ -1177,7 +1339,11 @@ func (w *Workspace) CommitMessage(hash string, done func(message string, err err
 func (w *Workspace) RewordCommit(hash, message string) {
 	short := domain.ShortHash(hash)
 	w.Run("Edit commit message", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.RewordCommit(ctx, repo, hash, message)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.RewordCommit(ctx, repo, hash, message)
 		return err
 	}, RunOptions{OnError: w.rewriteError("Edit commit message"), Success: w.tr(i18n.AppNoticeMessageUpdated, short),
 		SuccessBody: w.tr(i18n.AppNoticeMessageUpdatedBody)})
@@ -1187,7 +1353,11 @@ func (w *Workspace) RewordCommit(hash, message string) {
 func (w *Workspace) SquashCommit(hash, message string) {
 	short := domain.ShortHash(hash)
 	w.Run("Squash commit", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.SquashCommit(ctx, repo, hash, message)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.SquashCommit(ctx, repo, hash, message)
 		return err
 	}, RunOptions{OnError: w.rewriteError("Squash commit"), Success: w.tr(i18n.AppNoticeSquashedIntoParent, short),
 		SuccessBody: w.tr(i18n.AppNoticeSquashedBody)})
@@ -1197,7 +1367,11 @@ func (w *Workspace) SquashCommit(hash, message string) {
 func (w *Workspace) DropCommit(hash string) {
 	short := domain.ShortHash(hash)
 	w.Run("Drop commit", func(ctx context.Context, repo domain.Repo, _ func(string)) error {
-		_, err := w.Git.DropCommit(ctx, repo, hash)
+		h, herr := w.history()
+		if herr != nil {
+			return herr
+		}
+		_, err := h.DropCommit(ctx, repo, hash)
 		return err
 	}, RunOptions{OnError: w.rewriteError("Drop commit"), Success: w.tr(i18n.AppNoticeDroppedCommit, short),
 		SuccessBody: w.tr(i18n.AppNoticeDroppedCommitBody)})
@@ -1209,7 +1383,7 @@ func (w *Workspace) rewriteError(title string) func(error) bool {
 	return func(err error) bool {
 		switch {
 		case errors.Is(err, gitcli.ErrRewriteAbortLeft):
-			w.Notify(NoticeError, w.tr(i18n.AppNoticeFailed, title), w.tr(i18n.AppNoticeRewriteAbortLeftBody, ErrorText(err)))
+			w.Notify(NoticeError, w.tr(i18n.AppNoticeFailed, title), w.tr(i18n.AppNoticeRewriteAbortLeftBody, w.ErrorText(err)))
 			return true
 		case gitcli.KindOf(err) == gitcli.ErrConflict:
 			w.Notify(NoticeWarning, w.tr(i18n.AppNoticeWasAborted, title), w.tr(i18n.AppNoticeEditHitConflictBody))

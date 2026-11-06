@@ -281,7 +281,7 @@ func (w *Window) openPushFor(r domain.Ref) {
 					w.p.textCenter(w.t(i18n.DialogLoadingCommits), inner, fontUI, regular, w.pal.TextSecond)
 					return
 				case loadErr != nil:
-					w.p.textCenter(vapp.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
+					w.p.textCenter(w.ws.ErrorText(loadErr), inner, fontUI, regular, w.pal.Error)
 					return
 				case len(commits) == 0:
 					w.p.textCenter(w.t(i18n.DialogNothingToPush), inner, fontUI, regular, w.pal.TextSecond)
@@ -639,7 +639,7 @@ func gitExecutableFor(w *Window) (string, error) {
 	if rs := w.repo(); rs != nil {
 		root = rs.Repo.Root
 	}
-	return w.ws.Git.CachedExecutableIn(root)
+	return w.ws.CachedExecutableIn(root)
 }
 
 // gitPathPlaceholder is the text an empty Path to Git shows: the resolved
@@ -678,6 +678,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	// field: a WSL repository runs the git inside its distribution, so the
 	// echo must not name the Windows default there.
 	gitExe, _ := gitExecutableFor(w)
+	svnPath := text.NewEditor(s.SVNPath)
 	editor := text.NewEditor(s.ExternalEditor)
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
 	autoUpdate, autoUpdateWas := s.AutoUpdateCheck, s.AutoUpdateCheck
@@ -787,6 +788,16 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 				f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.gitPathPlaceholder(gitExe), false)
 			}
 			f.gap(6)
+			// The svn path only appears for a Subversion working copy: the
+			// settings page is a fixed-height dialog, and one extra group on
+			// every backend pushed the font and search controls below the
+			// visible area, where they could not be clicked at all.
+			if !w.ws.Caps.Index {
+				if f.collapsibleGroup("svnExec", w.t(i18n.SettingsGroupSVNExec)) {
+					f.field(w.t(i18n.SettingsLabelSVNPath), svnPath, w.t(i18n.SettingsPlaceholderAuto), false)
+				}
+				f.gap(6)
+			}
 			if f.collapsibleGroup("tools", w.t(i18n.SettingsGroupTools)) {
 				f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)
 				f.y -= 8
@@ -915,7 +926,9 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			s.Theme = theme
 			s.FontSize = float32(n)
 			s.GitPath = strings.TrimSpace(gitPath.String())
-			w.ws.Git.SetPath(s.GitPath)
+			w.ws.SetGitPath(s.GitPath)
+			s.SVNPath = strings.TrimSpace(svnPath.String())
+			w.ws.SetSVNPath(s.SVNPath)
 			s.ExternalEditor = strings.TrimSpace(editor.String())
 			gitDraft.commit(s)
 			aiDraft.commit(s)

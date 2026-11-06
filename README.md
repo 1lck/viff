@@ -4,7 +4,7 @@
 
 # Viff
 
-**A lightweight, native Git client, with a read-only project browser, an English/Chinese interface, and optional AI-written commit messages.**
+**A lightweight, native Git and Subversion desktop client, with a read-only project browser, an English/Chinese interface, and optional AI-written commit messages.**
 
 Go + Viva. No Electron. No WebView. No bundled browser.
 
@@ -107,6 +107,39 @@ it is installed and falls back to Git grep otherwise.
 </details>
 
 Screenshots come from real Viva headless tests using disposable demo repositories.
+
+## Supported version control systems
+
+Viff serves both Git and Subversion repositories from the same window. Entry
+points that a backend cannot support are hidden rather than shown and failing;
+the reasoning is recorded in [0025](docs/decisions/0025-svn-support.md).
+
+| Capability                                                       | Git                       | Subversion                                 |
+| ---------------------------------------------------------------- | ------------------------- | ------------------------------------------ |
+| Checkout/open, status, diff, blame, file contents                 | Yes                       | Yes                                        |
+| History                                                          | Yes (commit graph)        | Yes (linear, backed by a local cache)      |
+| update / commit / revert / add / delete                           | Yes                       | Yes (partial commits via a target set)     |
+| Branch switching, creation, deletion                              | Yes                       | Yes (directories plus `switch`)            |
+| Conflict display (read-only)                                      | Yes                       | Yes                                        |
+| Property editing (`svn:ignore`, `svn:eol-style`)                  | Not applicable            | Not implemented yet                        |
+| lock / unlock                                                     | Not applicable            | Not implemented yet                        |
+| rebase, cherry-pick, reset, interactive rebase                    | Yes                       | Not applicable                             |
+| stash                                                             | Yes                       | Not applicable                             |
+| worktree, reflog, submodule                                       | Yes                       | Not applicable                             |
+| Staging area (partial staging)                                    | Yes                       | Not applicable                             |
+
+**Subversion differs in three ways that matter day to day:**
+
+- **History needs the repository.** The working copy holds no history, so Viff
+  queries the repository and keeps the answer for the session. When the
+  repository cannot be reached the failure is reported rather than passed off as
+  current data; labelling a kept answer as stale is not implemented yet, so
+  nothing is shown as if it were live.
+- **No staging area.** Instead of staging, a commit takes an explicit set of
+  target files, which you choose in the commit area.
+- **Commits are remote and atomic.** Nothing is committed locally, and an
+  interrupted commit must be re-checked rather than retried; a finished commit
+  cannot be undone locally.
 
 ## If macOS says it cannot open `Viff.app`
 

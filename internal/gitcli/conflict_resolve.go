@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/vcs"
 )
 
 // Errors of the in-app conflict resolution. When one is returned the file on
@@ -36,33 +37,15 @@ var (
 	ErrResolveUnsupported = errors.New("this conflict cannot be resolved inside Viff; use an external editor")
 )
 
-// ConflictResolveRequest accepts one block of one unmerged file.
-type ConflictResolveRequest struct {
-	// Path is the repository-relative path, exactly as Git reports it.
-	Path string
-	// Block is the index of the conflict block in the file, counted the way
-	// domain.ParseConflictMarkers counts blocks.
-	Block int
-	// Choice is the side (or both) to keep.
-	Choice domain.ResolveChoice
-	// Expected is the working-tree file as the conflict view read it. The
-	// bytes on disk must still be exactly these at the last content check,
-	// immediately before the atomic rename; otherwise the request is refused
-	// as stale and the edit found on disk is left in place.
-	Expected []byte
-}
-
-// ConflictResolveResult describes a completed rewrite.
-type ConflictResolveResult struct {
-	Path         string
-	Block        int
-	Choice       domain.ResolveChoice
-	BlocksBefore int
-	BlocksAfter  int
-	BytesWritten int
-	LineEnding   string
-	FinalNewline bool
-}
+// ConflictResolveRequest and ConflictResolveResult are shared with every
+// backend and live in internal/vcs. They stay aliased here so existing call
+// sites keep compiling.
+type (
+	// ConflictResolveRequest accepts one block of one unmerged file.
+	ConflictResolveRequest = vcs.ConflictResolveRequest
+	// ConflictResolveResult describes a completed rewrite.
+	ConflictResolveResult = vcs.ConflictResolveResult
+)
 
 // ResolveConflictBlock rewrites the working-tree file of an unmerged path with
 // one conflict block replaced by the chosen side(s). It refuses binary,

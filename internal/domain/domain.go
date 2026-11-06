@@ -10,12 +10,48 @@ import (
 	"time"
 )
 
-// Repo identifies one working tree. CommonDir differs from GitDir in a linked
-// worktree; refs and objects live in CommonDir.
+// Kind names the version control system a repository belongs to. It lives in
+// domain so snapshots and caches can carry it without importing an adapter.
+type Kind uint8
+
+const (
+	KindGit Kind = iota
+	KindSVN
+)
+
+// Repo identifies one working tree. MetaDir is the backend's own metadata
+// directory (.git or .svn); CommonDir differs from MetaDir in a linked Git
+// worktree, where refs and objects live in CommonDir.
+//
+// URL, RelURL, RepoRoot and UUID identify a Subversion working copy. Git
+// resolves everything from the local object store, but a Subversion working
+// copy records only its own base revision, so its repository identity has to
+// travel with it; UUID plus RelURL also survive moving the working copy, which
+// a path does not.
 type Repo struct {
 	Root      string
-	GitDir    string
+	Kind      Kind
+	MetaDir   string
 	CommonDir string
+
+	URL      string // working copy root's repository URL (Subversion)
+	RelURL   string // repository-relative URL, "^/trunk" (Subversion)
+	RepoRoot string // repository root URL (Subversion)
+	UUID     string // repository UUID (Subversion)
+}
+
+// LockKey is the serialization key for writes. Two working trees of one Git
+// repository share refs and objects through CommonDir, so they must not write
+// concurrently; Subversion has no shared metadata between checkouts, so each
+// working copy is its own key.
+func (r Repo) LockKey() string {
+	if r.Kind == KindSVN {
+		return r.Root
+	}
+	if r.CommonDir != "" {
+		return r.CommonDir
+	}
+	return r.MetaDir
 }
 
 // Name is the folder name shown as the project name.
@@ -28,7 +64,9 @@ func (r Repo) Name() string {
 }
 
 // IsLinkedWorktree reports a worktree created with git worktree add.
-func (r Repo) IsLinkedWorktree() bool { return r.CommonDir != "" && r.CommonDir != r.GitDir }
+func (r Repo) IsLinkedWorktree() bool {
+	return r.Kind == KindGit && r.CommonDir != "" && r.CommonDir != r.MetaDir
+}
 
 // RefKind classifies a reference.
 type RefKind uint8
@@ -180,13 +218,19 @@ const (
 	AreaConflicts
 )
 
-// StatusEntry is one path from git status. Index and Worktree are the X and
-// Y status letters ('.' for unchanged).
+// StatusEntry is one path from a status query. Index and Worktree are the X
+// and Y status letters ('.' for unchanged), Git's two-column form. A backend
+// with a single change state (Subversion) reports Index '.' and puts the
+// change in Worktree.
 type StatusEntry struct {
 	Path     string
 	OrigPath string
 	Index    byte
 	Worktree byte
+	// Props is a property change ('M', 'C' or ' '). Git has no versioned
+	// properties and leaves it blank; Subversion reports svn:* changes
+	// separately from text changes.
+	Props byte
 	// Submodule is the porcelain v2 submodule field ("N..." when not one).
 	Submodule string
 	ModeHead  string
@@ -194,16 +238,18 @@ type StatusEntry struct {
 	ModeWork  string
 }
 
-// Untracked reports a "?" entry.
-func (e StatusEntry) Untracked() bool { return e.Index == '?' }
+// Untracked reports a "?" entry. Git puts the letter in both columns; a
+// single-column backend only fills Worktree.
+func (e StatusEntry) Untracked() bool { return e.Index == '?' || e.Worktree == '?' }
 
 // Ignored reports a "!" entry.
-func (e StatusEntry) Ignored() bool { return e.Index == '!' }
+func (e StatusEntry) Ignored() bool { return e.Index == '!' || e.Worktree == '!' }
 
-// Conflicted reports an unmerged entry (any combination of U, or AA/DD).
+// Conflicted reports an unmerged entry: any U, Git's AA/DD, or Subversion's
+// single-column "conflicted" item.
 func (e StatusEntry) Conflicted() bool {
 	x, y := e.Index, e.Worktree
-	return x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D')
+	return x == 'U' || y == 'U' || x == 'C' || y == 'C' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D')
 }
 
 // Staged reports changes recorded in the index relative to HEAD.
@@ -212,8 +258,20 @@ func (e StatusEntry) Staged() bool {
 }
 
 // Unstaged reports changes in the working tree relative to the index.
+//
+// A property-only change counts: Subversion reports it as item="normal" with
+// props="modified", so the text column is blank while the working copy really
+// differs from the base. Without that case the entry lands in no area at all
+// and a file whose only change is svn:eol-style or svn:ignore disappears from
+// the changes list, which also keeps it out of the next commit.
 func (e StatusEntry) Unstaged() bool {
-	return !e.Conflicted() && !e.Untracked() && !e.Ignored() && e.Worktree != '.' && e.Worktree != ' '
+	if e.Conflicted() || e.Untracked() || e.Ignored() {
+		return false
+	}
+	if e.Worktree != '.' && e.Worktree != ' ' {
+		return true
+	}
+	return e.Props != 0 && e.Props != ' '
 }
 
 // IsSubmodule reports a submodule entry.

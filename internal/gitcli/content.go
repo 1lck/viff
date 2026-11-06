@@ -12,46 +12,41 @@ import (
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/vcs"
 )
 
-// Content is one side of a diff: the bytes of a file at some revision, or a
-// description of why the bytes are not shown.
-type Content struct {
-	Exists    bool
-	Data      []byte
-	Size      int64
-	Binary    bool
-	TooLarge  bool
-	Mode      string
-	Symlink   bool
-	Submodule bool
-}
+// Content, Revision and the revision constructors are shared with every
+// backend and live in internal/vcs. They stay aliased here so existing call
+// sites keep compiling.
+type (
+	// Content is one side of a diff.
+	Content = vcs.Content
+	// Revision selects which version of a file to read.
+	Revision = vcs.Revision
+)
 
-// ContentLimit is the largest file loaded for a text diff. Bigger files get a
-// restricted preview that never reads them whole.
-const ContentLimit = 8 << 20
-
-// Revision selects which version of a file to read.
-type Revision struct {
-	// Kind: "worktree", "index", "stage" (with Stage), or "commit" (with Rev).
-	Kind  string
-	Rev   string
-	Stage int
-}
+// ContentLimit is the largest file loaded for a text diff.
+const ContentLimit = vcs.ContentLimit
 
 var (
-	RevWorktree = Revision{Kind: "worktree"}
-	RevIndex    = Revision{Kind: "index"}
-	RevHead     = Revision{Kind: "commit", Rev: "HEAD"}
+	// RevWorktree names the file on disk.
+	RevWorktree = vcs.RevWorktree
+	// RevIndex names the recorded (staged) version.
+	RevIndex = vcs.RevIndex
+	// RevHead names the last commit's version.
+	RevHead = vcs.RevHead
 )
 
 // RevCommit names a file at a commit.
-func RevCommit(rev string) Revision { return Revision{Kind: "commit", Rev: rev} }
+func RevCommit(rev string) Revision { return vcs.RevCommit(rev) }
 
 // RevStage names one index stage of an unmerged file.
-func RevStage(n int) Revision { return Revision{Kind: "stage", Stage: n} }
+func RevStage(n int) Revision { return vcs.RevStage(n) }
 
-func (rev Revision) objectName(path string) string {
+// objectName renders the revision as Git's <rev>:<path> object expression.
+// It is a free function rather than a Revision method because Revision is
+// shared with backends that have no object store.
+func objectName(rev Revision, path string) string {
 	switch rev.Kind {
 	case "index":
 		return ":" + path
@@ -66,7 +61,7 @@ func (r *Runner) Read(ctx context.Context, repo domain.Repo, rev Revision, path 
 	if rev.Kind == "worktree" {
 		return readWorktree(filepath.Join(repo.Root, filepath.FromSlash(path)))
 	}
-	name := rev.objectName(path)
+	name := objectName(rev, path)
 	out, err := r.Run(ctx, repo.Root, "cat-file", "-t", name)
 	if err != nil {
 		// A path missing at a revision is an absent side, not a failure.

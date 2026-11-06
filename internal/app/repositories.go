@@ -252,7 +252,17 @@ func (w *Workspace) markRepositoryError(root string, err error) {
 func (w *Workspace) AddRepository(dir string, done func(error)) {
 	_, ctx, finish := w.startTask("Adding "+filepath.Base(dir), false)
 	go func() {
-		repo, err := w.Git.Discover(ctx, dir)
+		backend := w.pickBackend(dir)
+		if backend == nil {
+			w.post(func() {
+				finish()
+				if done != nil {
+					done(ErrUnsupported)
+				}
+			})
+			return
+		}
+		repo, err := backend.Discover(ctx, dir)
 		w.post(func() {
 			finish()
 			if err != nil {
@@ -315,7 +325,17 @@ func (w *Workspace) ActivateRepository(root string, done func(error)) {
 	seq := w.repos.activateSeq
 	_, ctx, finish := w.startTask("Opening "+filepath.Base(entry.root), false)
 	go func() {
-		repo, err := w.Git.Discover(ctx, entry.root)
+		backend := w.pickBackend(entry.root)
+		if backend == nil {
+			w.post(func() {
+				finish()
+				if done != nil {
+					done(ErrUnsupported)
+				}
+			})
+			return
+		}
+		repo, err := backend.Discover(ctx, entry.root)
 		w.post(func() {
 			finish()
 			// The row may have been removed while discovery ran; a newer
@@ -344,6 +364,7 @@ func (w *Workspace) ActivateRepository(root string, done func(error)) {
 				}
 				return
 			}
+			w.useBackend(backend)
 			w.setRepo(repo)
 			if done != nil {
 				done(nil)

@@ -20,6 +20,7 @@ import (
 	"viff/internal/observability"
 	"viff/internal/platform"
 	"viff/internal/storage"
+	"viff/internal/svncli"
 	viffui "viff/internal/ui"
 	"viff/internal/updater"
 	"viff/internal/version"
@@ -122,6 +123,7 @@ func run() (code int) {
 	rec.Event(observability.Event{Event: observability.EventSettingsLoad, Level: settingsLevel, Fields: settingsFields})
 
 	git := &gitcli.Runner{Path: settings.GitPath}
+	svn := &svncli.Runner{Path: settings.SVNPath}
 	gitCtx, cancelGit := context.WithTimeout(context.Background(), 2*time.Second)
 	gitVersion, gitVersionErr := git.Version(gitCtx)
 	cancelGit()
@@ -132,6 +134,17 @@ func run() (code int) {
 	if gitVersionErr != nil {
 		gitSource = "missing"
 		gitVersion = ""
+	}
+	svnCtx, cancelSVN := context.WithTimeout(context.Background(), 2*time.Second)
+	svnVersion, svnVersionErr := svn.Version(svnCtx)
+	cancelSVN()
+	svnSource := "path"
+	if settings.SVNPath != "" {
+		svnSource = "settings"
+	}
+	if svnVersionErr != nil {
+		svnSource = "missing"
+		svnVersion = ""
 	}
 	rec.Event(observability.Event{
 		Event: observability.EventAppStart,
@@ -151,6 +164,8 @@ func run() (code int) {
 			"log_dir":         filepath.Join("<cfg>", "Viff", "logs"),
 			"git_version":     gitVersion,
 			"git_source":      gitSource,
+			"svn_version":     svnVersion,
+			"svn_source":      svnSource,
 		},
 	})
 
@@ -160,6 +175,9 @@ func run() (code int) {
 			win.Invalidate()
 		}
 	})
+	// Both adapters are registered; the app picks one per repository by a local
+	// probe of .git/.svn, so one binary opens either kind of working copy.
+	ws.SetBackends(git, svn)
 	ws.SetRecorder(rec, incidents)
 	ws.SetLogLevel(settings.LogLevel)
 	// The updater owns downloads and self-replacement; the app only sees the

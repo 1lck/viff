@@ -87,7 +87,7 @@ func TestInteractiveRebasePlan(t *testing.T) {
 	if op := tr.r.Operation(ctx, tr.repo); op.Active() {
 		t.Fatalf("rebase left running: %+v", op)
 	}
-	if _, err := os.Stat(filepath.Join(tr.repo.GitDir, "viff-rebase")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(tr.repo.MetaDir, "viff-rebase")); !os.IsNotExist(err) {
 		t.Fatal("plan files not cleaned up")
 	}
 }

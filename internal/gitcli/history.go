@@ -9,20 +9,12 @@ import (
 	"time"
 
 	"viff/internal/domain"
+	"viff/internal/vcs"
 )
 
-// LogFilter narrows the log. Empty fields do not filter.
-type LogFilter struct {
-	// Revisions are the starting points; empty means all branches, remote
-	// branches, tags and HEAD.
-	Revisions []string
-	Text      string // matched against messages (and hashes by the caller)
-	Author    string
-	Since     time.Time
-	Paths     []string
-	// FirstParent follows only first parents.
-	FirstParent bool
-}
+// LogFilter is shared with every backend and lives in internal/vcs. It stays
+// aliased here so existing call sites keep compiling.
+type LogFilter = vcs.LogFilter
 
 const logFormat = "%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ct%x1f%s%x1e"
 
@@ -61,8 +53,9 @@ type LogReader struct {
 	err    error
 }
 
-// OpenLog starts the log for a filter.
-func (r *Runner) OpenLog(ctx context.Context, repo domain.Repo, f LogFilter) (*LogReader, error) {
+// OpenLog starts the log for a filter. The concrete *LogReader satisfies
+// vcs.LogReader, which is what the contract and therefore the caller see.
+func (r *Runner) OpenLog(ctx context.Context, repo domain.Repo, f LogFilter) (vcs.LogReader, error) {
 	s, err := r.Stream(ctx, repo.Root, LogArgs(f)...)
 	if err != nil {
 		return nil, err

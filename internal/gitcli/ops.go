@@ -7,13 +7,35 @@ import (
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/vcs"
 )
 
-// Output is what a write command printed, for the console and notifications.
-type Output struct {
-	Stdout string
-	Stderr string
-}
+// Output, CommitOptions, PullMode, PushOptions and ResetMode are shared with
+// every backend and live in internal/vcs. They stay aliased here so existing
+// call sites keep compiling.
+type (
+	// Output is what a write command printed.
+	Output = vcs.Output
+	// CommitOptions configures a commit.
+	CommitOptions = vcs.CommitOptions
+	// PullMode decides how pull integrates the upstream.
+	PullMode = vcs.PullMode
+	// PushOptions configures a push.
+	PushOptions = vcs.PushOptions
+	// ResetMode is the mode of a reset.
+	ResetMode = vcs.ResetMode
+)
+
+const (
+	PullMerge           = vcs.PullMerge
+	PullRebase          = vcs.PullRebase
+	PullFastForwardOnly = vcs.PullFastForwardOnly
+
+	ResetSoft  = vcs.ResetSoft
+	ResetMixed = vcs.ResetMixed
+	ResetHard  = vcs.ResetHard
+	ResetKeep  = vcs.ResetKeep
+)
 
 func (r *Runner) write(ctx context.Context, repo domain.Repo, args ...string) error {
 	_, err := r.Run(ctx, repo.Root, args...)
@@ -64,16 +86,6 @@ func (r *Runner) writePaths(ctx context.Context, repo domain.Repo, args []string
 	full = append(full, "--pathspec-from-file=-", "--pathspec-file-nul")
 	_, err := r.RunInput(ctx, repo.Root, []byte(input), full...)
 	return err
-}
-
-// CommitOptions configures a commit.
-type CommitOptions struct {
-	Message  string
-	Amend    bool
-	SignOff  bool
-	NoVerify bool
-	// Paths, when set, commits only these paths (git commit --only).
-	Paths []string
 }
 
 // Commit records the index (or Paths) with the message.
@@ -197,15 +209,6 @@ func (r *Runner) Fetch(ctx context.Context, repo domain.Repo, remote string, pru
 	return err
 }
 
-// PullMode decides how pull integrates the upstream.
-type PullMode uint8
-
-const (
-	PullMerge PullMode = iota
-	PullRebase
-	PullFastForwardOnly
-)
-
 // Pull fetches and integrates the upstream of the current branch.
 func (r *Runner) Pull(ctx context.Context, repo domain.Repo, mode PullMode, progress func(string)) (Output, error) {
 	args := []string{"pull", "--progress", "--no-edit"}
@@ -219,18 +222,6 @@ func (r *Runner) Pull(ctx context.Context, repo domain.Repo, mode PullMode, prog
 	}
 	out, err := r.RunProgress(ctx, repo.Root, progress, args...)
 	return Output{Stdout: string(out)}, err
-}
-
-// PushOptions configures a push.
-type PushOptions struct {
-	Remote      string
-	Branch      string // local branch
-	RemoteName  string // remote branch name; defaults to Branch
-	SetUpstream bool
-	// ForceWithLease protects against overwriting work pushed by others.
-	ForceWithLease bool
-	Tags           bool
-	NoVerify       bool
 }
 
 // Push pushes a branch.
@@ -313,16 +304,6 @@ func (r *Runner) RevertCommits(ctx context.Context, repo domain.Repo, hashes []s
 	out, err := r.Run(ctx, repo.Root, append([]string{"revert", "--no-edit"}, hashes...)...)
 	return Output{Stdout: string(out)}, err
 }
-
-// ResetMode is git reset's mode.
-type ResetMode string
-
-const (
-	ResetSoft  ResetMode = "--soft"
-	ResetMixed ResetMode = "--mixed"
-	ResetHard  ResetMode = "--hard"
-	ResetKeep  ResetMode = "--keep"
-)
 
 // Reset moves the current branch to rev.
 func (r *Runner) Reset(ctx context.Context, repo domain.Repo, mode ResetMode, rev string) error {

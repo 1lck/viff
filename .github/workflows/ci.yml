@@ -131,6 +131,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libvulkan1 mesa-vulkan-drivers libxcb1 libcairo2 libfontconfig1 libfreetype6 libharfbuzz0b libpango-1.0-0 libpangocairo-1.0-0 fonts-dejavu-core
+      # The Subversion adapter's tests skip themselves without a client, which
+      # silently removed their only coverage; installing it here is what makes
+      # them run.
+      - name: Install the Subversion client
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y subversion
       - name: Install Windows installer compiler
         if: runner.os == 'Windows'
         run: |
@@ -149,6 +155,21 @@ jobs:
       - name: Vet all code, including headless tests
         if: matrix.shard == 1
         run: go vet -tags 'vivahead litheaudit' ./...
+      - name: Test the Subversion adapter against a real client
+        if: runner.os == 'Linux' && matrix.shard == 1
+        run: |
+          set -euo pipefail
+          mkdir -p .viff-test/ci/logs
+          go test -count=1 -timeout 5m -v ./internal/svncli | tee .viff-test/ci/logs/svn-adapter.txt
+          # These tests skip themselves when no client is installed, which is
+          # how the adapter had no coverage at all; after the step above a skip
+          # of one of them means something is wrong and must fail the build.
+          # TestUserDemoRepo skips for its own reason (it needs a scratch
+          # repository outside CI) and is not part of this guard.
+          if grep -qE -- '--- SKIP: (TestAll|TestEndToEnd|TestEdges|TestPaths|TestWrites)' .viff-test/ci/logs/svn-adapter.txt; then
+            echo '::error::a Subversion test skipped although subversion is installed'
+            exit 1
+          fi
       - name: Test domain, Git, storage, and workspace
         uses: ./.github/actions/go-test-shard
         with:

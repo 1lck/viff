@@ -126,7 +126,7 @@ func (r *Runner) rewriteHistory(ctx context.Context, repo domain.Repo, hash, mes
 		fmt.Fprintf(&todo, "%s %s\n", verb, c.Hash)
 	}
 
-	dir := filepath.Join(repo.GitDir, "viff-rewrite")
+	dir := filepath.Join(repo.MetaDir, "viff-rewrite")
 	if err := os.RemoveAll(dir); err != nil { // files of an earlier edit
 		return Output{}, err
 	}

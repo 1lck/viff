@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"viff/internal/domain"
 	"viff/internal/gitcli"
 )
 
@@ -30,6 +31,21 @@ func RipgrepPath(configured string) string {
 	return bin
 }
 
+// contentSearcher is the optional backend capability behind content search.
+// It is not part of vcs.Backend because Subversion has no equivalent of
+// "grep the working copy" that Viff can run: the entry is hidden instead of
+// the adapter stubbing a method it cannot implement (ADR 0025).
+type contentSearcher interface {
+	SearchContent(ctx context.Context, repo domain.Repo, query string, opts gitcli.SearchOptions) (gitcli.SearchResult, error)
+}
+
+// SupportsContentSearch reports whether the active backend can search file
+// contents.
+func (w *Workspace) SupportsContentSearch() bool {
+	_, ok := w.Git.(contentSearcher)
+	return ok
+}
+
 // SearchContentOptions selects the backend for one query.
 type SearchContentOptions struct {
 	Tool        string
@@ -49,6 +65,11 @@ func (w *Workspace) SearchContent(query string, opts SearchContentOptions, done 
 	if rs == nil || query == "" {
 		return
 	}
+	searcher, ok := w.Git.(contentSearcher)
+	if !ok {
+		done(SearchResult{}, ErrUnsupported)
+		return
+	}
 	w.searchSeq++
 	seq := w.searchSeq
 	w.cancelSearch()
@@ -56,7 +77,7 @@ func (w *Workspace) SearchContent(query string, opts SearchContentOptions, done 
 	w.searchCancel = cancel
 	go func() {
 		defer cancel()
-		res, err := w.Git.SearchContent(ctx, rs.Repo, query, gitcli.SearchOptions{
+		res, err := searcher.SearchContent(ctx, rs.Repo, query, gitcli.SearchOptions{
 			Tool:             opts.Tool,
 			RipgrepPath:      opts.RipgrepPath,
 			IncludeUntracked: true,
