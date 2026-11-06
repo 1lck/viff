@@ -400,16 +400,16 @@ func (w *Window) openSearchDialog(page int) {
 	}
 }
 
-// focusDialogField moves the native text input to a field after the hit
-// regions are rebuilt. The extra frame is what makes typing and IME follow a
-// page switch immediately.
+// focusDialogField moves the native text input to a field after the page that
+// contains it is painted. Requesting focus immediately would target the hit
+// tree of the frame that is still painting, where a just-switched page has no
+// field yet; the deferred call sets focusNext for the next frame instead.
 func (w *Window) focusDialogField(id ui.ID) {
-	w.focusNext = id
 	w.after(func() {
 		if w.dialog == nil {
 			return
 		}
-		w.c.RequestFocus(id)
+		w.focusNext = id
 		w.Invalidate()
 	})
 }

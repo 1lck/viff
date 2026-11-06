@@ -140,7 +140,7 @@ func Defaults() *Settings {
 	return &Settings{
 		Version: SchemaVersion, Theme: "dark", UIScale: 1, FontSize: 13,
 		AutoFetch: false, AutoFetchMins: 10, FetchPrune: true, PullMode: "merge",
-		AutoUpdateCheck:  true,
+		AutoUpdateCheck: true, SearchTool: "auto",
 		Window:           Window{Width: 1440, Height: 900},
 		CommitPanelWidth: 340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
 		DiffSyncScroll: true, DiffHighlightWords: true, CommitTree: false,
