@@ -235,7 +235,7 @@ func init() {
 		DialogCheckout:        "检出",
 		DialogReset:           "重置",
 		DialogPush:            "推送",
-		DialogCreateStash:     "创建暂存",
+		DialogCreateStash:     "创建储藏",
 		DialogClone:           "克隆",
 		DialogDelete:          "删除",
 		DialogAdd:             "添加",
@@ -302,7 +302,7 @@ func init() {
 		DialogUpdateBody:    "从 %s 更新 %s。",
 		DialogUpdateDontAsk: "不再询问",
 
-		DialogStashTitle:       "暂存更改",
+		DialogStashTitle:       "储藏更改",
 		DialogBranchLabel:      "分支：%s",
 		DialogMessage:          "说明：",
 		DialogOptional:         "可选",

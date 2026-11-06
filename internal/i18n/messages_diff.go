@@ -11,6 +11,11 @@ const (
 	DiffViewSideBySide = Key("diff.view.sideBySide")
 	DiffViewUnified    = Key("diff.view.unified")
 
+	// The whitespace chip and the menu behind it.
+	DiffWhitespaceExact  = Key("diff.whitespace.exact")
+	DiffWhitespaceTrim   = Key("diff.whitespace.trim")
+	DiffWhitespaceIgnore = Key("diff.whitespace.ignore")
+
 	DiffActionPrevDifference = Key("diff.action.previousDifference")
 	DiffActionNextDifference = Key("diff.action.nextDifference")
 	DiffActionHighlightWords = Key("diff.action.highlightWords")
@@ -107,6 +112,10 @@ func init() {
 		DiffViewSideBySide: "Side-by-side viewer",
 		DiffViewUnified:    "Unified viewer",
 
+		DiffWhitespaceExact:  "Do not ignore",
+		DiffWhitespaceTrim:   "Trim whitespaces",
+		DiffWhitespaceIgnore: "Ignore whitespaces",
+
 		DiffActionPrevDifference: "Previous Difference\t⇧F7",
 		DiffActionNextDifference: "Next Difference\tF7",
 		DiffActionHighlightWords: "Highlight Words",
@@ -200,6 +209,10 @@ func init() {
 
 		DiffViewSideBySide: "并排视图",
 		DiffViewUnified:    "统一视图",
+
+		DiffWhitespaceExact:  "不忽略",
+		DiffWhitespaceTrim:   "忽略行尾空白",
+		DiffWhitespaceIgnore: "忽略空白",
 
 		DiffActionPrevDifference: "上一处差异\t⇧F7",
 		DiffActionNextDifference: "下一处差异\tF7",

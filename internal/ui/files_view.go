@@ -7,6 +7,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
 
@@ -463,7 +464,7 @@ func (w *Window) filesMenu(row fileRow) []item {
 		{title: "Open in External Editor", icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(row.path, 0) }},
 		sep(),
 		{title: "Annotate with Git Blame", icon: icons.Vcs, run: func() { w.openFileView(row.path, "", true) }},
-		{title: "Show History", icon: icons.History, run: func() { w.showPathHistory(row.path) }},
+		{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(row.path) }},
 		sep(),
 		{title: "Copy Path", icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
 		{title: "Copy Relative Path", run: func() { w.copyText(row.path) }},

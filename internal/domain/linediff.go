@@ -15,17 +15,6 @@ const (
 	WhitespaceIgnore                // ignore all whitespace
 )
 
-// Title is the label used in the diff toolbar.
-func (m WhitespaceMode) Title() string {
-	switch m {
-	case WhitespaceTrim:
-		return "Trim whitespaces"
-	case WhitespaceIgnore:
-		return "Ignore whitespaces"
-	}
-	return "Do not ignore"
-}
-
 // Block is one changed region between two texts: lines [OldStart, OldEnd)
 // of the old text were replaced by [NewStart, NewEnd) of the new. A pure
 // insertion has OldStart == OldEnd, a pure deletion NewStart == NewEnd.
