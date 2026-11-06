@@ -180,6 +180,8 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 		w.Repo.cancelDetail()
 	}
 	w.closeWatcher(oldRoot)
+	// A content search belongs to the repository that started it.
+	w.cancelSearch()
 	// The undo history describes one checkout's HEAD and branches; a switch
 	// makes every record describe a state that is no longer current.
 	w.clearUndo()
@@ -266,6 +268,7 @@ func (w *Workspace) Close() {
 	}
 	w.closeWatcher(root)
 	w.clearUndo()
+	w.cancelSearch()
 	w.Repo = nil
 }
 

@@ -141,6 +141,11 @@ type Workspace struct {
 	// changes (see undo.go).
 	undos   []*undoEntry
 	undoing bool
+	// searchSeq and searchCancel belong to SearchContent: a query that is no
+	// longer the newest one is dropped after it returns.
+	searchSeq    uint64
+	searchCancel context.CancelFunc
+
 	// nextGen is the repository generation counter. It only ever grows: a
 	// generation is never reused after a repository is closed or removed, so a
 	// stale view can never match a newer repository.

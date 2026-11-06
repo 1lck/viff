@@ -190,12 +190,18 @@ var (
 	idDialogCancel = tree.ID(fDialog, "cancel")
 	idDialogExtra  = tree.ID(fDialog, "extra")
 	idDialogClose  = tree.ID(fDialog, "close")
+	idDialogBar    = tree.ID(fDialog, "body-scroll")
 	scDialogFields = tree.Sub(fDialog, tree.Name("fields"))
 	scDialogChecks = tree.Sub(fDialog, tree.Name("checks"))
 	scDialogRadios = tree.Sub(fDialog, tree.Name("radios"))
 	scDialogRows   = tree.Sub(fDialog, tree.Name("rows"))
 	scDialogCombos = tree.Sub(fDialog, tree.Name("combos"))
 	scDialogLinks  = tree.Sub(fDialog, tree.Name("links"))
+	scDialogTabs   = tree.Sub(fDialog, tree.Name("tabs"))
+	scDialogGroups = tree.Sub(fDialog, tree.Name("groups"))
+
+	idSettingsRipgrepBrowse   = tree.ID(fDialog, "settings-ripgrep-browse")
+	idSettingsRipgrepDownload = tree.ID(fDialog, "settings-ripgrep-download")
 	// The New Worktree dialog chooses an existing branch from a list inside
 	// the dialog, not a popup: a popup opened from a dialog is painted but
 	// cannot be clicked through the focus trap (0012).
@@ -258,9 +264,11 @@ var (
 var (
 	fQuickOpen = tree.Feature("quick-open")
 
-	idQuickInput = tree.ID(fQuickOpen, "input")
-	scQuickRows  = tree.Sub(fQuickOpen, tree.Name("rows"))
-	idQuickBar   = tree.ID(fQuickOpen, "scroll")
+	idQuickInput     = tree.ID(fQuickOpen, "input")
+	idSearchInput    = tree.ID(fQuickOpen, "content-input")
+	idSearchSettings = tree.ID(fQuickOpen, "settings")
+	scQuickRows      = tree.Sub(fQuickOpen, tree.Name("rows"))
+	idQuickBar       = tree.ID(fQuickOpen, "scroll")
 )
 
 // Text selection in the read-only viewer.
