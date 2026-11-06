@@ -390,7 +390,10 @@ func (r *Runner) Worktrees(ctx context.Context, repo domain.Repo) ([]domain.Work
 				cur = nil
 			}
 		case strings.HasPrefix(f, "worktree "):
-			cur = &domain.Worktree{Path: strings.TrimPrefix(f, "worktree ")}
+			// Git reports the worktree location as an absolute path in its own
+			// file system; the identity Viff compares against (samePath,
+			// WorktreeElsewhere) is the \\wsl.localhost spelling (wsl.go).
+			cur = &domain.Worktree{Path: toWinPath(repo.Root, strings.TrimPrefix(f, "worktree "))}
 		case cur == nil:
 		case strings.HasPrefix(f, "HEAD "):
 			cur.Head = strings.TrimPrefix(f, "HEAD ")

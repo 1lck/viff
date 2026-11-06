@@ -65,6 +65,7 @@ skill 是必读步骤，不是可选参考。按改动类型加载，跨类型�
 | `internal/ui` | Viva 视图、视图模型、主题、可复用交互组件 | 不拼 Git 命令，不直接读 `.git` |
 | `internal/platform` | 文件事件、外部打开、窗口与平台集成 | OS 差异集中在此 |
 | `internal/process` | 子进程平台属性（Windows 隐藏控制台等） | 其他包起子进程必须经过它 |
+| `internal/wslpath` | `\\wsl.localhost` 与 Linux 路径之间的纯词法转换 | 零依赖，不起进程，不碰文件系统 |
 | `internal/storage` | 设置、迁移、缓存、日志配额 | 不保存另一份权威 Git 状态 |
 | `internal/observability` | 结构化事件日志、崩溃记录、诊断导出 | 脱敏先于落盘 |
 | `internal/diagnostics` | 诊断包组装 | 不含仓库内容、凭据、令牌 |

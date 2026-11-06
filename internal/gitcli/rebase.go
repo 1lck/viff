@@ -125,7 +125,7 @@ func (r *Runner) InteractiveRebase(ctx context.Context, repo domain.Repo, base s
 			if err := os.WriteFile(msg, []byte(strings.TrimRight(s.Message, "\n")+"\n"), 0o644); err != nil {
 				return Output{}, err
 			}
-			fmt.Fprintf(&todo, "pick %s\nexec git commit --amend --allow-empty --quiet -F %s\n", s.Hash, shellQuote(filepath.ToSlash(msg)))
+			fmt.Fprintf(&todo, "pick %s\nexec git commit --amend --allow-empty --quiet -F %s\n", s.Hash, shellQuote(filepath.ToSlash(toGitPath(repo.Root, msg))))
 		default:
 			fmt.Fprintf(&todo, "%s %s\n", s.Action, s.Hash)
 		}
@@ -135,7 +135,10 @@ func (r *Runner) InteractiveRebase(ctx context.Context, repo domain.Repo, base s
 		return Output{}, err
 	}
 	args := []string{
-		"-c", "sequence.editor=cp " + shellQuote(filepath.ToSlash(todoPath)),
+		// The todo file was written through the Windows identity domain; the
+		// editor runs in Git's file system, so the path it copies from has to
+		// be spelled for that side (toGitPath; wsl.go).
+		"-c", "sequence.editor=cp " + shellQuote(filepath.ToSlash(toGitPath(repo.Root, todoPath))),
 		"-c", "core.editor=true",
 		"-c", "rebase.missingCommitsCheck=ignore",
 		"rebase", "-i", "--autostash", "--no-autosquash",

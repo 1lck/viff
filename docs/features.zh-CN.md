@@ -107,3 +107,4 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
 - AI 生成提交说明默认关闭；启用后会把当前改动的分支名、最近五条提交、变更文件与 diff 发到你自己配置的端点，范围与隐私边界见 [privacy.md](privacy.md)。
 - 应用内更新没有系统签名校验（macOS ad-hoc 签名、Windows 无 Authenticode），只做 HTTPS + SHA-256；宿主的系统安全提示仍可能出现。DEB 安装受权限限制只能提示手动安装；随包文档在 Windows/Linux 自替换后保持旧版本，见 [0023](decisions/0023-app-update.md)。旧版本（v0.1.0 及更早）没有更新器，升级到第一个带更新器的版本需要手动下载一次。
 - 终端目前只有一个本地会话：不连 SSH、不支持多标签/分屏、搜索、链接、内联图片与鼠标上报；隐藏工具窗时 shell 继续运行，会话不跨重启恢复。切换仓库不会改写已在运行的 shell 的当前目录，新会话才从新仓库根目录开始。Windows 使用 ConPTY（需要 Windows 10 1809+），本机未做 Windows 实机验收。见 [0028](decisions/0028-integrated-terminal.md)。
+- Windows 版可直接打开 WSL 发行版内的仓库（`\\wsl.localhost\...` 或旧的 `\\wsl$`，两种写法视为同一仓库）：Git 由发行版执行，文件经 9P 读取，因此 diff 与刷新比本地磁盘慢；WSL 仓库忽略设置里的「Git 路径」，并使用 Linux 侧的配置、凭据、签名与 hooks。文件监听在 WSL 仓库上放宽到 5 秒。内置终端与 `rg` 内容搜索仍走 Windows 侧，未针对 WSL 适配。见 [0035](decisions/0035-wsl-repositories.md)。

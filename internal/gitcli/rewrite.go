@@ -139,7 +139,10 @@ func (r *Runner) rewriteHistory(ctx context.Context, repo domain.Repo, hash, mes
 		return Output{}, err
 	}
 	args := []string{
-		"-c", "sequence.editor=cp " + shellQuote(filepath.ToSlash(todoPath)),
+		// The todo and message files are written through the Windows identity
+		// domain; the editors run in Git's file system, so the paths they copy
+		// from have to be spelled for that side (toGitPath; wsl.go).
+		"-c", "sequence.editor=cp " + shellQuote(filepath.ToSlash(toGitPath(repo.Root, todoPath))),
 		"-c", "rebase.missingCommitsCheck=ignore",
 		"-c", "commit.cleanup=strip",
 	}
@@ -151,7 +154,7 @@ func (r *Runner) rewriteHistory(ctx context.Context, repo domain.Repo, hash, mes
 		if err := os.WriteFile(msgPath, []byte(strings.TrimRight(message, "\n")+"\n"), 0o644); err != nil {
 			return Output{}, err
 		}
-		args = append(args, "-c", "core.editor=cp "+shellQuote(filepath.ToSlash(msgPath)))
+		args = append(args, "-c", "core.editor=cp "+shellQuote(filepath.ToSlash(toGitPath(repo.Root, msgPath))))
 	default:
 		args = append(args, "-c", "core.editor=true")
 	}
