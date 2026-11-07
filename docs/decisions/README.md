@@ -43,3 +43,4 @@
 | [0037](0037-content-search.md) | 在文件中查找：按需内容搜索 |
 | [0038](0038-wsl-repositories.md) | 在 Windows 版直接打开 WSL 仓库 |
 | [0039](0039-codemap-in-file-viewer.md) | 代码缩略图只属于只读文件查看器 |
+| [0040](0040-branch-double-click.md) | 双击分支默认只筛选，不检出 |

@@ -53,6 +53,14 @@ type Settings struct {
 	// has no field, while an explicit false is stored and respected.
 	AutoUpdateCheck bool `json:"autoUpdateCheck"`
 
+	// CheckoutOnDoubleClick makes a double-click on a branch row check that
+	// branch out. It defaults to false: checking out rewrites the working tree,
+	// which is a lot to do on a second click, and the row's context menu always
+	// offers the action explicitly. An older settings file has no field, and
+	// Load unmarshals into Defaults, so upgrading never turns the old behavior
+	// back on.
+	CheckoutOnDoubleClick bool `json:"checkoutOnDoubleClick,omitempty"`
+
 	// LogLevel is the file log level: "debug" keeps verbose diagnostics,
 	// empty or "info" keeps the default. It has no effect on behavior, so an
 	// old settings file without the field keeps working unchanged.

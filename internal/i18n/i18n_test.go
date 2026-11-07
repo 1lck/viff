@@ -1,6 +1,7 @@
 package i18n
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -108,4 +109,36 @@ func placeholders(s string) []string {
 		}
 	}
 	return out
+}
+
+// The "show in the file manager" action must name the platform's own file
+// manager: a menu that opens Explorer cannot say Finder. Both languages are
+// pinned here, and the Chinese spacing follows whether the name is Latin.
+func TestRevealLabelFollowsThePlatform(t *testing.T) {
+	for _, tc := range []struct {
+		goos, en, zh string
+	}{
+		{"darwin", "Show in Finder", "在 Finder 中显示"},
+		{"windows", "Show in File Explorer", "在文件资源管理器中显示"},
+		{"linux", "Show in File Manager", "在文件管理器中显示"},
+	} {
+		if got := revealLabelFor(EN, tc.goos); got != tc.en {
+			t.Errorf("%s English = %q, want %q", tc.goos, got, tc.en)
+		}
+		if got := revealLabelFor(ZHCN, tc.goos); got != tc.zh {
+			t.Errorf("%s Chinese = %q, want %q", tc.goos, got, tc.zh)
+		}
+	}
+	// Every key that reveals a path must carry the same platform wording, or one
+	// menu would say Finder on Windows.
+	for _, key := range []Key{ShowInFileManager, ChromeMenuShowInFinder, WorkspaceMenuRevealInFinder, ConsoleActionReveal} {
+		want := revealLabelFor(EN, runtime.GOOS)
+		if got := New(EN).T(key); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+		wantZH := revealLabelFor(ZHCN, runtime.GOOS)
+		if got := New(ZHCN).T(key); got != wantZH {
+			t.Errorf("%s (zh) = %q, want %q", key, got, wantZH)
+		}
+	}
 }

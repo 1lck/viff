@@ -1,6 +1,7 @@
 package app
 
 import (
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +32,59 @@ func newFixture(t testing.TB) *fixture {
 	f.git("config", "user.email", "test@example.com")
 	f.git("config", "commit.gpgsign", "false")
 	f.w = NewWorkspace(&gitcli.Runner{Env: env}, storage.Defaults(), nil)
+	// Release the repository the way the window does on quit: the log reader and
+	// the watcher own child processes and file handles, and a temp directory is
+	// removed right after the test. Cleanups run last-in first-out, so this one
+	// runs before TempDir's removal.
+	t.Cleanup(func() {
+		f.w.Close()
+		// Git writes pack files read-only (0444), and Windows refuses a directory
+		// whose file was just written while a scan or an indexer still holds it.
+		// Dropping the tree here, with the retries Windows needs, means
+		// t.TempDir's own removal has nothing left to fail on.
+		removeTree(t, dir)
+	})
 	return f
+}
+
+// removeTree deletes dir, clearing read-only attributes and retrying briefly.
+// os.RemoveAll gives up on the first "Access is denied": on Windows a pack file
+// carries the read-only attribute, and a directory can stay busy for a moment
+// because another process opened a file just written inside it. Both clear up
+// within a few attempts, so the test does not fail on somebody else's timing.
+func removeTree(t testing.TB, dir string) {
+	t.Helper()
+	var err error
+	for attempt := 1; attempt <= 20; attempt++ {
+		if err = os.RemoveAll(dir); err == nil {
+			return
+		}
+		clearReadOnly(dir)
+		time.Sleep(time.Duration(25*attempt) * time.Millisecond)
+	}
+	t.Logf("could not remove %s: %v", dir, err)
+}
+
+// clearReadOnly makes a repository tree removable. Git writes pack files with
+// mode 0444, which Windows turns into the read-only attribute, and os.RemoveAll
+// cannot delete a read-only file there: t.TempDir's cleanup failed with
+// "unlinkat …pack-*.idx: Access is denied" for every test that seeded a
+// repository through fast-import. Elsewhere the chmods are no-ops, so the one
+// code path serves both.
+func clearReadOnly(dir string) {
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.Type()&fs.ModeSymlink != 0 {
+			// A missing path or a link to somewhere else is not this walk's
+			// business: RemoveAll reports anything that still blocks the delete.
+			return nil
+		}
+		mode := os.FileMode(0o644)
+		if d.IsDir() {
+			mode = 0o755
+		}
+		_ = os.Chmod(path, mode)
+		return nil
+	})
 }
 
 func (f *fixture) git(args ...string) string {

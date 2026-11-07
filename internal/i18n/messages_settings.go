@@ -14,6 +14,7 @@ const (
 	SettingsGroupGitExec     = Key("settings.group.gitExec")
 	SettingsGroupSVNExec     = Key("settings.group.svnExec")
 	SettingsGroupTools       = Key("settings.group.tools")
+	SettingsGroupBehavior    = Key("settings.group.behavior")
 	SettingsGroupDiagnostics = Key("settings.group.diagnostics")
 	SettingsGroupUpdates     = Key("settings.group.updates")
 	SettingsGroupFonts       = Key("settings.group.fonts")
@@ -37,15 +38,17 @@ const (
 	SettingsHintInterface = Key("settings.hint.interfaceFont")
 	SettingsHintDiffFont  = Key("settings.hint.diffFont")
 
-	SettingsCheckDebugLog   = Key("settings.check.debugLog")
-	SettingsCheckAutoUpdate = Key("settings.check.autoUpdate")
-	SettingsCheckPrune      = Key("settings.check.prune")
-	SettingsCheckAutoFetch  = Key("settings.check.autoFetch")
-	SettingsCheckAskUpdate  = Key("settings.check.askUpdate")
-	SettingsCheckMarks      = Key("settings.check.marks")
-	SettingsCheckCodemap    = Key("settings.check.codemap")
-	SettingsHintCodemap     = Key("settings.hint.codemap")
-	SettingsHintAskUpdate   = Key("settings.hint.askUpdate")
+	SettingsCheckDebugLog    = Key("settings.check.debugLog")
+	SettingsCheckAutoUpdate  = Key("settings.check.autoUpdate")
+	SettingsCheckPrune       = Key("settings.check.prune")
+	SettingsCheckAutoFetch   = Key("settings.check.autoFetch")
+	SettingsCheckAskUpdate   = Key("settings.check.askUpdate")
+	SettingsCheckMarks       = Key("settings.check.marks")
+	SettingsCheckCodemap     = Key("settings.check.codemap")
+	SettingsCheckDoubleClick = Key("settings.check.doubleClickCheckout")
+	SettingsHintCodemap      = Key("settings.hint.codemap")
+	SettingsHintDoubleClick  = Key("settings.hint.doubleClickCheckout")
+	SettingsHintAskUpdate    = Key("settings.hint.askUpdate")
 
 	SettingsThemeDark   = Key("settings.theme.dark")
 	SettingsThemeLight  = Key("settings.theme.light")
@@ -89,6 +92,7 @@ func init() {
 		SettingsGroupGitExec:     "Git executable",
 		SettingsGroupSVNExec:     "Subversion executable",
 		SettingsGroupTools:       "Tools",
+		SettingsGroupBehavior:    "Behavior",
 		SettingsGroupDiagnostics: "Diagnostics",
 		SettingsGroupUpdates:     "Updates",
 		SettingsGroupFonts:       "Fonts",
@@ -112,15 +116,17 @@ func init() {
 		SettingsHintInterface: "Replaces the font of the whole interface. Diffs and the console keep a fixed-pitch face.",
 		SettingsHintDiffFont:  "Only fixed-pitch families: diffs, console and hashes lay their text out on a character grid.",
 
-		SettingsCheckDebugLog:   "Debug logging",
-		SettingsCheckAutoUpdate: "Check for updates at startup",
-		SettingsCheckPrune:      "Prune remote branches on fetch",
-		SettingsCheckAutoFetch:  "Fetch in the background",
-		SettingsCheckAskUpdate:  "Ask for the update type",
-		SettingsCheckMarks:      "Show change marks beside the diff",
-		SettingsCheckCodemap:    "Show the code map in the file viewer",
-		SettingsHintCodemap:     "A narrow column of the whole file in the file viewer, tinted by syntax; drag the frame or click the map to move. Off by default.",
-		SettingsHintAskUpdate:   "Off: updating from the shortcut uses the method above without asking.",
+		SettingsCheckDebugLog:    "Debug logging",
+		SettingsCheckAutoUpdate:  "Check for updates at startup",
+		SettingsCheckPrune:       "Prune remote branches on fetch",
+		SettingsCheckAutoFetch:   "Fetch in the background",
+		SettingsCheckAskUpdate:   "Ask for the update type",
+		SettingsCheckMarks:       "Show change marks beside the diff",
+		SettingsCheckCodemap:     "Show the code map in the file viewer",
+		SettingsCheckDoubleClick: "Check out a branch on double-click",
+		SettingsHintCodemap:      "A narrow column of the whole file in the file viewer, tinted by syntax; drag the frame or click the map to move. Off by default.",
+		SettingsHintDoubleClick:  "Off: a double-click only selects the branch and filters the log. The branch's context menu still checks it out.",
+		SettingsHintAskUpdate:    "Off: updating from the shortcut uses the method above without asking.",
 
 		SettingsThemeDark:   "Islands Dark",
 		SettingsThemeLight:  "Islands Light",
@@ -161,6 +167,7 @@ func init() {
 		SettingsGroupGitExec:     "Git 可执行文件",
 		SettingsGroupSVNExec:     "Subversion 可执行文件",
 		SettingsGroupTools:       "工具",
+		SettingsGroupBehavior:    "行为",
 		SettingsGroupDiagnostics: "诊断",
 		SettingsGroupUpdates:     "更新",
 		SettingsGroupFonts:       "字体",
@@ -184,15 +191,17 @@ func init() {
 		SettingsHintInterface: "替换整个界面的字体。diff 与控制台仍保持等宽。",
 		SettingsHintDiffFont:  "只列等宽字体：diff、控制台与哈希按字符网格排版。",
 
-		SettingsCheckDebugLog:   "调试日志",
-		SettingsCheckAutoUpdate: "启动时检查更新",
-		SettingsCheckPrune:      "抓取时清理远程分支",
-		SettingsCheckAutoFetch:  "后台自动抓取",
-		SettingsCheckAskUpdate:  "询问更新方式",
-		SettingsCheckMarks:      "在 diff 旁显示改动标记",
-		SettingsCheckCodemap:    "在文件查看器右侧显示代码缩略图",
-		SettingsHintCodemap:     "在文件查看器右侧把整份文件压成一条窄列，按语法着色；拖动视口框或点击缩略图即可定位。默认关闭。",
-		SettingsHintAskUpdate:   "关闭后：使用快捷键更新时直接按上面的方式执行，不再询问。",
+		SettingsCheckDebugLog:    "调试日志",
+		SettingsCheckAutoUpdate:  "启动时检查更新",
+		SettingsCheckPrune:       "抓取时清理远程分支",
+		SettingsCheckAutoFetch:   "后台自动抓取",
+		SettingsCheckAskUpdate:   "询问更新方式",
+		SettingsCheckMarks:       "在 diff 旁显示改动标记",
+		SettingsCheckCodemap:     "在文件查看器右侧显示代码缩略图",
+		SettingsCheckDoubleClick: "双击分支时检出该分支",
+		SettingsHintCodemap:      "在文件查看器右侧把整份文件压成一条窄列，按语法着色；拖动视口框或点击缩略图即可定位。默认关闭。",
+		SettingsHintDoubleClick:  "关闭时双击只选中分支并筛选日志，右键菜单仍可检出。",
+		SettingsHintAskUpdate:    "关闭后：使用快捷键更新时直接按上面的方式执行，不再询问。",
 
 		SettingsThemeDark:   "Islands 深色",
 		SettingsThemeLight:  "Islands 浅色",

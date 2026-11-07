@@ -992,8 +992,15 @@ func (w *Window) paintBranches(r ui.Rect) {
 		if row.ref != nil && row.key != "HEAD" {
 			ref := *row.ref
 			w.onDouble(id, func() {
+				// The first click already selected the row and filtered the log;
+				// the second one checks the branch out only when the user asked
+				// for that in the settings. Otherwise it stays a selection, so a
+				// stray double-click never rewrites the working tree.
+				if !w.ws.Settings.CheckoutOnDoubleClick {
+					return
+				}
 				if ref.Kind != domain.RefTag && !ref.Current {
-					w.ws.Checkout(ref)
+					w.checkoutBranch(ref)
 				}
 			})
 			w.onContext(id, func(x, y float32) { w.openMenu(x, y, w.refActions(ref)) })

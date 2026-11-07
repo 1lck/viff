@@ -70,7 +70,7 @@ func init() {
 		PatchApply:        "Apply Patch…",
 		PatchApplyIndex:   "Apply Patch to Index…",
 		PatchFetchFull:    "Fetch Full History (Unshallow)",
-		ShowInFileManager: "Show in Finder",
+		ShowInFileManager: revealLabel(EN),
 
 		CompareTitle:   "Compare %s → %s",
 		CompareLoading: "Loading changed files…",
@@ -116,7 +116,7 @@ func init() {
 		PatchApply:        "应用补丁…",
 		PatchApplyIndex:   "应用补丁到暂存区…",
 		PatchFetchFull:    "抓取完整历史（补全浅克隆）",
-		ShowInFileManager: "在文件管理器中显示",
+		ShowInFileManager: revealLabel(ZHCN),
 
 		CompareTitle:   "比较 %s → %s",
 		CompareLoading: "正在加载变更文件…",

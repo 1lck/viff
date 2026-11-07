@@ -137,6 +137,16 @@ func (w *Workspace) LoadMoreLog() {
 		if err == nil {
 			commits, done, err = reader.Next(LogPage)
 		}
+		if reader != nil && (err != nil || done) {
+			// Nothing will read this reader again, so reap its git process here,
+			// in this goroutine, before the page is published. Dropping the
+			// reader without closing it left the child alive holding the
+			// repository's pack files open, which on Windows blocks deleting or
+			// replacing the directory; and a snapshot that says "done" must not
+			// mean "a git process is still running".
+			reader.Close()
+			reader = nil
+		}
 		// A hash typed in the text filter matches the commit itself as well.
 		var hashHit *domain.Commit
 		if filter.Text != "" && len(filter.Text) >= 4 && isHex(filter.Text) && firstPage {
@@ -179,9 +189,6 @@ func (w *Workspace) LoadMoreLog() {
 				}
 			}
 			l.Done = done
-			if done && l.reader != nil {
-				l.reader = nil
-			}
 		})
 	}()
 }

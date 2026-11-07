@@ -123,6 +123,27 @@ func TestAIConfirmGenerateDefaultsOnAndPersistsOff(t *testing.T) {
 	}
 }
 
+// An old settings file has no double-click field, and a second click on a
+// branch row must not check the branch out just because the setting is new:
+// the default stays off, and turning it on survives a round trip.
+func TestCheckoutOnDoubleClickDefaultsOffAndPersistsOn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"theme":"dark"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Load(path)
+	if s.CheckoutOnDoubleClick {
+		t.Fatal("old settings did not default checkoutOnDoubleClick to false")
+	}
+	s.CheckoutOnDoubleClick = true
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if back := Load(path); !back.CheckoutOnDoubleClick {
+		t.Fatal("explicit checkoutOnDoubleClick=true was not persisted")
+	}
+}
+
 // EditorFont and DiffFont are family names the settings page picks from the
 // system's lists. A value that could not name a family must not survive a load,
 // and a usable one is kept without its surrounding spaces.

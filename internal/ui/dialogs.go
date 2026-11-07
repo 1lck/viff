@@ -659,7 +659,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	s := w.ws.Settings
 	collapsed := map[string]bool{}
 	if revealSearch {
-		for _, key := range []string{"appearance", "gitExec", "tools", "diagnostics", "updates", "fonts", "commands", "remote"} {
+		for _, key := range []string{"appearance", "behavior", "gitExec", "tools", "diagnostics", "updates", "fonts", "commands", "remote"} {
 			collapsed[key] = true
 		}
 	}
@@ -683,6 +683,10 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	autoFetch, prune := s.AutoFetch, s.FetchPrune
 	autoUpdate, autoUpdateWas := s.AutoUpdateCheck, s.AutoUpdateCheck
 	marks, codemap := s.DiffMarks, s.DiffCodemap
+	// doubleClickCheckout is read here and written back on OK, like the other
+	// toggles: the row's double-click reads the setting, so cancelling must not
+	// change it.
+	doubleClickCheckout := s.CheckoutOnDoubleClick
 	debugLog := s.LogLevel == "debug"
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
@@ -908,6 +912,17 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 					w.p.text(w.t(i18n.SettingsHintSearchTool), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 				})
 			}
+			// The behavior group comes last on purpose: the General page is a
+			// fixed-height dialog, and groups in the middle push the font and
+			// search controls below the visible area, where they cannot be
+			// clicked.
+			f.gap(6)
+			if f.collapsibleGroup("behavior", w.t(i18n.SettingsGroupBehavior)) {
+				f.check(w.t(i18n.SettingsCheckDoubleClick), &doubleClickCheckout)
+				f.custom(22, func(r ui.Rect) {
+					w.p.text(w.t(i18n.SettingsHintDoubleClick), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
+				})
+			}
 		},
 		okDisabled: func() bool {
 			n, err := strconv.Atoi(strings.TrimSpace(font.String()))
@@ -935,6 +950,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			s.AutoFetch, s.FetchPrune, s.PullMode = autoFetch, prune, pull
 			s.SkipUpdateDialog = !askUpdate
 			s.AutoUpdateCheck = autoUpdate
+			s.CheckoutOnDoubleClick = doubleClickCheckout
 			if marks != s.DiffMarks || codemap != s.DiffCodemap {
 				s.DiffMarks, s.DiffCodemap = marks, codemap
 				// The caches are dropped or built here, so the new setting
