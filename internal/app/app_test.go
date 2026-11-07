@@ -38,9 +38,31 @@ func newFixture(t testing.TB) *fixture {
 	// runs before TempDir's removal.
 	t.Cleanup(func() {
 		f.w.Close()
-		clearReadOnly(dir)
+		// Git writes pack files read-only (0444), and Windows refuses a directory
+		// whose file was just written while a scan or an indexer still holds it.
+		// Dropping the tree here, with the retries Windows needs, means
+		// t.TempDir's own removal has nothing left to fail on.
+		removeTree(t, dir)
 	})
 	return f
+}
+
+// removeTree deletes dir, clearing read-only attributes and retrying briefly.
+// os.RemoveAll gives up on the first "Access is denied": on Windows a pack file
+// carries the read-only attribute, and a directory can stay busy for a moment
+// because another process opened a file just written inside it. Both clear up
+// within a few attempts, so the test does not fail on somebody else's timing.
+func removeTree(t testing.TB, dir string) {
+	t.Helper()
+	var err error
+	for attempt := 1; attempt <= 20; attempt++ {
+		if err = os.RemoveAll(dir); err == nil {
+			return
+		}
+		clearReadOnly(dir)
+		time.Sleep(time.Duration(25*attempt) * time.Millisecond)
+	}
+	t.Logf("could not remove %s: %v", dir, err)
 }
 
 // clearReadOnly makes a repository tree removable. Git writes pack files with
