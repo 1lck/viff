@@ -1,6 +1,7 @@
 package app
 
 import (
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,10 +34,35 @@ func newFixture(t testing.TB) *fixture {
 	f.w = NewWorkspace(&gitcli.Runner{Env: env}, storage.Defaults(), nil)
 	// Release the repository the way the window does on quit: the log reader and
 	// the watcher own child processes and file handles, and a temp directory is
-	// removed right after the test, which Windows refuses while they are open.
-	// Cleanups run last-in first-out, so this one runs before TempDir's removal.
-	t.Cleanup(f.w.Close)
+	// removed right after the test. Cleanups run last-in first-out, so this one
+	// runs before TempDir's removal.
+	t.Cleanup(func() {
+		f.w.Close()
+		clearReadOnly(dir)
+	})
 	return f
+}
+
+// clearReadOnly makes a repository tree removable. Git writes pack files with
+// mode 0444, which Windows turns into the read-only attribute, and os.RemoveAll
+// cannot delete a read-only file there: t.TempDir's cleanup failed with
+// "unlinkat …pack-*.idx: Access is denied" for every test that seeded a
+// repository through fast-import. Elsewhere the chmods are no-ops, so the one
+// code path serves both.
+func clearReadOnly(dir string) {
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.Type()&fs.ModeSymlink != 0 {
+			// A missing path or a link to somewhere else is not this walk's
+			// business: RemoveAll reports anything that still blocks the delete.
+			return nil
+		}
+		mode := os.FileMode(0o644)
+		if d.IsDir() {
+			mode = 0o755
+		}
+		_ = os.Chmod(path, mode)
+		return nil
+	})
 }
 
 func (f *fixture) git(args ...string) string {
