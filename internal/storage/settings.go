@@ -18,6 +18,31 @@ import (
 // SchemaVersion is the settings format this build writes.
 const SchemaVersion = 1
 
+// Clock formats the Time format setting understands. TimeFormat24Hour is the
+// default and the value an older settings file implies, so upgrading never
+// changes how times read.
+const (
+	TimeFormat24Hour = "24h"
+	TimeFormat12Hour = "12h"
+)
+
+// NormalizeTimeFormat maps anything this build does not understand — an empty
+// field from an older settings file, or a value a newer build wrote — to the
+// 24-hour default, so no caller has to guess what to render.
+func NormalizeTimeFormat(value string) string {
+	if value == TimeFormat12Hour {
+		return TimeFormat12Hour
+	}
+	return TimeFormat24Hour
+}
+
+// MaxRecentProjects caps the Recent projects list. It is a convenience list,
+// not the workspace: repositories the user added live in workspace.json and are
+// not truncated. The cap used to be 20, which with a hundred repositories cut
+// off every project the user had not opened lately; searching still reaches the
+// workspace, so the list only has to stay short enough to scan.
+const MaxRecentProjects = 50
+
 // Settings is the persisted configuration.
 type Settings struct {
 	Version int `json:"version"`
@@ -106,6 +131,11 @@ type Settings struct {
 	// RipgrepPath is the ripgrep executable. Empty searches PATH; ripgrep is
 	// not bundled, so the setting exists for installs outside PATH.
 	RipgrepPath string `json:"ripgrepPath,omitempty"`
+
+	// TimeFormat picks the clock used for commit dates, notifications and the
+	// command console: TimeFormat24Hour (also the empty default, so an older
+	// settings file keeps rendering 24-hour times) or TimeFormat12Hour.
+	TimeFormat string `json:"timeFormat,omitempty"`
 
 	Recent []Recent `json:"recent"`
 
@@ -306,8 +336,8 @@ func (s *Settings) sanitize() {
 	default:
 		s.SearchTool = "auto"
 	}
-	if len(s.Recent) > 20 {
-		s.Recent = s.Recent[:20]
+	if len(s.Recent) > MaxRecentProjects {
+		s.Recent = s.Recent[:MaxRecentProjects]
 	}
 }
 
@@ -331,8 +361,8 @@ func (s *Settings) AddRecent(path string) {
 			list = append(list, r)
 		}
 	}
-	if len(list) > 20 {
-		list = list[:20]
+	if len(list) > MaxRecentProjects {
+		list = list[:MaxRecentProjects]
 	}
 	s.Recent = list
 }

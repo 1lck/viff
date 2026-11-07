@@ -50,6 +50,10 @@ const (
 	SettingsHintDoubleClick  = Key("settings.hint.doubleClickCheckout")
 	SettingsHintAskUpdate    = Key("settings.hint.askUpdate")
 
+	SettingsLabelTimeFormat = Key("settings.label.timeFormat")
+	SettingsTimeFormat24    = Key("settings.timeFormat.24h")
+	SettingsTimeFormat12    = Key("settings.timeFormat.12h")
+
 	SettingsThemeDark   = Key("settings.theme.dark")
 	SettingsThemeLight  = Key("settings.theme.light")
 	SettingsThemeSystem = Key("settings.theme.system")
@@ -128,6 +132,10 @@ func init() {
 		SettingsHintDoubleClick:  "Off: a double-click only selects the branch and filters the log. The branch's context menu still checks it out.",
 		SettingsHintAskUpdate:    "Off: updating from the shortcut uses the method above without asking.",
 
+		SettingsLabelTimeFormat: "Time format:",
+		SettingsTimeFormat24:    "24-hour (15:30)",
+		SettingsTimeFormat12:    "12-hour (3:30 PM)",
+
 		SettingsThemeDark:   "Islands Dark",
 		SettingsThemeLight:  "Islands Light",
 		SettingsThemeSystem: "Sync with OS",
@@ -202,6 +210,10 @@ func init() {
 		SettingsHintCodemap:      "在文件查看器右侧把整份文件压成一条窄列，按语法着色；拖动视口框或点击缩略图即可定位。默认关闭。",
 		SettingsHintDoubleClick:  "关闭时双击只选中分支并筛选日志，右键菜单仍可检出。",
 		SettingsHintAskUpdate:    "关闭后：使用快捷键更新时直接按上面的方式执行，不再询问。",
+
+		SettingsLabelTimeFormat: "时间格式：",
+		SettingsTimeFormat24:    "24 小时制（15:30）",
+		SettingsTimeFormat12:    "12 小时制（3:30 PM）",
 
 		SettingsThemeDark:   "Islands 深色",
 		SettingsThemeLight:  "Islands 浅色",

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+	"unicode/utf8"
 )
 
 // StatusEntry is one working copy item reported by "svn status --xml".
@@ -90,7 +91,7 @@ type BlameLine struct {
 // each path first and the grouping only afterwards.
 func ParseStatus(data []byte) ([]StatusEntry, error) {
 	var doc statusXML
-	if err := xml.Unmarshal(data, &doc); err != nil {
+	if err := unmarshalXML(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse svn status xml: %w", err)
 	}
 	var entries []StatusEntry
@@ -140,7 +141,7 @@ func parseStatusEntries(raw []statusEntryXML) ([]StatusEntry, error) {
 // entries are ignored instead of being merged into a misleading summary.
 func ParseInfo(data []byte) (*Info, error) {
 	var doc infoXML
-	if err := xml.Unmarshal(data, &doc); err != nil {
+	if err := unmarshalXML(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse svn info xml: %w", err)
 	}
 	if len(doc.Entries) == 0 {
@@ -175,7 +176,7 @@ func ParseInfo(data []byte) (*Info, error) {
 // and revisions become numbers so callers can compare ranges.
 func ParseLog(data []byte) ([]LogEntry, error) {
 	var doc logXML
-	if err := xml.Unmarshal(data, &doc); err != nil {
+	if err := unmarshalXML(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse svn log xml: %w", err)
 	}
 	entries := make([]LogEntry, 0, len(doc.Entries))
@@ -223,7 +224,7 @@ func ParseLog(data []byte) ([]LogEntry, error) {
 // the caller can still report which files were annotated.
 func ParseBlame(data []byte) ([]BlameFile, error) {
 	var doc blameXML
-	if err := xml.Unmarshal(data, &doc); err != nil {
+	if err := unmarshalXML(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse svn blame xml: %w", err)
 	}
 	files := make([]BlameFile, 0, len(doc.Targets))
@@ -257,6 +258,13 @@ func ParseBlame(data []byte) ([]BlameFile, error) {
 // parseTime accepts svn's timestamps as they are and treats a missing or empty
 // value as the zero time: unversioned entries and untouched blame lines simply
 // carry no date, and that is not an error worth failing a whole command for.
+//
+// svn always reports UTC ("2026-11-06T04:51:00.000000Z"), while everything that
+// shows a time — the log list's "Today 12:51", the settings, the window title —
+// speaks the user's zone, and Git commit times already arrive local from
+// time.Unix. Returning UTC made a noon commit read as "Today 04:51" and put
+// revisions into the wrong "Today"/"Yesterday" bucket, so the conversion
+// happens here, once, at the boundary where svn's wire format is decoded.
 func parseTime(value string) (time.Time, error) {
 	if value == "" {
 		return time.Time{}, nil
@@ -265,7 +273,7 @@ func parseTime(value string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("parse timestamp %q: %w", value, err)
 	}
-	return date, nil
+	return date.Local(), nil
 }
 
 // parseBoolAttr reads svn's "true"/"false" attributes. An absent attribute means
@@ -279,6 +287,42 @@ func parseBoolAttr(value string) (bool, error) {
 		return false, fmt.Errorf("parse boolean %q: %w", value, err)
 	}
 	return parsed, nil
+}
+
+// unmarshalXML decodes one svn --xml document, repairing bytes that are not
+// valid UTF-8 first.
+//
+// svn's XML declares UTF-8, but a working copy or repository written by a
+// client in a legacy encoding (GBK on Chinese Windows, Big5 on Taiwanese) can
+// carry paths and log messages that are not: Subversion stores the bytes the
+// committing client handed it. encoding/xml rejects the whole document on the
+// first invalid byte, so before this repair one damaged revision failed the
+// entire log view — the user saw an error instead of the revisions that decode
+// fine. Replacing those bytes keeps the enclosing document readable and costs
+// only the characters that were never valid UTF-8.
+func unmarshalXML(data []byte, v any) error {
+	return xml.Unmarshal(sanitizeUTF8(data), v)
+}
+
+// sanitizeUTF8 replaces every invalid UTF-8 byte sequence with U+FFFD and
+// returns the input untouched when it is already valid, so the common path
+// neither allocates nor copies.
+func sanitizeUTF8(data []byte) []byte {
+	if utf8.Valid(data) {
+		return data
+	}
+	out := make([]byte, 0, len(data)+len(data)/4)
+	for i := 0; i < len(data); {
+		r, size := utf8.DecodeRune(data[i:])
+		if r == utf8.RuneError && size == 1 {
+			out = utf8.AppendRune(out, utf8.RuneError)
+			i++
+			continue
+		}
+		out = append(out, data[i:i+size]...)
+		i += size
+	}
+	return out
 }
 
 // The wire structures below mirror svn's schema loosely on purpose: encoding/xml
@@ -438,7 +482,7 @@ type listCommitXML struct {
 // recursive call yields the relative path in Name.
 func ParseList(data []byte) ([]ListEntry, error) {
 	var doc listsXML
-	if err := xml.Unmarshal(data, &doc); err != nil {
+	if err := unmarshalXML(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse svn ls xml: %w", err)
 	}
 	var out []ListEntry

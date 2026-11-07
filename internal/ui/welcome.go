@@ -27,14 +27,38 @@ func (v *welcomeView) init() {
 	v.sel = -1
 }
 
-func (w *Window) recentShown() []string {
+// projectShown lists the Welcome screen's rows for the current query: the
+// recent projects, and while a query is typed also the repositories the
+// workspace knows but the user has not opened lately.
+//
+// Search has to reach the workspace because Recent is capped
+// (storage.MaxRecentProjects): with a hundred repositories the one the user
+// wants is usually not in the last fifty opens, and scrolling the Repositories
+// dialog is what the search field exists to avoid. An empty query keeps
+// showing Recent only, so the screen still reads as "recent projects".
+func (w *Window) projectShown() []string {
 	q := strings.ToLower(strings.TrimSpace(w.wel.search.String()))
+	seen := make(map[string]bool, len(w.ws.Settings.Recent)+len(w.ws.Repositories))
 	var out []string
-	for _, r := range w.ws.Settings.Recent {
-		if q != "" && !fuzzy(strings.ToLower(r.Path), q) {
-			continue
+	add := func(root string) {
+		if seen[root] {
+			return
 		}
-		out = append(out, r.Path)
+		if q != "" && !fuzzy(strings.ToLower(root), q) {
+			return
+		}
+		seen[root] = true
+		out = append(out, root)
+	}
+	for _, r := range w.ws.Settings.Recent {
+		add(r.Path)
+	}
+	// The workspace is the wider net: while searching, and when nothing was
+	// opened yet, its repositories are what the list and the field can offer.
+	if q != "" || len(w.ws.Settings.Recent) == 0 {
+		for _, s := range w.ws.Repositories {
+			add(s.Root)
+		}
 	}
 	return out
 }
@@ -85,8 +109,8 @@ func (w *Window) paintWelcome(full ui.Rect) {
 		w.paintCustomize(inset(main, 24, 20))
 		return
 	}
-	recent := w.recentShown()
-	if len(w.ws.Settings.Recent) == 0 {
+	recent := w.projectShown()
+	if len(w.ws.Settings.Recent) == 0 && len(w.ws.Repositories) == 0 {
 		w.paintWelcomeEmpty(main)
 		return
 	}

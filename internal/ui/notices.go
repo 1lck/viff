@@ -164,7 +164,7 @@ func (w *Window) paintNoticeCard(n vapp.Notification, r ui.Rect, k int, balloon 
 	}
 	w.p.text(title, rect(tx, r.Y+12, r.Width-tx+r.X-40, 20), fontUI, semibold, w.pal.Text)
 	if !balloon {
-		ts := n.Time.Format("15:04")
+		ts := n.Time.Format(w.clockLayout())
 		tw := w.p.width(ts, fontSmall, regular)
 		w.p.text(ts, rect(right(r)-tw-34, r.Y+12, tw+2, 20), fontSmall, regular, w.pal.TextSecond)
 	}
