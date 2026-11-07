@@ -51,6 +51,14 @@ func (w *Window) noticeIcon(k vapp.NoticeKind) icons.Pair {
 // paintNotices shows recent notifications as balloons at the bottom right.
 func (w *Window) paintNotices(full ui.Rect) {
 	v := &w.nt
+	// A dialog covers the window and owns the keyboard and the pointer, so a
+	// balloon must not be drawn over it: the balloon would paint above the
+	// dialog and swallow a click meant for its buttons. The notice waits in the
+	// workspace list and appears once the dialog is gone, with its full life.
+	if w.dialog != nil {
+		clear(v.shown)
+		return
+	}
 	if v.shown == nil {
 		v.shown = map[uint64]time.Duration{}
 		v.hidden = map[uint64]bool{}

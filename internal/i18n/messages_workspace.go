@@ -355,7 +355,7 @@ func init() {
 		WorkspaceMenuShowHistory:    "Show History",
 		WorkspaceMenuAnnotate:       "Annotate with Git Blame",
 		WorkspaceMenuOpenInEditor:   "Open in External Editor",
-		WorkspaceMenuRevealInFinder: "Show in Finder",
+		WorkspaceMenuRevealInFinder: revealLabel(EN),
 
 		WorkspaceMenuCreatePatch:  "Create Patch…",
 		WorkspaceMenuCommitChecks: "Commit Checks",
@@ -535,7 +535,7 @@ func init() {
 		WorkspaceMenuShowHistory:    "显示历史",
 		WorkspaceMenuAnnotate:       "用 Git blame 注解",
 		WorkspaceMenuOpenInEditor:   "用外部编辑器打开",
-		WorkspaceMenuRevealInFinder: "在文件管理器中显示",
+		WorkspaceMenuRevealInFinder: revealLabel(ZHCN),
 
 		WorkspaceMenuCreatePatch:  "创建补丁…",
 		WorkspaceMenuCommitChecks: "提交检查",

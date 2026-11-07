@@ -212,7 +212,7 @@ func init() {
 		ConsoleSaveFilter:        "Text files",
 		ConsoleSaveError:         "Cannot save console output",
 		ConsoleSaved:             "Console saved",
-		ConsoleActionReveal:      "Show in Finder",
+		ConsoleActionReveal:      revealLabel(EN),
 		ConsoleOutputTruncated:   "… (output truncated)",
 	})
 
@@ -317,7 +317,7 @@ func init() {
 		ConsoleSaveFilter:        "文本文件",
 		ConsoleSaveError:         "无法保存控制台输出",
 		ConsoleSaved:             "控制台已保存",
-		ConsoleActionReveal:      "在文件管理器中显示",
+		ConsoleActionReveal:      revealLabel(ZHCN),
 		ConsoleOutputTruncated:   "…（输出已截断）",
 	})
 }
