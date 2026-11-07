@@ -56,6 +56,7 @@ func (w *Window) paintNotices(full ui.Rect) {
 	// dialog and swallow a click meant for its buttons. The notice waits in the
 	// workspace list and appears once the dialog is gone, with its full life.
 	if w.dialog != nil {
+		clear(v.shown)
 		return
 	}
 	if v.shown == nil {

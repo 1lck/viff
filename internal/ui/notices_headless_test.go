@@ -37,6 +37,9 @@ func TestNoticeBalloonStepsAsideForDialogs(t *testing.T) {
 	if f.s.HasText(title) {
 		t.Fatal("the balloon is painted over an open dialog")
 	}
+	if _, ok := f.win.nt.shown[f.ws.Notifications[len(f.ws.Notifications)-1].ID]; ok {
+		t.Fatal("the hidden balloon retained its old display time")
+	}
 	// The dialog keeps taking clicks while the notice is pending.
 	f.click(f.win.t(i18n.CommonCancel))
 	f.settle()
