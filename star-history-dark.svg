@@ -19,21 +19,22 @@
 <line x1="115" y1="112.00" x2="1135" y2="112.00" stroke="#374151" stroke-width="1" stroke-dasharray="4 8"/>
 <text x="97.00" y="118.00" text-anchor="end" font-size="17" fill="#d1d5db">100</text>
 <text x="115.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 01</text>
-<text x="319.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 02</text>
-<text x="727.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 04</text>
-<text x="931.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 05</text>
-<text x="1135.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 06</text>
-<path d="M 115.00,535.00 L 115.00,535.00 C 183.00,535.00 251.00,535.00 319.00,535.00 C 387.00,535.00 455.00,535.00 523.00,535.00 C 591.00,535.00 659.00,530.21 727.00,522.31 C 795.00,514.41 863.00,382.86 931.00,344.65 C 999.00,306.44 1067.00,288.25 1135.00,260.05 L 1135.00,535.00 Z" fill="#e34b2d" fill-opacity="0.10" stroke="none"/>
-<path d="M 115.00,535.00 C 183.00,535.00 251.00,535.00 319.00,535.00 C 387.00,535.00 455.00,535.00 523.00,535.00 C 591.00,535.00 659.00,530.21 727.00,522.31 C 795.00,514.41 863.00,382.86 931.00,344.65 C 999.00,306.44 1067.00,288.25 1135.00,260.05" fill="none" stroke="#e34b2d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="285.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 02</text>
+<text x="625.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 04</text>
+<text x="965.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 06</text>
+<text x="1135.00" y="575.00" text-anchor="middle" font-size="18" fill="#f3f4f6">Nov 07</text>
+<path d="M 115.00,535.00 L 115.00,535.00 C 171.67,535.00 228.33,535.00 285.00,535.00 C 341.67,535.00 398.33,535.00 455.00,535.00 C 511.67,535.00 568.33,530.21 625.00,522.31 C 681.67,514.41 738.33,389.94 795.00,344.65 C 851.67,299.36 908.33,246.50 965.00,234.67 C 1021.67,222.84 1078.33,220.57 1135.00,213.52 L 1135.00,535.00 Z" fill="#e34b2d" fill-opacity="0.10" stroke="none"/>
+<path d="M 115.00,535.00 C 171.67,535.00 228.33,535.00 285.00,535.00 C 341.67,535.00 398.33,535.00 455.00,535.00 C 511.67,535.00 568.33,530.21 625.00,522.31 C 681.67,514.41 738.33,389.94 795.00,344.65 C 851.67,299.36 908.33,246.50 965.00,234.67 C 1021.67,222.84 1078.33,220.57 1135.00,213.52" fill="none" stroke="#e34b2d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="115.00" cy="535.00" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
-<circle cx="319.00" cy="535.00" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
-<circle cx="523.00" cy="535.00" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
-<circle cx="727.00" cy="522.31" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
-<circle cx="931.00" cy="344.65" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
-<circle cx="1135.00" cy="260.05" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
-<circle cx="1135.00" cy="260.05" r="10" fill="none" stroke="#e34b2d" stroke-opacity="0.24" stroke-width="5"/>
-<rect x="1041.00" y="215.05" width="76" height="26" rx="13" fill="#111827" stroke="#e34b2d" stroke-width="1.5"/>
-<text x="1079.00" y="233.05" text-anchor="middle" font-size="15" font-weight="700" fill="#f3f4f6">65 stars</text>
+<circle cx="285.00" cy="535.00" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
+<circle cx="455.00" cy="535.00" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
+<circle cx="625.00" cy="522.31" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
+<circle cx="795.00" cy="344.65" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
+<circle cx="965.00" cy="234.67" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
+<circle cx="1135.00" cy="213.52" r="5" fill="#111827" stroke="#e34b2d" stroke-width="3"/>
+<circle cx="1135.00" cy="213.52" r="10" fill="none" stroke="#e34b2d" stroke-opacity="0.24" stroke-width="5"/>
+<rect x="1041.00" y="168.52" width="76" height="26" rx="13" fill="#111827" stroke="#e34b2d" stroke-width="1.5"/>
+<text x="1079.00" y="186.52" text-anchor="middle" font-size="15" font-weight="700" fill="#f3f4f6">76 stars</text>
 <rect x="135" y="130" width="300" height="58" rx="12" fill="#111827" stroke="#374151" stroke-width="1.5"/>
 <circle cx="158" cy="159" r="6" fill="#e34b2d"/>
 <text x="179.00" y="165.00" font-size="19" font-weight="600" fill="#f3f4f6">1lck/viff</text>
