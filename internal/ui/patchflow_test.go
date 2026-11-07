@@ -10,6 +10,7 @@ import (
 	"time"
 
 	vapp "viff/internal/app"
+	"viff/internal/i18n"
 )
 
 // TestCreateAndApplyPatchFromMenus drives the feature the way a user does:
@@ -50,8 +51,10 @@ func TestCreateAndApplyPatchFromMenus(t *testing.T) {
 	if last.Kind != vapp.NoticeSuccess || last.Title != "Patch created" {
 		t.Fatalf("notification = %+v", last)
 	}
-	if len(last.Actions) != 1 || last.Actions[0].Title != "Show in Finder" {
-		t.Fatalf("notification actions = %+v", last.Actions)
+	// The reveal action names the platform's own file manager, so the expected
+	// title comes from the message table instead of a literal.
+	if want := i18n.New(i18n.EN).T(i18n.ShowInFileManager); len(last.Actions) != 1 || last.Actions[0].Title != want {
+		t.Fatalf("notification actions = %+v, want one %q action", last.Actions, want)
 	}
 
 	// Discard the change, then apply the saved patch through the window menu.

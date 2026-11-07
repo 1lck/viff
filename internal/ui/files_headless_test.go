@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/vivaui/viva/app"
+
+	"viff/internal/i18n"
 )
 
 // TestProjectPanel opens the Project tool window, filters it, opens a file
@@ -291,7 +293,10 @@ func TestProjectPanelSpeaksTheChosenLanguage(t *testing.T) {
 
 	assertMenuTitles(t, "file menu", f.win.filesMenu(fileRow{path: "README.md", name: "README.md"}), []string{
 		"打开", "用外部编辑器打开", "用 Git blame 注解", "显示历史",
-		"复制路径", "复制相对路径", "在文件管理器中显示",
+		"复制路径", "复制相对路径",
+		// The reveal action names the platform's file manager, so the expectation
+		// comes from the table rather than a literal that only fits macOS.
+		f.win.t(i18n.WorkspaceMenuRevealInFinder),
 	})
 	assertMenuTitles(t, "tool window menu", f.win.projectWindowMenu(), []string{
 		"打开文件…", "在文件中查找…", "全部展开", "全部折叠", "隐藏项目",
