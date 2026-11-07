@@ -40,12 +40,8 @@ func run() (code int) {
 	}
 	started := time.Now()
 	settingsPath := storage.DefaultPath()
-	// Debug trace for locating slow starts; truncated after three idle days.
-	dbg := observability.OpenDebugLog(filepath.Dir(settingsPath))
-	defer dbg.Close()
 	settingsLoad := time.Now()
 	settings := storage.Load(settingsPath)
-	dbg.Step("settings loaded (%d recents)", len(settings.Recent))
 
 	logDir := filepath.Join(filepath.Dir(settingsPath), "logs")
 	crashDir := observability.CrashDir(logDir)
@@ -64,11 +60,9 @@ func run() (code int) {
 		logErr = err
 	}
 	// phaseOf times one startup phase and records it under perf.slow, so a
-	// slow start can be located from the JSONL alone; debug.txt mirrors it in
-	// plain text.
+	// slow start can be located from the JSONL alone.
 	phaseOf := func(name string, from time.Time) {
 		d := time.Since(from)
-		dbg.Step("%s %dms", name, d.Milliseconds())
 		rec.Event(observability.Event{
 			Event: observability.EventPerfSlow,
 			Level: observability.LevelInfo,
@@ -177,7 +171,6 @@ func run() (code int) {
 			fields["git_version"] = gitVersion
 		}
 		rec.Event(observability.Event{Event: observability.EventPerfSlow, Level: probeLevel, Fields: fields})
-		dbg.Step("git version probe %dms ok=%v", time.Since(probeStart).Milliseconds(), gitVersionErr == nil)
 
 		svnStart := time.Now()
 		svnCtx, cancelSVN := context.WithTimeout(context.Background(), 2*time.Second)
@@ -196,7 +189,6 @@ func run() (code int) {
 			svnFields["svn_version"] = svnVersion
 		}
 		rec.Event(observability.Event{Event: observability.EventPerfSlow, Level: svnLevel, Fields: svnFields})
-		dbg.Step("svn version probe %dms ok=%v", time.Since(svnStart).Milliseconds(), svnVersionErr == nil)
 	}()
 	rec.Event(observability.Event{
 		Event: observability.EventAppStart,
@@ -237,8 +229,6 @@ func run() (code int) {
 	updates := updater.NewClient(version.Version)
 	ws.SetUpdateService(updates)
 	updates.Cleanup()
-	ws.SetDebugLog(dbg)
-	dbg.Step("workspace ready (%d saved repositories)", len(ws.Repositories))
 	ws.Watch = func(repo domain.Repo, changed func(meta bool)) (vapp.Watcher, error) {
 		return platform.Watch(repo, changed)
 	}

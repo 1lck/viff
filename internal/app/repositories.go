@@ -122,6 +122,9 @@ func isRemotePath(path string) bool {
 // activating and removing all use it, so one repository is keyed the same way
 // everywhere and a slow share never blocks the window from appearing.
 func entryKey(path string) string {
+	if normalized, ok := wslpath.Normalize(path); ok {
+		return normalized
+	}
 	if isRemotePath(path) {
 		return looseKey(path)
 	}
@@ -237,14 +240,7 @@ func (w *Workspace) saveRepositories() error {
 // noteActiveRepository makes repo part of the list and the active repository,
 // and persists both. It returns the canonical root.
 func (w *Workspace) noteActiveRepository(repo domain.Repo) string {
-	keyStart := time.Now()
 	root := entryKey(repo.Root)
-	if took := time.Since(keyStart); took > 50*time.Millisecond {
-		// A slow key means a remote file system resolved late (a WSL share
-		// booting, a network drive); worth seeing in the debug trace.
-		w.debug.Step("entry key resolved in %dms (remote=%v)",
-			took.Milliseconds(), isRemotePath(repo.Root))
-	}
 	entry := w.repos.byRoot[root]
 	if entry == nil {
 		entry = w.addEntry(root)

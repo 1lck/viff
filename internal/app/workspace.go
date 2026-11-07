@@ -182,9 +182,6 @@ type Workspace struct {
 	startedAt time.Time
 	// readyLogged keeps the app.ready event to the first paint.
 	readyLogged bool
-	// debug traces startup and slow-path timings to debug.txt; nil disables.
-	// Durations and counts only, never paths or content.
-	debug *observability.DebugLog
 }
 
 // Watcher stops a file-system watch.
@@ -210,10 +207,7 @@ func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
 	return w
 }
 
-// SetDebugLog installs the debug.txt trace writer (nil disables tracing).
-func (w *Workspace) SetDebugLog(d *observability.DebugLog) { w.debug = d }
-
-// RecordReady reports that the first frame has been painted. The UI calls it
+// RecordReady reports that the first frame has started painting. The UI calls it
 // once; the event carries the elapsed time since workspace creation so slow
 // starts can be measured from the log alone. Later calls do nothing.
 func (w *Workspace) RecordReady() {
@@ -222,7 +216,6 @@ func (w *Workspace) RecordReady() {
 	}
 	w.readyLogged = true
 	d := time.Since(w.startedAt)
-	w.debug.Step("first paint %dms", d.Milliseconds())
 	w.record(observability.Event{
 		Event: observability.EventAppReady, Level: observability.LevelInfo,
 		Dur: d, Fields: map[string]any{"startup_ms": d.Milliseconds()},
