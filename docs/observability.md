@@ -94,8 +94,8 @@ flowchart LR
 
 | event | 级别 | 触发点 | 主要字段 |
 |---|---|---|---|
-| `app.start` | info | 进程启动 | 版本/commit/构建时间、goos/goarch、Go/Viva 版本、Git 版本与来源、配置目录（`<cfg>`）、设置 schema、locale、缩放、主题、字体 |
-| `app.ready` | info | 首帧绘制完成 | `startup_ms` |
+| `app.start` | info | 进程启动 | 版本/commit/构建时间、goos/goarch、Go/Viva 版本、配置目录（`<cfg>`）、设置 schema、locale、缩放、主题、字体（Git/SVN 版本改由 `perf.slow` 的 `git_version`/`svn_version` 阶段携带，避免启动关键路径等待子进程） |
+| `app.ready` | info | 首帧开始绘制 | `startup_ms`（从 workspace 创建起算） |
 | `app.stop` | info | 正常退出 | `uptime_ms`、`tasks_running`、`reason` |
 | `app.fatal` | error | 启动失败/无法继续 | `phase`、`msg`、`stack`（写 crash 文件） |
 | `app.recover` | warn | 检测到上次崩溃文件 | `age_h`、`crash_path` |
@@ -113,7 +113,7 @@ flowchart LR
 | `git.fail` | error | 命令失败 | `op`、`write`、`dur_ms`、`exit`、`kind`、`code`、`stderr`（脱敏摘要，≤2 KiB）、`args`（debug 时脱敏后） |
 | `ui.notice` | warn/info | 通知中心新增错误/警告 | `notice_level`、`code`、`title` |
 | `conflict.detected` | info | 检测到冲突 | `files` 计数、`op_state` |
-| `perf.slow` | warn | 任务/刷新超过阈值 | `op`、`dur_ms`、`threshold_ms` |
+| `perf.slow` | info/warn | 启动阶段计时（每次启动各一条 info：`settings_load`/`window_create`/`window_start`/`git_version`/`svn_version`，带 `dur_ms`；探测失败为 warn，附 `code` 与版本来源）/ 任务或刷新超过阈值（warn） | `phase`、`op`、`dur_ms`、`threshold_ms`、`git_version`、`git_source`、`svn_version`、`svn_source` |
 | `perf.mem` | debug | 每 60s 采样 | `alloc_mb`、`heap_mb`、`goroutines` |
 | `diagnostics.export` | info | 生成诊断包 | `incident`、`files`、`bytes`、`profile`、`truncated` |
 | `update.check` | info/warn | 启动时自动检查或手动检查更新 | `from`/`to`、`manual`、`result`（up-to-date/available/error）、`dur_ms` |
@@ -125,7 +125,7 @@ flowchart LR
 
 - **读命令不记 `git.start`**（debug 会话除外）；成功读命令也不写 Console（沿用现有 `workspace.go:184-213` 的静默名单，但补全 `rev-list`/`ls-tree`/`blame`，避免刷屏挤掉失败上下文）。
 - 重复事件 1 秒内合并：`{"count":N,"first_seq":…}`，防止错误风暴写满磁盘。
-- `perf.mem` 只在 debug 下采样；`perf.slow` 阈值初始：任务 >5s、刷新 >2s、单条 Git 命令 >10s。
+- `perf.mem` 只在 debug 下采样；`perf.slow` 阈值初始：任务 >5s、刷新 >2s、单条 Git 命令 >10s。启动阶段计时不受阈值控制：每次启动为 `settings_load`/`window_create`/`window_start`/`git_version`/`svn_version` 各记一条 info 事件，首帧开始绘制时记 `app.ready`（`startup_ms`，从 workspace 创建起算）。
 - 单条事件序列化后 >4 KiB 直接截断，记 `truncated:true` 与原始字节数。
 - 典型会话预算：info 级别 <200 KB；debug 会话 10 分钟 <2 MiB。
 
@@ -412,7 +412,7 @@ v1 已实现，与本文的偏差如下，后续改动请同步本节：
 | Console Copy All / Save / 显示耗时 / Clear 确认 | 已实现 | 单条输出上限 8 KiB |
 | UI 导出前预览与敏感项勾选 | **未实现**（P1） | v1 导出包固定 standard 档；用户可用压缩工具自查 |
 | 诊断会话 10 分钟自动停止 | **未实现**（P1） | v1 需用户手动停止；事件/体量上限仍由导出器兜底 |
-| `perf.slow` / `perf.mem` 等度量事件 | **未实现**（P1） | 事件常量已保留，接入点待补 |
+| `perf.slow` 启动阶段计时 + `app.ready` 首帧开始计时 | 已实现 | `cmd/viff/main.go`（Git 探测改为后台，不阻塞窗口）、`internal/ui` 首帧调用 `RecordReady`；阈值化慢操作告警与 `perf.mem` 采样仍为 P1 |
 | 一键打开预填 GitHub Issue / 自动上传 | **未实现**（P1/P2） | 当前复制模板 + 用户自行附加 zip；上传需另立 ADR |
 | Windows crash dumps (`app.EnableCrashDumps`) | **未实现**（P2） | 需先有用户同意弹窗 |
 | 清除诊断数据设置项 | **未实现**（P2） | 当前通过 Open Log Folder 手动删除 |

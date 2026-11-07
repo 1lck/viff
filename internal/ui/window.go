@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/vivaui/viva/app"
@@ -112,6 +113,10 @@ type Window struct {
 	lfsWarnedGen uint64
 	saveTimer    *time.Timer
 	fetchStop    chan struct{}
+	// pendingCrash receives the previous-crash path from any goroutine; the
+	// UI thread shows the notice on the next wake so startup never blocks on
+	// scanning the crash directory.
+	pendingCrash atomic.Pointer[string]
 	started      time.Duration
 }
 
@@ -367,6 +372,13 @@ func (w *Window) Start(dir string) {
 	}
 }
 
+// SetCrashNotice queues the previous-crash notice from any goroutine; the
+// notice is shown on the UI thread on the next wake.
+func (w *Window) SetCrashNotice(crash string) {
+	w.pendingCrash.Store(&crash)
+	w.Invalidate()
+}
+
 // ShowCrashNotice tells the user the previous run ended unexpectedly and
 // offers the problem-reporting entry points. crashPath is the crash file found
 // at startup (it may be empty); main calls this after Start when the
@@ -466,6 +478,7 @@ func (w *Window) Paint(c *ui.Canvas, size ui.Size) {
 	w.modalTop = 0
 	if w.started == 0 {
 		w.started = c.Now() + 1
+		w.ws.RecordReady()
 	}
 
 	full := rect(0, 0, size.Width, size.Height)

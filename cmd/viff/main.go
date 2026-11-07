@@ -40,6 +40,7 @@ func run() (code int) {
 	}
 	started := time.Now()
 	settingsPath := storage.DefaultPath()
+	settingsLoad := time.Now()
 	settings := storage.Load(settingsPath)
 
 	logDir := filepath.Join(filepath.Dir(settingsPath), "logs")
@@ -58,6 +59,20 @@ func run() (code int) {
 	} else {
 		logErr = err
 	}
+	// phaseOf times one startup phase and records it under perf.slow, so a
+	// slow start can be located from the JSONL alone.
+	phaseOf := func(name string, from time.Time) {
+		d := time.Since(from)
+		rec.Event(observability.Event{
+			Event: observability.EventPerfSlow,
+			Level: observability.LevelInfo,
+			Fields: map[string]any{
+				"phase":  name,
+				"dur_ms": d.Milliseconds(),
+			},
+		})
+	}
+	phaseOf("settings_load", settingsLoad)
 	defer func() {
 		if log != nil {
 			rec.Event(observability.Event{
@@ -124,28 +139,57 @@ func run() (code int) {
 
 	git := &gitcli.Runner{Path: settings.GitPath}
 	svn := &svncli.Runner{Path: settings.SVNPath}
-	gitCtx, cancelGit := context.WithTimeout(context.Background(), 2*time.Second)
-	gitVersion, gitVersionErr := git.Version(gitCtx)
-	cancelGit()
 	gitSource := "path"
 	if settings.GitPath != "" {
 		gitSource = "settings"
 	}
-	if gitVersionErr != nil {
-		gitSource = "missing"
-		gitVersion = ""
-	}
-	svnCtx, cancelSVN := context.WithTimeout(context.Background(), 2*time.Second)
-	svnVersion, svnVersionErr := svn.Version(svnCtx)
-	cancelSVN()
 	svnSource := "path"
 	if settings.SVNPath != "" {
 		svnSource = "settings"
 	}
-	if svnVersionErr != nil {
-		svnSource = "missing"
-		svnVersion = ""
-	}
+	// The Git and SVN probes used to run synchronously before the window
+	// existed; on Windows the first process spawn can take seconds
+	// (antivirus, cold start — worse for a VM-backed WSL checkout), so they
+	// now run in the background and the window shows immediately. The
+	// diagnostics export probes each tool itself when needed.
+	probeStart := time.Now()
+	go func() {
+		probeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		gitVersion, gitVersionErr := git.Version(probeCtx)
+		fields := map[string]any{
+			"phase":      "git_version",
+			"dur_ms":     time.Since(probeStart).Milliseconds(),
+			"git_source": gitSource,
+		}
+		probeLevel := observability.LevelInfo
+		if gitVersionErr != nil {
+			probeLevel = observability.LevelWarn
+			fields["git_version"] = ""
+			fields["code"] = gitcli.CodeOf(gitVersionErr)
+		} else {
+			fields["git_version"] = gitVersion
+		}
+		rec.Event(observability.Event{Event: observability.EventPerfSlow, Level: probeLevel, Fields: fields})
+
+		svnStart := time.Now()
+		svnCtx, cancelSVN := context.WithTimeout(context.Background(), 2*time.Second)
+		svnVersion, svnVersionErr := svn.Version(svnCtx)
+		cancelSVN()
+		svnFields := map[string]any{
+			"phase":      "svn_version",
+			"dur_ms":     time.Since(svnStart).Milliseconds(),
+			"svn_source": svnSource,
+		}
+		svnLevel := observability.LevelInfo
+		if svnVersionErr != nil {
+			svnLevel = observability.LevelWarn
+			svnFields["svn_version"] = ""
+		} else {
+			svnFields["svn_version"] = svnVersion
+		}
+		rec.Event(observability.Event{Event: observability.EventPerfSlow, Level: svnLevel, Fields: svnFields})
+	}()
 	rec.Event(observability.Event{
 		Event: observability.EventAppStart,
 		Level: observability.LevelInfo,
@@ -162,14 +206,13 @@ func run() (code int) {
 			"scale":           settings.UIScale,
 			"log_level":       level.String(),
 			"log_dir":         filepath.Join("<cfg>", "Viff", "logs"),
-			"git_version":     gitVersion,
 			"git_source":      gitSource,
-			"svn_version":     svnVersion,
 			"svn_source":      svnSource,
 		},
 	})
 
 	var win *viffui.Window
+	windowCreate := time.Now()
 	ws := vapp.NewWorkspace(git, settings, func() {
 		if win != nil {
 			win.Invalidate()
@@ -190,33 +233,46 @@ func run() (code int) {
 		return platform.Watch(repo, changed)
 	}
 	win = viffui.New(ws)
+	phaseOf("window_create", windowCreate)
 
 	if logErr != nil {
 		ws.Notify(vapp.NoticeWarning, "Logging disabled", "Viff cannot write its diagnostics log: "+logErr.Error())
 	}
 
 	// A path argument opens that repository; otherwise the last one, as
-	// IntelliJ reopens the last project.
+	// IntelliJ reopens the last project. A remote path (a WSL checkout) is
+	// passed on without a stat: probing it can block for seconds on a file
+	// system that has to boot first, and Discover reports failures anyway.
 	dir := ""
 	if len(os.Args) > 1 {
 		if abs, err := filepath.Abs(os.Args[1]); err == nil {
 			dir = abs
 		}
 	} else if len(settings.Recent) > 0 {
-		if _, err := os.Stat(settings.Recent[0].Path); err == nil {
-			dir = settings.Recent[0].Path
+		recent := settings.Recent[0].Path
+		remote := vapp.IsRemotePath(recent)
+		if remote {
+			dir = recent
+		} else if _, err := os.Stat(recent); err == nil {
+			dir = recent
 		}
 	}
 	win.Start(dir)
+	phaseOf("window_start", windowCreate)
 
-	if crash, ok := observability.PreviousCrash(crashDir, 7*24*time.Hour); ok {
-		rec.Event(observability.Event{
-			Event:  observability.EventAppRecover,
-			Level:  observability.LevelWarn,
-			Fields: map[string]any{"crash": filepath.Base(crash)},
-		})
-		win.ShowCrashNotice(crash)
-	}
+	// The crash-directory scan runs after the window is up: nothing in the
+	// first frame depends on it, and a notice queued here shows on the next
+	// wake.
+	go func() {
+		if crash, ok := observability.PreviousCrash(crashDir, 7*24*time.Hour); ok {
+			rec.Event(observability.Event{
+				Event:  observability.EventAppRecover,
+				Level:  observability.LevelWarn,
+				Fields: map[string]any{"crash": filepath.Base(crash)},
+			})
+			win.SetCrashNotice(crash)
+		}
+	}()
 
 	// RunApplication, not RunCanvas: the application owns the window, which is
 	// what lets Viff keep an icon in the status area. RunCanvas has no handle to

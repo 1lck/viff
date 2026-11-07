@@ -30,6 +30,11 @@ func TestCanonicalPathWSLIdentity(t *testing.T) {
 			t.Errorf("canonicalPath(%q) = %q, want %q", c, got, want)
 		}
 	}
+	for _, c := range cases {
+		if got := entryKey(c); got != want {
+			t.Errorf("entryKey(%q) = %q, want %q", c, got, want)
+		}
+	}
 	// Case below the distro distinguishes two real directories.
 	a := canonicalPath(`\\wsl.localhost\Ubuntu\home\repo`)
 	b := canonicalPath(`\\wsl.localhost\Ubuntu\home\Repo`)
