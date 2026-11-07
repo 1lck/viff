@@ -31,6 +31,11 @@ func newFixture(t testing.TB) *fixture {
 	f.git("config", "user.email", "test@example.com")
 	f.git("config", "commit.gpgsign", "false")
 	f.w = NewWorkspace(&gitcli.Runner{Env: env}, storage.Defaults(), nil)
+	// Release the repository the way the window does on quit: the log reader and
+	// the watcher own child processes and file handles, and a temp directory is
+	// removed right after the test, which Windows refuses while they are open.
+	// Cleanups run last-in first-out, so this one runs before TempDir's removal.
+	t.Cleanup(f.w.Close)
 	return f
 }
 
