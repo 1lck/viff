@@ -106,7 +106,7 @@ func (w *Window) paintStash(r ui.Rect) {
 		}
 		w.p.iconIn(icons.Shelve, rect(hl.X+6, yy, 16, rowH))
 		msg := s.Message
-		when := ago(s.Time, now)
+		when := ago(s.Time, now, w.clockLayout())
 		ww := w.p.width(when, fontSmall, regular)
 		w.p.text(msg, rect(hl.X+28, yy, hl.Width-28-ww-16, rowH), fontUI, regular, w.pal.Text)
 		w.p.text(when, rect(right(hl)-ww-8, yy, ww+2, rowH), fontSmall, regular, w.pal.TextSecond)

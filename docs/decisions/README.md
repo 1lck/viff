@@ -44,3 +44,4 @@
 | [0038](0038-wsl-repositories.md) | 在 Windows 版直接打开 WSL 仓库 |
 | [0039](0039-codemap-in-file-viewer.md) | 代码缩略图只属于只读文件查看器 |
 | [0040](0040-branch-double-click.md) | 双击分支默认只筛选，不检出 |
+| [0041](0041-commit-time-and-clock-format.md) | 提交时间的时区与时钟格式 |

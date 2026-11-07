@@ -13,6 +13,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/i18n"
 	"viff/internal/platform"
+	"viff/internal/storage"
 	"viff/internal/ui/icons"
 )
 
@@ -550,10 +551,20 @@ func shortenHome(p string) string {
 	return p
 }
 
-func ago(t time.Time, now time.Time) string {
+// ago renders a timestamp the way the log list reads it: relative for the last
+// two days, an absolute date before that.
+//
+// layout is the hour-and-minute part, "15:04" or "3:04 PM", chosen by the
+// Time format setting; the date parts around it stay the same in both.
+func ago(t time.Time, now time.Time, layout string) string {
 	if t.IsZero() {
 		return ""
 	}
+	// Commit times come from two sources that may not agree on a zone: Git
+	// hands out local times, anything still carrying UTC does not. Both
+	// comparisons below are calendar-day tests, so they only mean what they say
+	// when both values are in one zone.
+	t = t.In(now.Location())
 	d := now.Sub(t)
 	switch {
 	case d < time.Minute:
@@ -562,13 +573,31 @@ func ago(t time.Time, now time.Time) string {
 		m := int(d.Minutes())
 		return plural(m, "minute", "minutes") + " ago"
 	case d < 24*time.Hour && now.YearDay() == t.YearDay():
-		return "Today " + t.Format("15:04")
+		return "Today " + t.Format(layout)
 	case d < 48*time.Hour && now.AddDate(0, 0, -1).YearDay() == t.YearDay():
-		return "Yesterday " + t.Format("15:04")
+		return "Yesterday " + t.Format(layout)
 	case now.Year() == t.Year():
-		return t.Format("Jan 2, 15:04")
+		return t.Format("Jan 2, " + layout)
 	}
 	return t.Format("Jan 2, 2006")
+}
+
+// clockLayout is the hour-and-minute layout of the Time format setting: 24-hour
+// by default, 12-hour with an AM/PM suffix when the user picked it.
+func (w *Window) clockLayout() string {
+	if w.ws.Settings.TimeFormat == storage.TimeFormat12Hour {
+		return "3:04 PM"
+	}
+	return "15:04"
+}
+
+// consoleClockLayout is clockLayout with seconds: a command log is read by
+// matching entries against what the user did, so the seconds matter there.
+func (w *Window) consoleClockLayout() string {
+	if w.ws.Settings.TimeFormat == storage.TimeFormat12Hour {
+		return "3:04:05 PM"
+	}
+	return "15:04:05"
 }
 
 var _ = vapp.LogPage

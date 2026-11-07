@@ -179,7 +179,7 @@ func (w *Window) paintLogCommitMessage(msg ui.Rect, d *domain.CommitDetail) {
 	meta := domain.ShortHash(d.Hash) + "  " + d.Author + " <" + d.AuthorEmail + ">"
 	w.p.text(meta, rect(mr.X, yy, mr.Width, 19), fontSmall, regular, w.pal.TextMuted)
 	yy += 19
-	when := "on " + d.AuthorTime.Format("Jan 2, 2006 at 15:04")
+	when := "on " + d.AuthorTime.Format("Jan 2, 2006 at "+w.clockLayout())
 	if d.Committer != d.Author {
 		when += " · committed by " + d.Committer
 	}

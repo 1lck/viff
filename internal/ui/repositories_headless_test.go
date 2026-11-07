@@ -418,3 +418,62 @@ func TestRepositoriesOverviewFitsSmallWindow(t *testing.T) {
 	}
 	f.snap("repositories-900x600")
 }
+
+// TestWelcomeSearchFindsWorkspaceRepository covers searching the Welcome screen
+// for a repository that is not in Recent: the field has to reach the workspace
+// list, because Recent is capped (a user reported a hundred repositories and
+// nothing but the last few opens to pick from). The result is a real row, so
+// clicking it opens that repository.
+func TestWelcomeSearchFindsWorkspaceRepository(t *testing.T) {
+	f := newUIFixture(t)
+	wanted := filepath.Join(filepath.Dir(f.dir), "needle-project")
+	if err := os.MkdirAll(wanted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.gitIn(wanted, "init", "-q", "-b", "main")
+	f.gitIn(wanted, "config", "user.name", "Ada Lovelace")
+	f.gitIn(wanted, "config", "user.email", "ada@example.com")
+	f.gitIn(wanted, "config", "commit.gpgsign", "false")
+	writeFile(t, filepath.Join(wanted, "main.go"), "package main\n")
+	f.gitIn(wanted, "add", "-A")
+	f.gitIn(wanted, "commit", "-q", "-m", "Seed needle")
+
+	f.start(1280, 800)
+	// The fixture repository is the only recent one; "needle-project" joins the
+	// workspace without ever being opened, so it cannot be in Recent.
+	f.ws.Settings.AddRecent(f.dir)
+	f.ws.AddRepository(wanted, func(error) {})
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return len(f.ws.Repositories) == 1
+	}, 20*time.Second); err != nil {
+		t.Fatalf("repository never reached the workspace: %v", err)
+	}
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	if got := f.win.projectShown(); len(got) != 1 || got[0] != f.dir {
+		t.Fatalf("idle project list = %v, want only the recent project %q", got, f.dir)
+	}
+
+	f.click("Search projects")
+	if err := f.s.Type("needle"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	got := f.win.projectShown()
+	if len(got) != 1 || got[0] != wanted {
+		t.Fatalf("matching project list = %v, want [%q]", got, wanted)
+	}
+	if !f.s.HasText("needle-project") {
+		t.Fatalf("the match was not painted: %s", strings.Join(f.s.Texts(), " | "))
+	}
+
+	// A search hit is a row, not a hint: it opens the repository.
+	f.click("needle-project")
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.ws.Repo != nil && canonicalRootNoFatal(f.ws.ActiveRoot) == canonicalRoot(t, wanted)
+	}, 20*time.Second); err != nil {
+		t.Fatalf("clicking the search result did not open it: %v\nactive: %q", err, f.ws.ActiveRoot)
+	}
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	f.snap("repositories-search-result")
+}

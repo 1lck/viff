@@ -53,9 +53,10 @@ type consoleRow struct {
 }
 
 // consoleCommandHead is the command row's leading text: time, the command and,
-// when the workspace measured it, how long it took.
-func consoleCommandHead(e vapp.ConsoleEntry) string {
-	head := e.Time.Format("15:04:05") + "  " + e.Command
+// when the workspace measured it, how long it took. layout is the hour layout
+// of the Time format setting, with seconds kept for a command log.
+func consoleCommandHead(e vapp.ConsoleEntry, layout string) string {
+	head := e.Time.Format(layout) + "  " + e.Command
 	if e.Took > 0 {
 		head += "  " + consoleDuration(e.Took)
 	}
@@ -77,7 +78,7 @@ func consoleDuration(d time.Duration) string {
 func (w *Window) consoleText() string {
 	var b strings.Builder
 	for _, e := range w.ws.Console {
-		b.WriteString(consoleCommandHead(e))
+		b.WriteString(consoleCommandHead(e, w.consoleClockLayout()))
 		b.WriteByte('\n')
 		out := strings.TrimRight(e.Output, "\n")
 		if out == "" {
@@ -139,7 +140,7 @@ func (w *Window) consoleRows() (rows []consoleRow, widest int) {
 		return consoleRow{text: text, cells: displayCells(text), color: c}
 	}
 	for _, e := range w.ws.Console {
-		head := consoleCommandHead(e)
+		head := consoleCommandHead(e, w.consoleClockLayout())
 		c := w.pal.EditorText
 		if e.Failed {
 			c = w.pal.Error

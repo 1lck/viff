@@ -481,7 +481,7 @@ func (w *Window) paintLogTable(r ui.Rect) {
 		}
 		w.p.text(c.Subject, rect(sx, y, subjectW-graphW-12-refsW, logRowH), fontUI, weight, fg)
 		w.p.text(c.Author, rect(r.X+subjectW, y, authorW-10, logRowH), fontUI, regular, w.pal.TextMuted)
-		w.p.text(ago(c.AuthorTime, now), rect(r.X+subjectW+authorW, y, dateW-14, logRowH), fontUI, regular, w.pal.TextMuted)
+		w.p.text(ago(c.AuthorTime, now, w.clockLayout()), rect(r.X+subjectW+authorW, y, dateW-14, logRowH), fontUI, regular, w.pal.TextMuted)
 		w.c.HitWithOptions(id, rr, c.Subject, ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected})
 		if w.c.Clicked(id) {
 			i := i
@@ -1220,7 +1220,7 @@ func (w *Window) paintReflog(r ui.Rect) {
 		w.c.Label(e.Selector, rect(rr.X+12, y, 110, rowH), ui.TextStyle{Size: fs - 1, Color: w.pal.TextMuted, Mono: true, MonoFace: w.mono})
 		w.c.Label(domain.ShortHash(e.Hash), rect(rr.X+124, y, 80, rowH), ui.TextStyle{Size: fs - 1, Color: w.pal.Link, Mono: true, MonoFace: w.mono})
 		w.p.text(e.Message, rect(rr.X+210, y, rr.Width-210-dateW, rowH), fontUI, regular, w.pal.Text)
-		w.p.text(ago(e.Time, now), rect(right(rr)-dateW, y, dateW-12, rowH), fontUI, regular, w.pal.TextMuted)
+		w.p.text(ago(e.Time, now, w.clockLayout()), rect(right(rr)-dateW, y, dateW-12, rowH), fontUI, regular, w.pal.TextMuted)
 		w.c.HitWithOptions(id, rr, e.Message, ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: v.sel == i})
 		if w.c.Clicked(id) {
 			i := i

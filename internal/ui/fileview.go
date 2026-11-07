@@ -237,7 +237,7 @@ func (w *Window) paintAnnotations(t *diffTab, r ui.Rect, top, lineH float32) {
 	w.c.Unclip()
 	w.p.vline(right(r)-1, r.Y, r.Height, w.pal.Border)
 	if hover >= 0 {
-		w.tip(idAnnotations, blameTip(b.Commits[hover]))
+		w.tip(idAnnotations, blameTip(b.Commits[hover], w.clockLayout()))
 	}
 	commitAt := func(y float32) (domain.BlameCommit, bool) {
 		return b.CommitAt(int((y - r.Y + top) / lineH))
@@ -272,13 +272,13 @@ func (w *Window) paintAnnotations(t *diffTab, r ui.Rect, top, lineH float32) {
 	})
 }
 
-func blameTip(c domain.BlameCommit) string {
+func blameTip(c domain.BlameCommit, layout string) string {
 	var s strings.Builder
 	s.WriteString(domain.ShortHash(c.Hash) + "  " + c.Author)
 	if c.AuthorEmail != "" {
 		s.WriteString(" <" + c.AuthorEmail + ">")
 	}
-	s.WriteString("\n" + c.Time.Format("Jan 2, 2006 at 15:04") + "\n\n" + c.Summary)
+	s.WriteString("\n" + c.Time.Format("Jan 2, 2006 at "+layout) + "\n\n" + c.Summary)
 	return s.String()
 }
 

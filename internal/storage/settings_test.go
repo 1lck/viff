@@ -293,3 +293,41 @@ func TestSearchSettingsDefaultsAndSanitize(t *testing.T) {
 		t.Errorf("git = %q", got)
 	}
 }
+
+// TestNormalizeTimeFormat lets an older settings file, which has no TimeFormat
+// field, keep rendering 24-hour times: everything but an explicit 12-hour value
+// means 24-hour.
+func TestNormalizeTimeFormat(t *testing.T) {
+	cases := map[string]string{
+		"":        TimeFormat24Hour,
+		"24h":     TimeFormat24Hour,
+		"12h":     TimeFormat12Hour,
+		"klingon": TimeFormat24Hour,
+	}
+	for in, want := range cases {
+		if got := NormalizeTimeFormat(in); got != want {
+			t.Errorf("NormalizeTimeFormat(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestRecentProjectsCapKeepsTheNewest pins the size of the recent list: it grew
+// so a user with many repositories keeps reachable entries, but it is still a
+// capped convenience list, and the newest entry must never be trimmed away.
+func TestRecentProjectsCapKeepsTheNewest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	s := Load(path)
+	for i := 0; i < MaxRecentProjects+5; i++ {
+		s.AddRecent(filepath.Join(t.TempDir(), "repo-"+strings.Repeat("x", i%3)+string(rune('a'+i%26))+string(rune('a'+i/26))))
+	}
+	if got := len(s.Recent); got != MaxRecentProjects {
+		t.Fatalf("recent list = %d entries, want %d", got, MaxRecentProjects)
+	}
+	if err := s.Save(); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	reloaded := Load(path)
+	if got := len(reloaded.Recent); got != MaxRecentProjects {
+		t.Errorf("reloaded recent list = %d entries, want %d", got, MaxRecentProjects)
+	}
+}

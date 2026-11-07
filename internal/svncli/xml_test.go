@@ -1,8 +1,10 @@
 package svncli
 
 import (
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // The samples below are verbatim output of svn 1.15.0 on Windows x64, captured
@@ -520,20 +522,22 @@ func TestParseBlameMalformed(t *testing.T) {
 }
 
 func TestParseTime(t *testing.T) {
-	// svn prints microsecond precision with a trailing Z; the parser must keep the
-	// calendar date and stay in UTC.
+	// svn prints microsecond precision with a trailing Z. The instant has to be
+	// kept exactly; the zone becomes the user's, because every view of Viff
+	// speaks local time and svn reports UTC.
 	got, err := parseTime("2026-11-05T07:20:51.371585Z")
 	if err != nil {
 		t.Fatalf("parseTime: %v", err)
 	}
-	if got.Year() != 2026 || got.Month() != time.November || got.Day() != 5 {
-		t.Errorf("date = %v, want 2026-11-05", got)
+	want := time.Date(2026, time.November, 5, 7, 20, 51, 371585000, time.UTC)
+	if !got.Equal(want) {
+		t.Errorf("instant = %v, want %v", got, want)
 	}
-	if got.Hour() != 7 || got.Minute() != 20 || got.Second() != 51 || got.Nanosecond() != 371585000 {
-		t.Errorf("clock = %v", got)
+	if got.Location() != time.Local {
+		t.Errorf("location = %v, want the local zone", got.Location())
 	}
-	if _, offset := got.Zone(); offset != 0 {
-		t.Errorf("zone offset = %d, want 0", offset)
+	if got.Nanosecond() != 371585000 {
+		t.Errorf("nanoseconds = %d", got.Nanosecond())
 	}
 
 	// Missing values are the common case for unversioned entries and untouched
@@ -578,5 +582,72 @@ func TestStatusEntryConflicted(t *testing.T) {
 		if (StatusEntry{Item: item}).Conflicted() {
 			t.Errorf("item %q reported as conflicted", item)
 		}
+	}
+}
+
+// TestParseTimeReturnsLocalZone pins the zone svn timestamps leave the parser
+// in. svn reports UTC and every view of Viff speaks the user's zone, so a
+// timestamp that keeps "UTC" here shows a noon commit as "Today 04:51" and
+// files it under the wrong day.
+func TestParseTimeReturnsLocalZone(t *testing.T) {
+	got, err := parseTime("2026-11-06T04:51:00.000000Z")
+	if err != nil {
+		t.Fatalf("parseTime: %v", err)
+	}
+	want := time.Date(2026, time.November, 6, 4, 51, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Errorf("instant = %v, want %v", got, want)
+	}
+	if got.Location() != time.Local {
+		t.Errorf("location = %v, want the local zone", got.Location())
+	}
+}
+
+// TestParseLogToleratesInvalidUTF8 covers a repository written by a client in a
+// legacy encoding: svn declares UTF-8 in the XML header no matter what the
+// stored bytes are, and encoding/xml used to reject the whole document, which
+// failed the entire log view over one damaged revision.
+func TestParseLogToleratesInvalidUTF8(t *testing.T) {
+	// "暂存格" in GBK, as a Chinese Windows client would have committed it.
+	gbk := []byte{0xd4, 0xdd, 0xb4, 0xe6, 0xb8, 0xf1}
+	data := append([]byte(`<?xml version="1.0" encoding="UTF-8"?><log><logentry revision="12">`+
+		`<author>momo</author><date>2026-11-06T04:51:00.000000Z</date><msg>`), gbk...)
+	data = append(data, []byte(`</msg></logentry></log>`)...)
+	entries, err := ParseLog(data)
+	if err != nil {
+		t.Fatalf("ParseLog with legacy bytes: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	entry := entries[0]
+	if entry.Revision != 12 || entry.Author != "momo" {
+		t.Errorf("revision/author = %d/%q", entry.Revision, entry.Author)
+	}
+	if entry.Message == "" {
+		t.Error("message was dropped instead of repaired")
+	}
+	if !utf8.ValidString(entry.Message) {
+		t.Errorf("message is still invalid UTF-8: %q", entry.Message)
+	}
+	if !strings.ContainsRune(entry.Message, utf8.RuneError) {
+		t.Errorf("message = %q, want the invalid bytes replaced with U+FFFD", entry.Message)
+	}
+}
+
+// TestParseStatusToleratesInvalidUTF8 keeps the other parsers honest: paths come
+// from the same working copy, so they carry the same bytes.
+func TestParseStatusToleratesInvalidUTF8(t *testing.T) {
+	path := append([]byte(`<?xml version="1.0" encoding="UTF-8"?><status><target path="`), 0xd4, 0xdd)
+	path = append(path, []byte(`"><entry path="src\`+"\xd4\xdd"+`.go"><wc-status item="modified" props="none" revision="3"/></entry></target></status>`)...)
+	entries, err := ParseStatus(path)
+	if err != nil {
+		t.Fatalf("ParseStatus with legacy bytes: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if !utf8.ValidString(entries[0].Path) {
+		t.Errorf("path is still invalid UTF-8: %q", entries[0].Path)
 	}
 }

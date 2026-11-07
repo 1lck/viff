@@ -15,6 +15,7 @@ import (
 	"viff/internal/domain"
 	"viff/internal/gitcli"
 	"viff/internal/i18n"
+	"viff/internal/storage"
 	"viff/internal/ui/icons"
 	"viff/internal/version"
 )
@@ -687,6 +688,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	// toggles: the row's double-click reads the setting, so cancelling must not
 	// change it.
 	doubleClickCheckout := s.CheckoutOnDoubleClick
+	timeFormat := storage.NormalizeTimeFormat(s.TimeFormat)
 	debugLog := s.LogLevel == "debug"
 	mins := text.NewEditor(strconv.Itoa(s.AutoFetchMins))
 	pull := s.PullMode
@@ -719,6 +721,10 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 		"dark":   w.t(i18n.SettingsThemeDark),
 		"light":  w.t(i18n.SettingsThemeLight),
 		"system": w.t(i18n.SettingsThemeSystem),
+	}
+	timeFormatTitle := map[string]string{
+		storage.TimeFormat24Hour: w.t(i18n.SettingsTimeFormat24),
+		storage.TimeFormat12Hour: w.t(i18n.SettingsTimeFormat12),
 	}
 	pullTitle := w.pullTitles()
 	w.openDialog(&dialog{
@@ -922,6 +928,14 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 				f.custom(22, func(r ui.Rect) {
 					w.p.text(w.t(i18n.SettingsHintDoubleClick), rect(r.X+170, r.Y, r.Width-170, 20), fontSmall, regular, w.pal.TextSecond)
 				})
+				f.combo(w.t(i18n.SettingsLabelTimeFormat), timeFormatTitle[timeFormat], func() []item {
+					var items []item
+					for _, k := range []string{storage.TimeFormat24Hour, storage.TimeFormat12Hour} {
+						k := k
+						items = append(items, item{title: timeFormatTitle[k], checked: timeFormat == k, run: func() { timeFormat = k }})
+					}
+					return items
+				})
 			}
 		},
 		okDisabled: func() bool {
@@ -951,6 +965,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			s.SkipUpdateDialog = !askUpdate
 			s.AutoUpdateCheck = autoUpdate
 			s.CheckoutOnDoubleClick = doubleClickCheckout
+			s.TimeFormat = timeFormat
 			if marks != s.DiffMarks || codemap != s.DiffCodemap {
 				s.DiffMarks, s.DiffCodemap = marks, codemap
 				// The caches are dropped or built here, so the new setting

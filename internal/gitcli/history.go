@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"viff/internal/domain"
 	"viff/internal/vcs"
@@ -102,12 +103,31 @@ func (l *LogReader) Close() {
 	}
 }
 
+// validUTF8 replaces invalid UTF-8 byte sequences with U+FFFD.
+//
+// Git stores commit metadata as the bytes the committing client sent and only
+// transcodes when the commit carries an encoding header. A commit written by a
+// client in a legacy encoding (GBK on Chinese Windows) therefore reaches Viff as
+// bytes that are not UTF-8. Rendering them as-is puts U+FFFD in the view anyway,
+// but the invalid string would also travel into the diagnostics bundle and the
+// event log; normalizing here keeps every later consumer on valid text and
+// limits the damage to the characters that were never valid.
+func validUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "\uFFFD")
+}
+
 func parseCommitRecord(rec []byte) (domain.Commit, bool) {
 	f := strings.Split(string(rec), "\x1f")
 	if len(f) < 8 {
 		return domain.Commit{}, false
 	}
-	c := domain.Commit{Hash: f[0], Author: f[2], AuthorEmail: f[3], Committer: f[5], Subject: f[7]}
+	c := domain.Commit{
+		Hash: f[0], Author: validUTF8(f[2]), AuthorEmail: f[3],
+		Committer: validUTF8(f[5]), Subject: validUTF8(f[7]),
+	}
 	if f[1] != "" {
 		c.Parents = strings.Fields(f[1])
 	}
@@ -133,7 +153,7 @@ func (r *Runner) CommitDetail(ctx context.Context, repo domain.Repo, hash string
 		d.Commit = c
 	}
 	if len(parts) == 9 {
-		d.Body = strings.TrimRight(parts[8], "\n")
+		d.Body = strings.TrimRight(validUTF8(parts[8]), "\n")
 	}
 	args := []string{"diff-tree", "-r", "-z", "--no-commit-id", "--name-status", "-M", "--root"}
 	if len(d.Parents) > 1 {
