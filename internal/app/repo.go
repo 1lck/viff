@@ -323,42 +323,69 @@ func (w *Workspace) Refresh(meta bool) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		st, err := w.Git.Status(ctx, repo)
-		op := w.Git.Operation(ctx, repo)
-		var conflicts []domain.Conflict
-		if err == nil {
-			conflicts, _ = w.Git.Conflicts(ctx, repo, st)
-		}
-		var refs []domain.Ref
-		var remotes []domain.Remote
-		var stashes []domain.Stash
-		var refsErr error
-		refs, refsErr = w.Git.Refs(ctx, repo)
-		if refsErr == nil {
-			remotes, _ = w.Git.Remotes(ctx, repo)
-			if sw, serr := w.stash(); serr == nil {
-				stashes, _ = sw.Stashes(ctx, repo)
-			}
-		}
-		var worktrees []domain.Worktree
-		var worktreesErr error
-		if wt, werr := w.worktrees(); werr == nil {
-			worktrees, worktreesErr = wt.Worktrees(ctx, repo)
-		}
-		shallow, shallowErr := w.Git.IsShallow(ctx, repo)
-		// The remote HEAD names the branch a pull request targets; it is read
-		// with the other refs so a comparison never guesses while it is known.
-		remoteHeads, headsErr := w.remoteHeads(ctx, repo)
-		// LFS detection runs a probe and a file listing, so it is neither part
-		// of every status refresh nor on the UI thread. A metadata refresh is
-		// the user's refresh button or the end of a write task, which is
-		// exactly when the managed file list can change.
+		// The queries are reads against the immutable repo identity; the
+		// groups are independent, so they run concurrently instead of paying
+		// one subprocess spawn after another (which dominates first paint on
+		// Windows). Overlapping refreshes stay coalesced by rs.refreshing.
 		key := lfsAttributesKey(repo.Root)
-		lfs, lfsRefreshed := cachedLFS, false
-		if meta || lfsAt.IsZero() || key != lfsKey || time.Since(lfsAt) >= lfsRecheckInterval {
-			lfs = w.lfsStatus(ctx, repo)
-			lfsRefreshed = true
-		}
+		var (
+			st           domain.Status
+			err          error
+			op           domain.Operation
+			conflicts    []domain.Conflict
+			refs         []domain.Ref
+			remotes      []domain.Remote
+			stashes      []domain.Stash
+			refsErr      error
+			worktrees    []domain.Worktree
+			worktreesErr error
+			shallow      bool
+			shallowErr   error
+			remoteHeads  map[string]string
+			headsErr     error
+			lfs          = cachedLFS
+			lfsRefreshed = false
+		)
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			st, err = w.Git.Status(ctx, repo)
+			if err == nil {
+				op = w.Git.Operation(ctx, repo)
+				conflicts, _ = w.Git.Conflicts(ctx, repo, st)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			refs, refsErr = w.Git.Refs(ctx, repo)
+			if refsErr == nil {
+				remotes, _ = w.Git.Remotes(ctx, repo)
+				if sw, serr := w.stash(); serr == nil {
+					stashes, _ = sw.Stashes(ctx, repo)
+				}
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if wt, werr := w.worktrees(); werr == nil {
+				worktrees, worktreesErr = wt.Worktrees(ctx, repo)
+			}
+			shallow, shallowErr = w.Git.IsShallow(ctx, repo)
+			// The remote HEAD names the branch a pull request targets; it is
+			// read with the other refs so a comparison never guesses while it
+			// is known.
+			remoteHeads, headsErr = w.remoteHeads(ctx, repo)
+			// LFS detection runs a probe and a file listing, so it is neither
+			// part of every status refresh nor on the UI thread. A metadata
+			// refresh is the user's refresh button or the end of a write
+			// task, which is exactly when the managed file list can change.
+			if meta || lfsAt.IsZero() || key != lfsKey || time.Since(lfsAt) >= lfsRecheckInterval {
+				lfs = w.lfsStatus(ctx, repo)
+				lfsRefreshed = true
+			}
+		}()
+		wg.Wait()
 		w.post(func() {
 			if w.Repo != rs || rs.statusSeq != seq {
 				return

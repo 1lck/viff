@@ -56,10 +56,10 @@ func TestWatchReportsChangesOnce(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		os.WriteFile(filepath.Join(dir, "f"+string(rune('a'+i%26))), []byte("x"), 0o644)
 	}
-	// The non-macOS backend scans the worktree every six seconds.
+	// The non-macOS backend scans the worktree every thirty seconds (ADR 0003).
 	wait := 5 * time.Second
 	if runtime.GOOS != "darwin" {
-		wait = 12 * time.Second
+		wait = 35 * time.Second
 	}
 	deadline := time.Now().Add(wait)
 	for worktree.Load() == 0 && time.Now().Before(deadline) {
