@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,6 +96,43 @@ func canonicalPath(path string) string {
 	return filepath.Clean(abs)
 }
 
+// looseKey normalizes a path without touching the file system.
+func looseKey(path string) string {
+	if path == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = filepath.Clean(path)
+	}
+	return filepath.Clean(abs)
+}
+
+// isRemotePath reports whether resolving path may hit a slow file system: a
+// UNC share, which includes WSL repositories (\\wsl.localhost\...). A stat or
+// symlink resolution there can wake a virtual machine and block for seconds,
+// so such paths are keyed without disk access and only touched when the user
+// actually opens that repository.
+func isRemotePath(path string) bool {
+	return strings.HasPrefix(path, `\\`) || strings.HasPrefix(filepath.ToSlash(path), "//")
+}
+
+// entryKey is the list key of a repository path: canonical for local paths,
+// loose (no disk access) for remote ones. Loading the list, opening,
+// activating and removing all use it, so one repository is keyed the same way
+// everywhere and a slow share never blocks the window from appearing.
+func entryKey(path string) string {
+	if isRemotePath(path) {
+		return looseKey(path)
+	}
+	return canonicalPath(path)
+}
+
+// IsRemotePath reports whether path names a repository on a slow, possibly
+// VM-backed file system (a UNC share, which includes WSL checkouts). The
+// composition root uses it to keep such paths off the startup critical path.
+func IsRemotePath(path string) bool { return isRemotePath(path) }
+
 // loadRepositories reads the persisted list on startup. It only loads: a
 // repository that disappeared from disk is not dropped and not queried here.
 func (w *Workspace) loadRepositories() {
@@ -111,7 +149,10 @@ func (w *Workspace) loadRepositories() {
 		w.WorkspaceWarning = store.Warning
 	}
 	for _, saved := range store.Repositories {
-		root := canonicalPath(saved)
+		// Remote paths are keyed without disk access (entryKey); resolving
+		// them here would block the window on a file system that may have to
+		// boot a VM first.
+		root := entryKey(saved)
 		if root == "" || w.repos.byRoot[root] != nil {
 			continue
 		}
@@ -120,7 +161,7 @@ func (w *Workspace) loadRepositories() {
 	// The persisted active repository is only a hint until it is opened; the
 	// UI can show it as the active row or open it. Open and Activate keep it
 	// up to date.
-	if active := canonicalPath(store.Active); active != "" && w.repos.byRoot[active] != nil {
+	if active := entryKey(store.Active); active != "" && w.repos.byRoot[active] != nil {
 		w.ActiveRoot = active
 	}
 	w.syncRepositoryViews()
@@ -196,7 +237,14 @@ func (w *Workspace) saveRepositories() error {
 // noteActiveRepository makes repo part of the list and the active repository,
 // and persists both. It returns the canonical root.
 func (w *Workspace) noteActiveRepository(repo domain.Repo) string {
-	root := canonicalPath(repo.Root)
+	keyStart := time.Now()
+	root := entryKey(repo.Root)
+	if took := time.Since(keyStart); took > 50*time.Millisecond {
+		// A slow key means a remote file system resolved late (a WSL share
+		// booting, a network drive); worth seeing in the debug trace.
+		w.debug.Step("entry key resolved in %dms (remote=%v)",
+			took.Milliseconds(), isRemotePath(repo.Root))
+	}
 	entry := w.repos.byRoot[root]
 	if entry == nil {
 		entry = w.addEntry(root)
@@ -283,7 +331,7 @@ func (w *Workspace) AddRepository(dir string, done func(error)) {
 // is already listed is a no-op, however it was spelled (symlinks, trailing
 // slashes) and whether or not it is the active one.
 func (w *Workspace) addDiscoveredRepository(repo domain.Repo) {
-	root := canonicalPath(repo.Root)
+	root := entryKey(repo.Root)
 	if root == "" || w.repos.byRoot[root] != nil {
 		return
 	}
@@ -297,7 +345,7 @@ func (w *Workspace) addDiscoveredRepository(repo domain.Repo) {
 // bumps the generation and reloads status, refs and the log. A write task in
 // progress refuses the switch so its result cannot land in another view.
 func (w *Workspace) ActivateRepository(root string, done func(error)) {
-	key := canonicalPath(root)
+	key := entryKey(root)
 	entry := w.repos.byRoot[key]
 	if entry == nil {
 		if done != nil {
@@ -379,7 +427,7 @@ func (w *Workspace) ActivateRepository(root string, done func(error)) {
 // shows the welcome screen (the remaining rows stay listed, so the UI can
 // activate one of them).
 func (w *Workspace) RemoveRepository(root string) error {
-	key := canonicalPath(root)
+	key := entryKey(root)
 	entry := w.repos.byRoot[key]
 	if entry == nil {
 		return fmt.Errorf("%w: %s", ErrRepositoryUnknown, root)

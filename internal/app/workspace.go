@@ -178,6 +178,13 @@ type Workspace struct {
 	ConfirmCheckout func(CheckoutBlocked) bool
 	// Now is the clock (replaceable in tests).
 	Now func() time.Time
+	// startedAt anchors startup duration measurement (app.ready).
+	startedAt time.Time
+	// readyLogged keeps the app.ready event to the first paint.
+	readyLogged bool
+	// debug traces startup and slow-path timings to debug.txt; nil disables.
+	// Durations and counts only, never paths or content.
+	debug *observability.DebugLog
 }
 
 // Watcher stops a file-system watch.
@@ -190,7 +197,7 @@ type Watcher interface{ Close() }
 // recorder keeps every existing test and a build without a config directory
 // working unchanged.
 func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
-	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now, obs: observability.Nop{}, inc: observability.Nop{}}
+	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now, obs: observability.Nop{}, inc: observability.Nop{}, startedAt: time.Now()}
 	w.Caps = CapabilitiesOf(git)
 	w.SetLogLevel("")
 	w.initUpdateState()
@@ -201,6 +208,25 @@ func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
 	w.loadRepositories()
 	w.ApplyGitSettings()
 	return w
+}
+
+// SetDebugLog installs the debug.txt trace writer (nil disables tracing).
+func (w *Workspace) SetDebugLog(d *observability.DebugLog) { w.debug = d }
+
+// RecordReady reports that the first frame has been painted. The UI calls it
+// once; the event carries the elapsed time since workspace creation so slow
+// starts can be measured from the log alone. Later calls do nothing.
+func (w *Workspace) RecordReady() {
+	if w.readyLogged {
+		return
+	}
+	w.readyLogged = true
+	d := time.Since(w.startedAt)
+	w.debug.Step("first paint %dms", d.Milliseconds())
+	w.record(observability.Event{
+		Event: observability.EventAppReady, Level: observability.LevelInfo,
+		Dur: d, Fields: map[string]any{"startup_ms": d.Milliseconds()},
+	})
 }
 
 // now is the workspace clock, falling back to the real time when a Workspace

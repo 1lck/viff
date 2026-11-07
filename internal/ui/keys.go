@@ -233,6 +233,9 @@ func (w *Window) stopAutoFetch() {
 
 // runDue performs timer work on the UI thread.
 func (w *Window) runDue() {
+	if p := w.pendingCrash.Swap(nil); p != nil {
+		w.ShowCrashNotice(*p)
+	}
 	if fetchDue.Swap(false) && w.ws.Repo != nil && !w.ws.Busy() && len(w.ws.Repo.Remotes) > 0 {
 		w.ws.Fetch(true)
 	}
