@@ -20,10 +20,12 @@ func (w *Window) openSubmodule(path string) {
 		return
 	}
 	dir := filepath.Join(rs.Repo.Root, filepath.FromSlash(path))
-	w.ws.Open(dir, func(err error) {
-		if err != nil {
-			w.ws.NotifyError(w.t(i18n.SubmoduleCannotOpen), err)
-		}
+	w.confirmDiscardEdits(func() {
+		w.ws.Open(dir, func(err error) {
+			if err != nil {
+				w.ws.NotifyError(w.t(i18n.SubmoduleCannotOpen), err)
+			}
+		})
 	})
 }
 

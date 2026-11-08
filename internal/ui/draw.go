@@ -196,7 +196,7 @@ func expandTabs(s string, tab int) string {
 			continue
 		}
 		b.WriteRune(r)
-		col++
+		col += cellWidthOf(r)
 	}
 	return b.String()
 }

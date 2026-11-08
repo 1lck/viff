@@ -46,6 +46,11 @@ func (w *Window) loadBlame(t *diffTab) {
 
 func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 	res := t.res
+	if t.edit != nil {
+		// The toolbar shows the dirty state, so the rows are synced before it
+		// is painted; paintEditBody repeats the call as a no-op.
+		t.edit.sync(t)
+	}
 	tb := splitTop(&r, 36)
 	w.paintFileToolbar(t, tb)
 	w.p.hline(r.X, r.Y, r.Width, w.pal.Border)
@@ -71,6 +76,10 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 		// not jump to a line this version never showed.
 		t.pendingLine = 0
 		w.paintCentered(r, res.Notice, "", w.pal.TextMuted)
+		return
+	}
+	if t.edit != nil {
+		w.paintEditBody(t, r)
 		return
 	}
 	if t.annotate && t.blameErr != nil {
@@ -125,7 +134,18 @@ func (w *Window) paintFileView(t *diffTab, r ui.Rect) {
 }
 
 func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
+	if t.edit != nil {
+		w.paintEditToolbar(t, r)
+		return
+	}
 	x := r.X + 8
+	if w.canEdit(t) {
+		bw := w.p.width(w.t(i18n.FileviewEdit), fontUI, regular) + 20
+		if w.button(idFileEdit, rect(x, r.Y+(r.Height-26)/2, bw, 26), w.t(i18n.FileviewEdit)+"\t⌘E", btnBorderless, false) {
+			w.after(func() { w.enterEdit(t) })
+		}
+		x += bw + 4
+	}
 	label := w.t(i18n.FileviewAnnotate)
 	if t.annotate {
 		label = "Close Annotations"
@@ -170,6 +190,49 @@ func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
 	}
 	if t.annotate && t.blame == nil && t.blameErr == nil {
 		info = "Annotating…"
+	}
+	iw := w.p.width(info, fontUI, regular)
+	if rx-iw > x+10 {
+		w.p.text(info, rect(rx-iw, r.Y, iw+2, r.Height), fontUI, regular, w.pal.TextSecond)
+	}
+}
+
+// paintEditToolbar replaces the read-only actions while the tab edits. Save and
+// Revert disable on a clean buffer; Done returns to the viewer and asks before
+// dropping unsaved text.
+func (w *Window) paintEditToolbar(t *diffTab, r ui.Rect) {
+	e := t.edit
+	x := r.X + 8
+	y := r.Y + (r.Height-26)/2
+	bw := w.p.width(w.t(i18n.FileviewSave), fontUI, regular) + 20
+	if w.button(idFileSave, rect(x, y, bw, 26), w.t(i18n.FileviewSave)+"\t⌘S", btnBorderless, !e.dirty || e.saving) {
+		w.after(func() { w.saveEdit(t) })
+	}
+	x += bw + 4
+	bw = w.p.width(w.t(i18n.FileviewRevert), fontUI, regular) + 20
+	if w.button(idFileRevert, rect(x, y, bw, 26), w.t(i18n.FileviewRevert), btnBorderless, !e.dirty || e.saving) {
+		w.after(func() { w.revertEdit(t) })
+	}
+	x += bw + 4
+	bw = w.p.width(w.t(i18n.FileviewDone), fontUI, regular) + 20
+	if w.button(idFileDone, rect(x, y, bw, 26), w.t(i18n.FileviewDone), btnBorderless, false) {
+		w.after(func() { w.requestExitEdit(t) })
+	}
+	x += bw + 10
+	rx := right(r) - 8
+	if t.src.Commit == "" {
+		if w.action(idDiffOpen, rx-actionSize, r.Y+(r.Height-actionSize)/2, icons.Edit, w.t(i18n.FileviewOpenExternal)+"\tF4", actOpts{}) {
+			p := t.src.Path
+			w.after(func() { w.openExternal(p, w.currentLine(t)) })
+		}
+		rx -= actionSize + 10
+	}
+	info := w.t(i18n.FileviewEditing)
+	if e.dirty {
+		info += "  ·  " + w.t(i18n.FileviewModified)
+	}
+	if e.lineEnd != "" {
+		info += "  ·  " + e.lineEnd
 	}
 	iw := w.p.width(info, fontUI, regular)
 	if rx-iw > x+10 {

@@ -804,6 +804,9 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 
 // currentLine is the 1-based line at the top of the new side.
 func (w *Window) currentLine(t *diffTab) int {
+	if t.edit != nil {
+		return t.edit.caretPos().line + 1
+	}
 	_, lineH, _ := w.metrics()
 	return int(t.y/lineH) + 1
 }

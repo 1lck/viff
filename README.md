@@ -4,7 +4,7 @@
 
 # Viff
 
-**A lightweight, native Git and Subversion desktop client, with a read-only project browser, an English/Chinese interface, and optional AI-written commit messages.**
+**A lightweight, native Git and Subversion desktop client, with a project browser and in-app editing of working-tree text files, an English/Chinese interface, and optional AI-written commit messages.**
 
 Go + Viva. No Electron. No WebView. No bundled browser.
 
@@ -22,9 +22,9 @@ Go + Viva. No Electron. No WebView. No bundled browser.
 
 ## Keep the tool lightweight. Keep the workflow complete.
 
-Git stays the core. Around it, Viff adds a read-only project browser with
-Quick Open, picture diffs, an English/Chinese interface, and optional
-model-written commit messages. It is written in Go with
+Git stays the core. Around it, Viff adds a project browser with Quick Open and
+in-app editing of working-tree text files, picture diffs, an English/Chinese
+interface, and optional model-written commit messages. It is written in Go with
 [Viva](https://github.com/vivaui/viva), renders without a browser engine, and
 runs your installed Git executable.
 
@@ -62,7 +62,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Build a commit        | Check files, folders, or groups; stage files, hunks, or lines; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
 | Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, named ChangeLists, and discovery of repositories below a parent folder |
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |
-| Browse files          | Project tool window with folders, status colours, Quick Open, read-only viewing with an optional code map, blame, and file history                                                      |
+| Browse and edit files | Project tool window with folders, status colours, Quick Open, read-only viewing with an optional code map, blame, file history, and editing of working-tree UTF-8 text files (up to 1 MiB, saved text included) |
 | Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                                                              |
 | Undo mistakes         | Command-Z reverses the last local commit, merge, rebase, checkout, or branch change from this session                                                         |
 | Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, explicit mark-as-resolved, and a copyable context for an external AI tool                  |

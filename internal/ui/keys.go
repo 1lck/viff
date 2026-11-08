@@ -33,7 +33,7 @@ func (w *Window) globalKey(e ui.KeyEvent) bool {
 			return true
 		}
 	case ui.KeyF4:
-		if t != nil && t.src.Working {
+		if t != nil && (t.src.Working || t.src.View && t.src.Commit == "") {
 			w.openExternal(t.src.Path, w.currentLine(t))
 			return true
 		}
@@ -108,9 +108,28 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		} else {
 			w.focusLogSearch()
 		}
+	case ch == "s":
+		t := w.ed.cur()
+		if t == nil || t.edit == nil {
+			return false
+		}
+		w.after(func() { w.saveEdit(t) })
+	case ch == "e":
+		t := w.ed.cur()
+		if t == nil {
+			return false
+		}
+		switch {
+		case t.edit != nil:
+			w.after(func() { w.requestExitEdit(t) })
+		case w.canEdit(t):
+			w.after(func() { w.enterEdit(t) })
+		default:
+			return false
+		}
 	case ch == "w":
 		if len(w.ed.tabs) > 0 {
-			w.closeTab(w.ed.active)
+			w.requestCloseTab(w.ed.active)
 		}
 	case ch == "0":
 		w.toggleCommit()
@@ -141,7 +160,7 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		// Select All in the read-only file view; a focused text field keeps
 		// Command+A for its own text (Viva consumes the chord before this).
 		t := w.ed.cur()
-		if t == nil || !t.selectAllText(w.ws.Settings.DiffUnified) {
+		if t == nil || t.edit != nil || !t.selectAllText(w.ws.Settings.DiffUnified) {
 			return false
 		}
 	case ch == "c" && !shift && !alt:
