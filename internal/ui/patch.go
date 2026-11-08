@@ -98,7 +98,7 @@ func (w *Window) writePatch(dest string, paths []string, staged bool) {
 
 // gitWindowMenu is the Git tool window's action menu.
 func (w *Window) gitWindowMenu() []item {
-	if w.repo() == nil {
+	if w.repo() == nil || w.readOnly() {
 		return nil
 	}
 	items := []item{
@@ -115,6 +115,9 @@ func (w *Window) gitWindowMenu() []item {
 
 // choosePatch asks for a saved patch and applies it.
 func (w *Window) choosePatch(cached bool) {
+	if w.guardReadOnly() {
+		return
+	}
 	paths, err := app.OpenFiles(app.OpenFileOptions{
 		Title: "Apply Patch",
 		Filters: []app.FileFilter{

@@ -2,7 +2,6 @@ package gitcli
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,6 +88,8 @@ func TestRemoteReadOnlyAllowlist(t *testing.T) {
 		{"lfs", "track", "*.bin"},
 		{"symbolic-ref", "HEAD", "refs/heads/x"},
 		{"clean", "-f"},
+		{"diff", "--output=patch.txt"},
+		{"log", "--output=log.txt"},
 		{"update-index", "--refresh"},
 		{"gc"},
 	}
@@ -164,7 +165,7 @@ func TestDiscoverAndReadThroughRemoteTransport(t *testing.T) {
 	if string(c.Data) != "changed\n" || !c.Exists {
 		t.Fatalf("worktree content = %+v", c)
 	}
-	if _, err := r.Run(context.Background(), repo.Root, "commit", "-m", "nope"); !errors.Is(err, &Error{Kind: ErrReadOnlyRemote}) && KindOf(err) != ErrReadOnlyRemote {
+	if _, err := r.Run(context.Background(), repo.Root, "commit", "-m", "nope"); KindOf(err) != ErrReadOnlyRemote {
 		t.Fatalf("write on a remote repository returned %v, want ErrReadOnlyRemote", err)
 	}
 }

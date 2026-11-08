@@ -341,6 +341,13 @@ func (r *Runner) runRemoteScript(ctx context.Context, repo domain.Repo, script s
 // fails closed instead of mutating the server. Only read-only commands and
 // their read-only argument shapes are accepted.
 func remoteReadCommand(args []string) bool {
+	// --output writes a file on the server. None of the read commands Viff
+	// runs need it, so reject it before looking at the subcommand.
+	for _, a := range args {
+		if a == "--output" || strings.HasPrefix(a, "--output=") {
+			return false
+		}
+	}
 	sub, rest, ok := gitSubcommand(args)
 	if !ok {
 		return false
@@ -451,7 +458,7 @@ func readOnlyBranch(rest []string) bool {
 			read = true
 		case "-d", "-D", "-m", "-M", "-c", "-C", "-f", "--delete", "--move",
 			"--copy", "--force", "--set-upstream-to", "-u", "--unset-upstream",
-			"--edit-description":
+			"--edit-description", "--track", "--no-track", "--orphan":
 			return false
 		}
 		if strings.HasPrefix(a, "-") {

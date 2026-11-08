@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/sshpath"
 )
 
 // LFSStatus is what Viff knows about Git LFS in a repository. Viff detects LFS
@@ -89,6 +90,12 @@ func (r *Runner) lfsCapability(ctx context.Context, repo domain.Repo) (string, b
 	if r.LFSCommand == nil {
 		if distro := wslDistroOf(repo.Root); distro != "" {
 			key = "wsl:" + distro
+		} else if sshpath.Is(repo.Root) {
+			if target, err := sshpath.Parse(repo.Root); err == nil {
+				key = "ssh:" + target.String()
+			} else {
+				key = "ssh:" + repo.Root
+			}
 		} else {
 			git, err := r.git()
 			if err != nil {

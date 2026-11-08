@@ -220,6 +220,11 @@ func (r *Runner) Executable() (string, error) {
 // A distro this process has not probed yet is probed here; the answer is then
 // cached like every other probe, so opening the dialog is cheap.
 func (r *Runner) ExecutableIn(ctx context.Context, root string) (string, error) {
+	if sshpath.Is(root) {
+		if target, err := sshpath.Parse(root); err == nil {
+			return "git (on " + target.Host + ")", nil
+		}
+	}
 	distro := wslDistroOf(root)
 	if distro == "" {
 		return r.Executable()
@@ -251,6 +256,11 @@ func (r *Runner) cachedWSLGit(distro string) string {
 // where running wsl.exe — a round trip that can wait on the distribution
 // booting — would stall the frame.
 func (r *Runner) CachedExecutableIn(root string) (string, error) {
+	if sshpath.Is(root) {
+		if target, err := sshpath.Parse(root); err == nil {
+			return "git (on " + target.Host + ")", nil
+		}
+	}
 	distro := wslDistroOf(root)
 	if distro == "" {
 		return r.Executable()
