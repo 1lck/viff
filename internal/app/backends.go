@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"viff/internal/domain"
+	"viff/internal/sshpath"
 	"viff/internal/vcs"
 )
 
@@ -56,6 +57,18 @@ func kindOfProber(p vcs.Prober) domain.Kind {
 // falls back to the first registered backend, whose Discover then reports the
 // real error to the user.
 func (w *Workspace) pickBackend(dir string) Git {
+	if sshpath.Is(dir) {
+		// Detect is a local stat; a remote URL is always Git in this version.
+		if w.Git != nil {
+			return w.Git
+		}
+		for _, t := range w.backends {
+			if t.kind == domain.KindGit {
+				return t.backend
+			}
+		}
+		return nil
+	}
 	for _, t := range w.backends {
 		if t.prober.Detect(dir) {
 			return t.backend

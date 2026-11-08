@@ -1,8 +1,6 @@
 package viffui
 
 import (
-	"path"
-
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
@@ -81,7 +79,6 @@ func (w *Window) conflictPanes(t *diffTab) []conflictPane {
 
 func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	cv := t.res.Conflict
-	rs := w.repo()
 	// In-app resolution needs a readable working-tree text whose markers form
 	// complete blocks. Anything else stays read-only here: a binary file, a
 	// symlink or a submodule has no sides to accept as text, and markers the
@@ -150,7 +147,7 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	bx, by := inner.X+34, inner.Y+38
 	label := w.t(i18n.ConflictActionMarkAsResolved)
 	bw := w.buttonWidth(label)
-	if w.button(idConflictStage, rect(bx, by, bw, 26), label, btnDefault, !resolved && cv.Conflict.Kind.Textual()) {
+	if w.button(idConflictStage, rect(bx, by, bw, 26), label, btnDefault, w.readOnly() || !resolved && cv.Conflict.Kind.Textual()) {
 		p := t.src.Path
 		w.after(func() { w.markResolved(p) })
 	}
@@ -159,7 +156,7 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	}
 	bx += bw + 8
 	ow := w.buttonWidth(w.t(i18n.ConflictActionOpenEditor))
-	if w.button(idConflictOpen, rect(bx, by, ow, 26), w.t(i18n.ConflictActionOpenEditor), btnNormal, !cv.Current.Content.Exists) {
+	if w.button(idConflictOpen, rect(bx, by, ow, 26), w.t(i18n.ConflictActionOpenEditor), btnNormal, w.readOnly() || !cv.Current.Content.Exists) {
 		p := t.src.Path
 		line := 0
 		if t.conflictBlock < len(cv.Markers.Blocks) && len(cv.Markers.Blocks) > 0 {
@@ -170,7 +167,7 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	bx += ow + 8
 	cw := w.buttonWidth(w.t(i18n.ConflictActionCopyPath))
 	if w.button(idConflictCopy, rect(bx, by, cw, 26), w.t(i18n.ConflictActionCopyPath), btnBorderless, false) {
-		full := path.Join(rs.Repo.Root, t.src.Path)
+		full := w.repoPath(t.src.Path)
 		w.after(func() { w.copyText(full) })
 	}
 	bx += cw + 8
@@ -209,7 +206,7 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		label := w.t(i18n.ConflictAcceptTitle, itoa(t.conflictBlock+1), itoa(n))
 		w.p.text(label, rect(rx, inner.Y+72, 230, 26), fontUI, regular, w.pal.TextMuted)
 		rx += 240
-		disabled := t.busy || t.loading
+		disabled := t.busy || t.loading || w.readOnly()
 		choices := []struct {
 			id     ui.ID
 			label  string

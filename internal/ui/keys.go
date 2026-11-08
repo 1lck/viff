@@ -171,7 +171,7 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		}
 	case ch == "c" && shift && w.focused(idChangesList):
 		if sel := w.selectedEntries(); len(sel) > 0 {
-			w.copyText(rs.Repo.Root + "/" + sel[0].entry.Path)
+			w.copyText(w.repoPath(sel[0].entry.Path))
 		}
 	case ch == "c" && alt && shift && w.focused(idLogTable):
 		var hs []string
@@ -255,7 +255,7 @@ func (w *Window) runDue() {
 	if p := w.pendingCrash.Swap(nil); p != nil {
 		w.ShowCrashNotice(*p)
 	}
-	if fetchDue.Swap(false) && w.ws.Repo != nil && !w.ws.Busy() && len(w.ws.Repo.Remotes) > 0 {
+	if fetchDue.Swap(false) && w.ws.Repo != nil && !w.ws.Busy() && !w.ws.ReadOnly() && len(w.ws.Repo.Remotes) > 0 {
 		w.ws.Fetch(true)
 	}
 }

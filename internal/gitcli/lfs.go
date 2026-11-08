@@ -204,7 +204,7 @@ func (r *Runner) lfsPatterns(ctx context.Context, repo domain.Repo) ([]string, e
 	var patterns []string
 	seen := map[string]bool{}
 	for _, rel := range paths {
-		data, readErr := readLFSAttributes(repo.Root, rel)
+		data, readErr := r.readLFSAttributes(ctx, repo, rel)
 		if readErr != nil {
 			err = errors.Join(err, readErr)
 			continue
@@ -224,9 +224,24 @@ func (r *Runner) lfsPatterns(ctx context.Context, repo domain.Repo) ([]string, e
 }
 
 // readLFSAttributes reads one .gitattributes relative to the repository root.
-// A missing file is not an error: most repositories have none.
-func readLFSAttributes(root, rel string) ([]byte, error) {
-	p := filepath.Join(root, filepath.FromSlash(rel))
+// A missing file is not an error: most repositories have none. A remote
+// repository reads the file through its SSH transport, so LFS detection uses
+// the server's attributes rather than this machine's checkout.
+func (r *Runner) readLFSAttributes(ctx context.Context, repo domain.Repo, rel string) ([]byte, error) {
+	if repo.IsSSH() {
+		c, err := r.Read(ctx, repo, RevWorktree, rel)
+		if err != nil {
+			return nil, fmt.Errorf("read .gitattributes: %w", err)
+		}
+		if !c.Exists {
+			return nil, nil
+		}
+		if c.Size > lfsAttributesMaxSize || len(c.Data) > lfsAttributesMaxSize {
+			return nil, fmt.Errorf("read .gitattributes: file is larger than %d bytes", lfsAttributesMaxSize)
+		}
+		return c.Data, nil
+	}
+	p := filepath.Join(repo.Root, filepath.FromSlash(rel))
 	info, err := os.Stat(p)
 	if err != nil {
 		if os.IsNotExist(err) {

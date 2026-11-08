@@ -198,6 +198,12 @@ LogLevel string `json:"logLevel,omitempty"` // "", "info", "debug"
 | ErrHookFailed | `hook.failed` |
 | ErrNoGit | `git.missing` |
 | ErrNoWSL | `wsl.unavailable` |
+| ErrNoSSH | `ssh.missing` |
+| ErrSSHConnect | `ssh.connect` |
+| ErrSSHAuth | `ssh.auth` |
+| ErrSSHHostKey | `ssh.host_key` |
+| ErrSSHGitMissing | `ssh.git_missing` |
+| ErrReadOnlyRemote | `repo.read_only` |
 | ErrNoDistro | `wsl.distro_missing` |
 | ErrNoWSLGit | `wsl.git_missing` |
 | ErrCancelled | `git.cancelled` |

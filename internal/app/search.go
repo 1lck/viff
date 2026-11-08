@@ -77,8 +77,13 @@ func (w *Workspace) SearchContent(query string, opts SearchContentOptions, done 
 	w.searchCancel = cancel
 	go func() {
 		defer cancel()
+		tool := opts.Tool
+		if rs.Repo.IsSSH() {
+			// rg runs on this machine and cannot see the server's working tree.
+			tool = gitcli.SearchGit
+		}
 		res, err := searcher.SearchContent(ctx, rs.Repo, query, gitcli.SearchOptions{
-			Tool:             opts.Tool,
+			Tool:             tool,
 			RipgrepPath:      opts.RipgrepPath,
 			IncludeUntracked: true,
 		})

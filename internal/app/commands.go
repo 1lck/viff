@@ -52,6 +52,13 @@ func (w *Workspace) run(title string, undo *undoSpec, op Op, o RunOptions) {
 	if rs == nil {
 		return
 	}
+	// The first remote version is an observation mode. A write never reaches
+	// the server; the UI hides the actions, and this is the shared backstop for
+	// a keyboard shortcut or a dialog that slipped through.
+	if !o.Read && rs.Repo.IsSSH() {
+		w.Notify(NoticeInfo, w.tr(i18n.AppNoticeReadOnlyRemote), w.tr(i18n.AppNoticeReadOnlyRemoteBody))
+		return
+	}
 	task, ctx, finish := w.startTask(title, !o.Read)
 	repo := rs.Repo
 	go func() {

@@ -14,6 +14,7 @@ import (
 	"viff/internal/gitcli"
 	"viff/internal/i18n"
 	"viff/internal/observability"
+	"viff/internal/sshpath"
 )
 
 // RepoState is everything known about the open repository. Each field is
@@ -109,7 +110,7 @@ func (w *Workspace) Open(dir string, done func(error)) {
 	w.repos.activateSeq++
 	seq := w.repos.activateSeq
 	start := time.Now()
-	_, ctx, finish := w.startTask("Opening "+filepath.Base(dir), false)
+	_, ctx, finish := w.startTask("Opening "+displayBase(dir), false)
 	go func() {
 		backend := w.pickBackend(dir)
 		if backend == nil {
@@ -207,6 +208,10 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 // the Watch function the composition root installs, so the event leaves
 // backend empty rather than guessing between native and polling.
 func (w *Workspace) startWatcher(repo domain.Repo) {
+	if repo.IsSSH() {
+		w.watcher = w.startRemoteWatch(repo)
+		return
+	}
 	if w.Watch == nil {
 		return
 	}
@@ -483,6 +488,12 @@ const lfsRecheckInterval = 30 * time.Second
 // track` writes. Nested attribute files are not part of the key; a metadata
 // refresh or the interval picks their changes up.
 func lfsAttributesKey(root string) string {
+	if sshpath.Is(root) {
+		// There is no local .gitattributes to stat; the key only exists to
+		// collapse local event storms, so a remote refresh re-runs LFS
+		// detection on every metadata refresh instead.
+		return "ssh"
+	}
 	st, err := os.Stat(filepath.Join(root, ".gitattributes"))
 	if err != nil {
 		return "missing"
@@ -608,6 +619,11 @@ func samePath(a, b string) bool {
 	if a == "" || b == "" {
 		return false
 	}
+	if sshpath.Is(a) || sshpath.Is(b) {
+		na, oka := sshpath.Normalize(a)
+		nb, okb := sshpath.Normalize(b)
+		return oka && okb && na == nb
+	}
 	if filepath.Clean(a) == filepath.Clean(b) {
 		return true
 	}
@@ -688,4 +704,13 @@ func (rs *RepoState) Conflict(path string) (domain.Conflict, bool) {
 func exists(root, rel string) bool {
 	_, err := os.Lstat(filepath.Join(root, filepath.FromSlash(rel)))
 	return err == nil
+}
+
+// displayBase is the short name of a repository root for a task title: the
+// folder name locally, the last remote path segment for an SSH repository.
+func displayBase(root string) string {
+	if sshpath.Is(root) {
+		return sshpath.Name(root)
+	}
+	return filepath.Base(root)
 }

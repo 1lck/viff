@@ -115,6 +115,9 @@ func (w *Workspace) SaveFile(req SaveFileRequest, done func(SaveFileResult, erro
 // writeWorkingFile is the save's body, separated so tests can exercise the
 // checks without the task scheduler.
 func writeWorkingFile(repo domain.Repo, req SaveFileRequest) (SaveFileResult, error) {
+	if repo.IsSSH() {
+		return SaveFileResult{}, errors.New("remote repositories are read-only in Viff; edit the file on the server")
+	}
 	full, err := repositoryFilePath(repo, req.Path)
 	if err != nil {
 		return SaveFileResult{}, err

@@ -56,6 +56,18 @@ const (
 	ErrNoDistro
 	// ErrNoWSLGit means the distribution has no git executable.
 	ErrNoWSLGit
+
+	// SSH kinds (ADR 0043). A repository opened over SSH can fail before the
+	// remote Git starts, and the fix differs per failure: install an SSH
+	// client, trust the host key, load a key into the agent, or install Git on
+	// the server. ErrReadOnlyRemote is not a failure: Viff opened the
+	// repository for observation and refuses every write.
+	ErrNoSSH
+	ErrSSHConnect
+	ErrSSHAuth
+	ErrSSHHostKey
+	ErrSSHGitMissing
+	ErrReadOnlyRemote
 )
 
 // Error is a failed backend invocation with the context needed to diagnose it.
@@ -167,6 +179,18 @@ func (k ErrorKind) String() string {
 		return "no_distro"
 	case ErrNoWSLGit:
 		return "no_wsl_git"
+	case ErrNoSSH:
+		return "no_ssh"
+	case ErrSSHConnect:
+		return "ssh_connect"
+	case ErrSSHAuth:
+		return "ssh_auth"
+	case ErrSSHHostKey:
+		return "ssh_host_key"
+	case ErrSSHGitMissing:
+		return "ssh_git_missing"
+	case ErrReadOnlyRemote:
+		return "read_only_remote"
 	}
 	return "other"
 }
@@ -220,6 +244,18 @@ func (k ErrorKind) Code() string {
 		return "wsl.distro_missing"
 	case ErrNoWSLGit:
 		return "wsl.git_missing"
+	case ErrNoSSH:
+		return "ssh.missing"
+	case ErrSSHConnect:
+		return "ssh.connect"
+	case ErrSSHAuth:
+		return "ssh.auth"
+	case ErrSSHHostKey:
+		return "ssh.host_key"
+	case ErrSSHGitMissing:
+		return "ssh.git_missing"
+	case ErrReadOnlyRemote:
+		return "repo.read_only"
 	}
 	return "git.failed"
 }

@@ -45,6 +45,9 @@ var rebaseActions = []struct {
 // openInteractiveRebase loads the commits from c to HEAD and opens the plan
 // editor, as IntelliJ's "Interactively Rebase from Here".
 func (w *Window) openInteractiveRebase(c domain.Commit) {
+	if w.guardReadOnly() {
+		return
+	}
 	w.ws.RebaseCommits(c.Hash, func(list []gitcli.RebaseCommit, base string, err error) {
 		if err != nil {
 			w.ws.NotifyError(w.t(i18n.RebaseCannotFrom, domain.ShortHash(c.Hash)), err)

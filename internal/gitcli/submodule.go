@@ -74,6 +74,9 @@ func submoduleDir(repo domain.Repo, path string) (string, error) {
 // The URL is passed after "--" so it can never be read as an option. The file
 // transport is left to the user's Git configuration: Viff never enables it.
 func (r *Runner) AddSubmodule(ctx context.Context, repo domain.Repo, url, path string, progress func(string)) error {
+	if err := readOnlyRemote(repo, "submodule add"); err != nil {
+		return err
+	}
 	u := strings.TrimSpace(url)
 	switch {
 	case u == "":
@@ -149,6 +152,9 @@ func (r *Runner) submoduleWorktreeDirty(ctx context.Context, repo domain.Repo, s
 // confirm them first. Only a submodule this repository records itself can be
 // deinitialized: a nested one belongs to its parent repository.
 func (r *Runner) DeinitSubmodule(ctx context.Context, repo domain.Repo, path string, force bool) error {
+	if err := readOnlyRemote(repo, "submodule deinit"); err != nil {
+		return err
+	}
 	sm, err := r.directSubmodule(ctx, repo, path)
 	if err != nil {
 		return err
@@ -170,6 +176,9 @@ func (r *Runner) DeinitSubmodule(ctx context.Context, repo domain.Repo, path str
 // set, and ErrSubmoduleNeedsForce says the caller must confirm them first.
 // Only a submodule this repository records itself can be removed.
 func (r *Runner) RemoveSubmodule(ctx context.Context, repo domain.Repo, path string, force bool) error {
+	if err := readOnlyRemote(repo, "submodule remove"); err != nil {
+		return err
+	}
 	sm, err := r.directSubmodule(ctx, repo, path)
 	if err != nil {
 		return err

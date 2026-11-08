@@ -725,6 +725,7 @@ func (w *Window) commitMenu() []item {
 	for i := range sel {
 		hashes[len(sel)-1-i] = sel[i].Hash // oldest first
 	}
+	readOnly := w.readOnly()
 	items := []item{
 		{title: w.t(i18n.ChromeMenuCopyRevision), icon: icons.Copy, shortcut: "⌥⇧⌘C", run: func() {
 			var s []string
@@ -734,8 +735,8 @@ func (w *Window) commitMenu() []item {
 			w.copyText(strings.Join(s, " "))
 		}},
 		sep(),
-		{title: w.t(i18n.ChromeMenuCherryPick), icon: icons.CherryPick, disabled: rs.Operation.Active(), run: func() { w.ws.CherryPick(hashes) }},
-		{title: w.t(i18n.ChromeMenuCheckoutRevision, short), disabled: !single, run: func() {
+		{title: w.t(i18n.ChromeMenuCherryPick), icon: icons.CherryPick, disabled: readOnly || rs.Operation.Active(), run: func() { w.ws.CherryPick(hashes) }},
+		{title: w.t(i18n.ChromeMenuCheckoutRevision, short), disabled: readOnly || !single, run: func() {
 			w.confirmCheckoutRevision(c.Hash)
 		}},
 		{title: w.t(i18n.ChromeMenuShowDiffWorking), icon: icons.Diff, disabled: !single, run: func() { w.compareWithWorking(c.Hash) }},
@@ -752,12 +753,12 @@ func (w *Window) commitMenu() []item {
 	canRewrite := w.ws.Caps.HistoryWriter != nil
 	items = append(items,
 		sep(),
-		item{title: w.t(i18n.ChromeMenuResetHere), icon: icons.Reset, disabled: !canRewrite || !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
-		item{title: w.t(i18n.ChromeMenuRevert), icon: icons.Revert, disabled: !canRewrite || rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
-		item{title: w.t(i18n.ChromeMenuInteractiveRebase), disabled: !canRewrite || !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
+		item{title: w.t(i18n.ChromeMenuResetHere), icon: icons.Reset, disabled: readOnly || !canRewrite || !single || branch == "" && !rs.Status.Branch.Detached, run: func() { w.openReset(c) }},
+		item{title: w.t(i18n.ChromeMenuRevert), icon: icons.Revert, disabled: readOnly || !canRewrite || rs.Operation.Active(), run: func() { w.ws.RevertCommits(reverse(hashes)) }},
+		item{title: w.t(i18n.ChromeMenuInteractiveRebase), disabled: readOnly || !canRewrite || !single || branch == "" || rs.Operation.Active(), run: func() { w.openInteractiveRebase(c) }},
 	)
 	if canRewrite && single && isHead && len(c.Parents) == 1 && rs.Status.Branch.Ahead > 0 {
-		items = append(items, item{title: w.t(i18n.ChromeMenuUndoCommit), icon: icons.Undo, run: func() {
+		items = append(items, item{title: w.t(i18n.ChromeMenuUndoCommit), icon: icons.Undo, disabled: readOnly, run: func() {
 			w.confirm(w.t(i18n.ChromeDialogUndoCommit), w.t(i18n.ChromeDialogUndoCommitMessage, c.Subject), w.t(i18n.ChromeDialogUndoCommit), func() {
 				w.ws.Reset(gitcli.ResetSoft, "HEAD~1")
 			})
@@ -768,21 +769,21 @@ func (w *Window) commitMenu() []item {
 		// a commit with exactly one parent and no operation in flight.
 		canEdit := len(c.Parents) == 1 && !rs.Operation.Active()
 		items = append(items, sep(),
-			item{title: w.t(i18n.ChromeMenuEditCommitMessage), disabled: !canEdit, run: func() { w.openRewordCommit(c) }},
-			item{title: w.t(i18n.ChromeMenuSquashIntoParent), disabled: !canEdit, run: func() { w.openSquashCommit(c) }},
-			item{title: w.t(i18n.ChromeMenuDropCommit), disabled: !canEdit, run: func() { w.openDropCommit(c) }},
+			item{title: w.t(i18n.ChromeMenuEditCommitMessage), disabled: readOnly || !canEdit, run: func() { w.openRewordCommit(c) }},
+			item{title: w.t(i18n.ChromeMenuSquashIntoParent), disabled: readOnly || !canEdit, run: func() { w.openSquashCommit(c) }},
+			item{title: w.t(i18n.ChromeMenuDropCommit), disabled: readOnly || !canEdit, run: func() { w.openDropCommit(c) }},
 		)
 	}
 	items = append(items, sep(),
-		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: !single || !w.canWriteBranches(), run: func() { w.openNewBranch(c.Hash, short) }},
-		item{title: w.t(i18n.ChromeMenuNewTag), icon: icons.BranchLabel, disabled: !single || w.ws.Caps.References == nil, run: func() { w.openNewTag(c.Hash, short) }},
+		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: readOnly || !single || !w.canWriteBranches(), run: func() { w.openNewBranch(c.Hash, short) }},
+		item{title: w.t(i18n.ChromeMenuNewTag), icon: icons.BranchLabel, disabled: readOnly || !single || w.ws.Caps.References == nil, run: func() { w.openNewTag(c.Hash, short) }},
 	)
 	// Publishing a commit is a Git-shaped step: a backend whose commit is the
 	// server operation has nothing to push, so the entry is left out instead of
 	// opening an action that fails.
 	if w.ws.Caps.SeparatePush {
 		// A merge commit has more than one history, so "up to" is ambiguous.
-		items = append(items, item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }})
+		items = append(items, item{title: w.t(i18n.ChromeMenuPushUpToCommit), icon: icons.Push, disabled: readOnly || !single || len(c.Parents) > 1 || len(rs.Remotes) == 0, run: func() { w.openPushUpToCommit(c) }})
 	}
 	items = append(items, item{title: w.t(i18n.ChromeMenuBrowseAtRevision), icon: icons.Folder, disabled: !single, run: func() { w.openRevisionBrowser(c) }})
 	// The service name comes from the remote, so the entry reads "Open Commit on

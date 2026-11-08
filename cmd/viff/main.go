@@ -19,6 +19,7 @@ import (
 	"viff/internal/gitcli"
 	"viff/internal/observability"
 	"viff/internal/platform"
+	"viff/internal/sshpath"
 	"viff/internal/storage"
 	"viff/internal/svncli"
 	viffui "viff/internal/ui"
@@ -245,7 +246,9 @@ func run() (code int) {
 	// system that has to boot first, and Discover reports failures anyway.
 	dir := ""
 	if len(os.Args) > 1 {
-		if abs, err := filepath.Abs(os.Args[1]); err == nil {
+		if sshpath.Is(os.Args[1]) {
+			dir = os.Args[1]
+		} else if abs, err := filepath.Abs(os.Args[1]); err == nil {
 			dir = abs
 		}
 	} else if len(settings.Recent) > 0 {

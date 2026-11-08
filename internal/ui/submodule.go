@@ -15,6 +15,10 @@ import (
 // Viff shows one repository per window, so this is the same as opening the
 // folder from the welcome screen.
 func (w *Window) openSubmodule(path string) {
+	if w.readOnly() {
+		w.ws.Notify(vapp.NoticeInfo, w.t(i18n.ChromeStatusReadOnly), w.t(i18n.WorkspaceTipReadOnly))
+		return
+	}
 	rs := w.repo()
 	if rs == nil {
 		return
@@ -33,6 +37,9 @@ func (w *Window) openSubmodule(path string) {
 // deinit and remove. The list reloads after a write and every dialog reopens
 // it from Git, so what is shown is the repository's state and never a guess.
 func (w *Window) openSubmodules() {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if rs == nil {
 		return
@@ -216,6 +223,9 @@ func (w *Window) paintSubmoduleRow(r ui.Rect, i int, sm domain.Submodule, direct
 
 // gitMenu is the Git tool window's options menu.
 func (w *Window) gitMenu() []item {
+	if w.readOnly() {
+		return nil
+	}
 	rs := w.repo()
 	if rs == nil {
 		return nil

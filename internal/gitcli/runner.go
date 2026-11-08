@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"viff/internal/process"
+	"viff/internal/sshpath"
 	"viff/internal/vcs"
 	"viff/internal/wslpath"
 )
@@ -53,6 +54,16 @@ const (
 	ErrNoWSL    = vcs.ErrNoWSL
 	ErrNoDistro = vcs.ErrNoDistro
 	ErrNoWSLGit = vcs.ErrNoWSLGit
+	// ErrNoSSH, ErrSSHConnect, ErrSSHAuth, ErrSSHHostKey and ErrSSHGitMissing
+	// are the ways a remote repository fails before its Git runs; the fixes
+	// differ, so they keep separate codes. ErrReadOnlyRemote is the refusal of
+	// every write on a repository opened for observation.
+	ErrNoSSH          = vcs.ErrNoSSH
+	ErrSSHConnect     = vcs.ErrSSHConnect
+	ErrSSHAuth        = vcs.ErrSSHAuth
+	ErrSSHHostKey     = vcs.ErrSSHHostKey
+	ErrSSHGitMissing  = vcs.ErrSSHGitMissing
+	ErrReadOnlyRemote = vcs.ErrReadOnlyRemote
 )
 
 // KindOf returns the error kind of err, ErrOther for foreign errors.
@@ -131,6 +142,10 @@ type Runner struct {
 	Env []string
 	// Log, when set, receives one line per finished command.
 	Log func(dir string, args []string, took time.Duration, err error)
+	// SSH is the transport for repositories opened over ssh://. It is nil in
+	// production, where the system ssh runs the command; tests replace it with
+	// a local transport so the rest of the stack runs on every platform.
+	SSH SSHTransport
 	// LFSCommand runs one git-lfs subcommand; args are those after "lfs". It
 	// is nil in production, where the real executable runs through Path, and
 	// tests set it to simulate a missing or installed git-lfs.
@@ -293,6 +308,25 @@ func (r *Runner) git() (string, error) {
 var baseArgs = []string{"-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "log.showSignature=false"}
 
 func (r *Runner) command(ctx context.Context, dir string, args []string) (*exec.Cmd, error) {
+	if sshpath.Is(dir) {
+		// A remote repository is read-only in this version. The allowlist is
+		// the last line of defence: the application also hides write actions,
+		// but a command that slips through must never reach the server.
+		if !remoteReadCommand(args) {
+			return nil, &Error{Kind: ErrReadOnlyRemote, Args: args, Stderr: "remote repositories are read-only in Viff"}
+		}
+		target, err := sshpath.Parse(dir)
+		if err != nil {
+			return nil, &Error{Kind: ErrOther, Args: args, Err: err}
+		}
+		// Local Git settings (signing, credential helper, SSH command) point at
+		// programs and paths on this machine; the server's own configuration
+		// applies to a remote repository, as it does for a WSL checkout.
+		full := make([]string, 0, len(baseArgs)+len(args))
+		full = append(full, baseArgs...)
+		full = append(full, args...)
+		return r.ssh().Command(ctx, target, target.Path, full)
+	}
 	if wslpath.Is(dir) {
 		// A WSL repository runs the distro's own git through wsl.exe; see
 		// wsl_windows.go and docs/decisions/0038-wsl-repositories.md.
@@ -365,7 +399,7 @@ func (r *Runner) RunInput(ctx context.Context, dir string, stdin []byte, args ..
 	}
 	err = cmd.Run()
 	if err != nil {
-		err = r.wrap(ctx, args, err, stderr.buf.String(), stdout.String())
+		err = r.wrap(ctx, dir, args, err, stderr.buf.String(), stdout.String())
 	}
 	if r.Log != nil {
 		r.Log(dir, args, time.Since(start), err)
@@ -388,7 +422,7 @@ func (r *Runner) RunProgress(ctx context.Context, dir string, progress func(line
 		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, r.wrap(ctx, args, err, "", "")
+		return nil, r.wrap(ctx, dir, args, err, "", "")
 	}
 	stderr := &limitedBuffer{limit: stderrLimit}
 	buf := make([]byte, 4096)
@@ -415,7 +449,7 @@ func (r *Runner) RunProgress(ctx context.Context, dir string, progress func(line
 	}
 	err = cmd.Wait()
 	if err != nil {
-		err = r.wrap(ctx, args, err, stderr.buf.String(), stdout.String())
+		err = r.wrap(ctx, dir, args, err, stderr.buf.String(), stdout.String())
 	}
 	if r.Log != nil {
 		r.Log(dir, args, time.Since(start), err)
@@ -423,7 +457,7 @@ func (r *Runner) RunProgress(ctx context.Context, dir string, progress func(line
 	return stdout.Bytes(), err
 }
 
-func (r *Runner) wrap(ctx context.Context, args []string, err error, stderr, stdout string) error {
+func (r *Runner) wrap(ctx context.Context, dir string, args []string, err error, stderr, stdout string) error {
 	exit := -1
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
@@ -433,7 +467,54 @@ func (r *Runner) wrap(ctx context.Context, args []string, err error, stderr, std
 	// it execs passes UTF-8 through; the BOM decides (see wsl.go). Git's own
 	// output never starts with one, so decoding unconditionally is safe.
 	stderr, stdout = decodeWSLText(stderr), decodeWSLText(stdout)
-	return &Error{Kind: classify(stderr+"\n"+stdout, exit, ctx.Err()), Args: args, ExitCode: exit, Stderr: stderr, Stdout: stdout, Err: err}
+	kind := classify(stderr+"\n"+stdout, exit, ctx.Err())
+	if kind == ErrOther && sshpath.Is(dir) {
+		if sshKind, ok := classifySSH(stderr, stdout, exit); ok {
+			kind = sshKind
+		}
+	}
+	return &Error{Kind: kind, Args: args, ExitCode: exit, Stderr: stderr, Stdout: stdout, Err: err}
+}
+
+// classifySSH separates the failures that happen before the remote Git runs.
+// ssh itself exits 255 when it cannot connect or the host key or key is
+// rejected; a remote Git that fails for its own reasons exits with Git's code
+// (128 and friends), so its messages are not stolen by these patterns.
+func classifySSH(stderr, stdout string, exit int) (ErrorKind, bool) {
+	s := strings.ToLower(stderr + "\n" + stdout)
+	switch {
+	case exit == 255 && strings.Contains(s, "host key verification failed"):
+		return ErrSSHHostKey, true
+	case exit == 255 && strings.Contains(s, "remote host identification has changed"):
+		return ErrSSHHostKey, true
+	case exit == 255 && strings.Contains(s, "no matching host key"):
+		return ErrSSHHostKey, true
+	case exit == 255 && strings.Contains(s, "permission denied (publickey"):
+		return ErrSSHAuth, true
+	case exit == 255 && strings.Contains(s, "permission denied (password"):
+		return ErrSSHAuth, true
+	case exit == 255 && strings.Contains(s, "permission denied (keyboard-interactive"):
+		return ErrSSHAuth, true
+	case exit == 255 && strings.Contains(s, "too many authentication failures"):
+		return ErrSSHAuth, true
+	case (exit == 127 || exit == 126) && (strings.Contains(s, "git: command not found") || strings.Contains(s, "git: not found") || strings.Contains(s, "git: no such file")):
+		return ErrSSHGitMissing, true
+	case exit == 255 && (strings.Contains(s, "could not resolve hostname") ||
+		strings.Contains(s, "connection refused") ||
+		strings.Contains(s, "connection timed out") ||
+		strings.Contains(s, "operation timed out") ||
+		strings.Contains(s, "network is unreachable") ||
+		strings.Contains(s, "no route to host") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "connection closed") ||
+		strings.Contains(s, "broken pipe") ||
+		strings.Contains(s, "kex_exchange_identification") ||
+		strings.Contains(s, "timeout, server")):
+		return ErrSSHConnect, true
+	case exit == 255 && strings.Contains(s, "ssh:"):
+		return ErrSSHConnect, true
+	}
+	return ErrOther, false
 }
 
 // Stream starts git and returns its stdout for incremental reading. Closing
@@ -454,9 +535,9 @@ func (r *Runner) Stream(ctx context.Context, dir string, args ...string) (*Strea
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		cancel()
-		return nil, r.wrap(ctx, args, err, "", "")
+		return nil, r.wrap(ctx, dir, args, err, "", "")
 	}
-	return &Stream{cmd: cmd, out: out, cancel: cancel, stderr: stderr, args: args, runner: r, ctx: ctx}, nil
+	return &Stream{cmd: cmd, out: out, cancel: cancel, stderr: stderr, args: args, dir: dir, runner: r, ctx: ctx}, nil
 }
 
 // Stream is a running git process whose stdout is read incrementally.
@@ -466,6 +547,7 @@ type Stream struct {
 	cancel context.CancelFunc
 	stderr *limitedBuffer
 	args   []string
+	dir    string
 	runner *Runner
 	ctx    context.Context
 	closed bool
@@ -482,7 +564,7 @@ func (s *Stream) Close() error {
 	s.cancel()
 	err := s.cmd.Wait()
 	if err != nil && s.ctx.Err() == nil {
-		return s.runner.wrap(s.ctx, s.args, err, s.stderr.buf.String(), "")
+		return s.runner.wrap(s.ctx, s.dir, s.args, err, s.stderr.buf.String(), "")
 	}
 	return nil
 }
@@ -495,7 +577,7 @@ func (s *Stream) Wait() error {
 	s.closed = true
 	err := s.cmd.Wait()
 	if err != nil {
-		err = s.runner.wrap(s.ctx, s.args, err, s.stderr.buf.String(), "")
+		err = s.runner.wrap(s.ctx, s.dir, s.args, err, s.stderr.buf.String(), "")
 	}
 	s.cancel()
 	return err

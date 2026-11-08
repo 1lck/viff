@@ -2,7 +2,6 @@ package viffui
 
 import (
 	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/i18n"
 	"viff/internal/platform"
+	"viff/internal/sshpath"
 )
 
 // Window is the one main window: it owns view state (selection, scroll,
@@ -860,12 +860,14 @@ func (w *Window) openRepo(dir string) {
 		w.ws.Open(dir, func(err error) {
 			switch {
 			case err == nil:
-			case vapp.IsNotRepository(err):
+			case vapp.IsNotRepository(err) && !sshpath.Is(dir):
 				// A folder that is not itself a repository may contain several
-				// repositories: offer discovery instead of Git's raw error.
+				// repositories: offer discovery instead of Git's raw error. A
+				// remote path is one repository by contract; scanning it would
+				// start a second, unrelated transport.
 				w.after(func() { w.openRepositoryDiscovery(dir) })
 			default:
-				w.ws.NotifyError("Cannot open "+filepath.Base(dir), err)
+				w.ws.NotifyError("Cannot open "+repoRootName(dir), err)
 			}
 		})
 	})

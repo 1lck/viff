@@ -41,18 +41,27 @@ var (
 // RewordCommit replaces one commit's message and keeps its content. The commits
 // after it are replayed; local changes are stashed and restored.
 func (r *Runner) RewordCommit(ctx context.Context, repo domain.Repo, hash, message string) (Output, error) {
+	if err := readOnlyRemote(repo, "reword"); err != nil {
+		return Output{}, err
+	}
 	return r.rewriteHistory(ctx, repo, hash, message, RebaseReword)
 }
 
 // SquashCommit folds one commit into its parent and gives the combined commit
 // a new message. Both commits' content stays.
 func (r *Runner) SquashCommit(ctx context.Context, repo domain.Repo, hash, message string) (Output, error) {
+	if err := readOnlyRemote(repo, "squash"); err != nil {
+		return Output{}, err
+	}
 	return r.rewriteHistory(ctx, repo, hash, message, RebaseSquash)
 }
 
 // DropCommit removes one commit from the branch; the commits after it are
 // replayed without it and its changes disappear from the working tree.
 func (r *Runner) DropCommit(ctx context.Context, repo domain.Repo, hash string) (Output, error) {
+	if err := readOnlyRemote(repo, "drop"); err != nil {
+		return Output{}, err
+	}
 	return r.rewriteHistory(ctx, repo, hash, "", RebaseDrop)
 }
 

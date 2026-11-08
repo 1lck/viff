@@ -24,6 +24,9 @@ const worktreeRowH = 48
 // openWorktrees shows the worktree list, loading it first when the repository
 // state has not been read yet.
 func (w *Window) openWorktrees() {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if rs == nil {
 		return

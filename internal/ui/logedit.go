@@ -47,6 +47,9 @@ func (m *commitMessageEditor) paint(w *Window, id ui.ID, r ui.Rect) {
 
 // openRewordCommit edits the message of c and keeps its content.
 func (w *Window) openRewordCommit(c domain.Commit) {
+	if w.guardReadOnly() {
+		return
+	}
 	w.ws.CommitMessage(c.Hash, func(message string, err error) {
 		if err != nil {
 			w.ws.NotifyError("Cannot load the commit message", err)
@@ -61,6 +64,9 @@ func (w *Window) openRewordCommit(c domain.Commit) {
 // openSquashCommit folds c into its parent and asks for the combined message,
 // prefilled with the parent's message followed by the squashed one.
 func (w *Window) openSquashCommit(c domain.Commit) {
+	if w.guardReadOnly() {
+		return
+	}
 	if len(c.Parents) != 1 {
 		return
 	}
@@ -87,6 +93,9 @@ func (w *Window) openSquashCommit(c domain.Commit) {
 
 // openDropCommit removes c after a confirmation that names what is lost.
 func (w *Window) openDropCommit(c domain.Commit) {
+	if w.guardReadOnly() {
+		return
+	}
 	short := domain.ShortHash(c.Hash)
 	w.confirm(w.t(i18n.WorkspaceDropCommitTitle), w.t(i18n.WorkspaceDropCommitBody, short, c.Subject),
 		w.t(i18n.WorkspaceDropCommitTitle), func() { w.ws.DropCommit(c.Hash) })

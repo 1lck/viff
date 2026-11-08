@@ -562,7 +562,7 @@ func (w *Window) paintTabs(r ui.Rect) {
 				}},
 				sep(),
 				{title: w.t(i18n.WorkspaceMenuKeepTabOpen), disabled: !t.preview, run: func() { t.preview = false }},
-				{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, run: func() { w.copyText(path.Join(w.repo().Repo.Root, t.src.Path)) }},
+				{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, run: func() { w.copyText(w.repoPath(t.src.Path)) }},
 			})
 		})
 		x = right(tr) + 4
@@ -692,6 +692,10 @@ func fileIcon(p string) icons.Pair {
 func (w *Window) openExternal(rel string, line int) {
 	rs := w.repo()
 	if rs == nil {
+		return
+	}
+	if rs.Repo.IsSSH() {
+		w.ws.Notify(vapp.NoticeInfo, w.t(i18n.ChromeStatusReadOnly), w.t(i18n.WorkspaceTipReadOnly))
 		return
 	}
 	full := path.Join(rs.Repo.Root, rel)

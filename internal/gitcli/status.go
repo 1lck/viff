@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/sshpath"
 )
 
 // Discover finds the repository containing dir.
@@ -22,14 +23,22 @@ func (r *Runner) Discover(ctx context.Context, dir string) (domain.Repo, error) 
 	if len(lines) < 3 {
 		return domain.Repo{}, &Error{Kind: ErrNotRepository, Args: []string{"rev-parse"}, Stderr: "not a git repository (bare repositories are not supported)"}
 	}
-	// A WSL git reports Linux absolute paths; the repository identity is the
-	// \\wsl.localhost spelling so every layer outside gitcli sees one path
-	// domain (wsl.go). Repositories outside WSL pass through unchanged.
+	// A WSL git reports Linux absolute paths and a remote git reports paths on
+	// the server; the identity is the Windows UNC spelling or the ssh:// URL,
+	// so every layer outside gitcli sees one path domain (wsl.go, ssh.go).
+	// Repositories outside those domains pass through unchanged.
+	identity := func(p string) string {
+		v := toIdentityPath(dir, p)
+		if sshpath.Is(dir) {
+			return v
+		}
+		return filepath.Clean(v)
+	}
 	repo := domain.Repo{
-		Root:      filepath.Clean(toWinPath(dir, lines[0])),
+		Root:      identity(lines[0]),
 		Kind:      domain.KindGit,
-		MetaDir:   filepath.Clean(toWinPath(dir, lines[1])),
-		CommonDir: filepath.Clean(toWinPath(dir, lines[2])),
+		MetaDir:   identity(lines[1]),
+		CommonDir: identity(lines[2]),
 	}
 	return repo, nil
 }
@@ -180,6 +189,10 @@ func parseBranchHeader(b *domain.BranchStatus, line string) {
 
 // Operation reads the in-progress operation from the Git directory.
 func (r *Runner) Operation(ctx context.Context, repo domain.Repo) domain.Operation {
+	if repo.IsSSH() {
+		op, _ := r.ssh().Operation(ctx, repo)
+		return op
+	}
 	gd := repo.MetaDir
 	read := func(name string) string {
 		b, err := os.ReadFile(filepath.Join(gd, name))

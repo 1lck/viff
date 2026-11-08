@@ -102,6 +102,9 @@ func ValidateRebasePlan(steps []RebaseStep) error {
 // followed by an amend with the new message, which keeps the author and runs
 // the user's hooks. Local changes are stashed and restored by --autostash.
 func (r *Runner) InteractiveRebase(ctx context.Context, repo domain.Repo, base string, steps []RebaseStep) (Output, error) {
+	if err := readOnlyRemote(repo, "rebase"); err != nil {
+		return Output{}, err
+	}
 	if err := ValidateRebasePlan(steps); err != nil {
 		return Output{}, err
 	}

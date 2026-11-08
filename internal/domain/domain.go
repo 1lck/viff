@@ -68,6 +68,11 @@ func (r Repo) IsLinkedWorktree() bool {
 	return r.Kind == KindGit && r.CommonDir != "" && r.CommonDir != r.MetaDir
 }
 
+// IsSSH reports a repository Viff opens on another machine over SSH. The
+// working tree is read-only in this version: Git runs on the server, and every
+// command that would change its state is refused.
+func (r Repo) IsSSH() bool { return strings.HasPrefix(r.Root, "ssh://") }
+
 // RefKind classifies a reference.
 type RefKind uint8
 

@@ -28,5 +28,8 @@ func (w *Window) updateBranchFromRemote(r domain.Ref) {
 
 // fetchFullHistory offers to complete a shallow clone's history.
 func (w *Window) fetchFullHistory() {
+	if w.guardReadOnly() {
+		return
+	}
 	w.ws.UnshallowRepository()
 }

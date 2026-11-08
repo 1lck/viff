@@ -60,6 +60,9 @@ type (
 // The index is never touched: Git still reports the path as unmerged, so the
 // caller can keep using the ordinary "Mark as Resolved" step to stage it.
 func (r *Runner) ResolveConflictBlock(ctx context.Context, repo domain.Repo, req ConflictResolveRequest) (ConflictResolveResult, error) {
+	if err := readOnlyRemote(repo, "resolve"); err != nil {
+		return ConflictResolveResult{}, err
+	}
 	var result ConflictResolveResult
 	if !req.Choice.Valid() {
 		return result, fmt.Errorf("unknown conflict choice %d", req.Choice)

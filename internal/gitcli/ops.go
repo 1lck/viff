@@ -38,6 +38,9 @@ const (
 )
 
 func (r *Runner) write(ctx context.Context, repo domain.Repo, args ...string) error {
+	if err := readOnlyRemote(repo, "write"); err != nil {
+		return err
+	}
 	_, err := r.Run(ctx, repo.Root, args...)
 	return err
 }
@@ -81,6 +84,9 @@ func (r *Runner) Revert(ctx context.Context, repo domain.Repo, paths []string) e
 // writePaths passes paths through a pathspec file on stdin, so any number of
 // paths with any characters reach Git unchanged and literal.
 func (r *Runner) writePaths(ctx context.Context, repo domain.Repo, args []string, paths []string) error {
+	if err := readOnlyRemote(repo, "write"); err != nil {
+		return err
+	}
 	input := strings.Join(paths, "\x00")
 	full := append([]string{"--literal-pathspecs"}, args...)
 	full = append(full, "--pathspec-from-file=-", "--pathspec-file-nul")

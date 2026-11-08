@@ -28,6 +28,12 @@
 | `branch.not_merged` | 删除分支被拒：分支上还有未合并的提交 | 先合并/变基，或确认无需保留后强制删除；删除前记录分支名与未合并提交 | 分支名、未合并提交数或短哈希、`git log --oneline <分支>` 片段 |
 | `commit.empty` | 没有可提交的改动（暂存区为空，或改动被忽略规则排除） | 先暂存文件；检查 `.gitignore` 与文件状态；amend 场景确认是否本来就无改动 | 暂存区状态、文件列表、操作类型（普通提交/amend） |
 | `hook.failed` | Git hook 失败（pre-commit、commit-msg、pre-push 等） | 阅读 hook 输出；修复 hook 或在提交对话框勾选跳过 hooks（跳过前确认代价）。检查 hook 脚本权限与解释器 | hook 名称、原始输出、操作系统、是否通过终端可复现 |
+| `ssh.missing` | 找不到 `ssh` 可执行文件 | 安装 OpenSSH 客户端：Windows 在“设置 → 应用 → 可选功能”安装 OpenSSH Client；macOS/Linux 通常自带。确认 `ssh -V` 能在终端运行 | 操作系统、`ssh -V` 输出、`PATH` 大致情况 |
+| `ssh.connect` | 连接服务器失败：DNS、端口、网络、超时或连接被断开 | 检查主机/端口；在终端运行 `ssh <host>` 与 `ssh -p <port> <host>`；确认 VPN、防火墙与服务器 sshd 状态 | 主机名（可脱敏）、端口、`ssh -v <host>` 末尾输出、操作系统 |
+| `ssh.auth` | SSH 认证失败：agent 里没有可用 key，或 key 不被服务器接受 | 在终端确认 `ssh -T <host>` 能通过、`ssh-add -l` 有 key；Viff 不提供密码/口令输入框，需要 key 已加载到 agent 或 `~/.ssh/config` 的 IdentityFile | 主机名、`ssh-add -l` 的 key 数量与类型（不要贴 key 内容）、`ssh -v` 的认证方法摘要 |
+| `ssh.host_key` | 服务器主机密钥未信任或已变化 | 先在终端执行一次 `ssh <host>`，确认指纹后重试；如果提示公钥已变化，先确认服务器是否重装或中间人风险，不要盲目删除 known_hosts | 主机名、终端 `ssh <host>` 的提示文本、是否最近重装过服务器 |
+| `ssh.git_missing` | 服务器上没有 Git，或非交互式 SSH 的 PATH 找不到 git | 在服务器上运行 `git --version`；若只在登录 shell 里有，检查非交互式 PATH（例如 `~/.ssh/environment` 或绝对路径） | 服务器系统、服务器内 `git --version` 输出 |
+| `repo.read_only` | 试图在只读远程仓库上执行写操作 | 远程仓库在当前版本只读：在服务器上或另一个终端里修改/提交；fetch/pull/push 也不会执行 | 操作名称、仓库 URL（可脱敏）、错误码 |
 | `git.missing` | 找不到 `git` 可执行文件 | 安装 Git：macOS 安装 Git 或 Xcode Command Line Tools；Windows 安装 Git for Windows；Linux 用包管理器。确认 Git 在 `PATH` 中，重启 Viff | 操作系统、安装方式、终端 `git --version` 输出、`PATH` 大致情况（不含敏感路径） |
 | `wsl.unavailable` | 打开 WSL 仓库，但本机没有可用的 WSL | 在终端运行 `wsl --install`，安装完成后重启；确认 `wsl.exe` 在 `PATH` 中且 `wsl --status` 可用 | Windows 版本、`wsl --status` 输出、`wsl.exe --version` |
 | `wsl.distro_missing` | 路径里的发行版名不存在 | 检查路径写法：`\\wsl.localhost\<发行版>\home\<用户>\<仓库>`；用 `wsl --list` 确认发行版名称 | 完整的仓库路径、`wsl --list --verbose` 输出（可脱敏用户名） |
@@ -66,6 +72,13 @@
 - SSH：确认 `ssh -T git@<主机>` 能通过、SSH agent 里有可用 key、remote 用的是 SSH 地址。
 - **不要**把令牌、口令、完整 remote URL 贴进 Issue；诊断包默认已隐藏这类信息，但仍请预览。
 - 附上错误码、remote 主机名和 Git 原始错误摘要。
+
+### 远程仓库打不开（`ssh.*` / `repo.read_only`）
+
+- 先在终端确认 `ssh <host>` 能登录、`ssh -T <host>` 不需要密码、`git -C <服务器路径> status` 能运行。Viff 用系统 `ssh`，继承 `~/.ssh/config`、agent 与 known_hosts，但不提供密码/口令弹窗。
+- 首次连接新主机需要先在终端信任主机密钥（`ssh.host_key`）；macOS 从 Dock 启动时可能拿不到终端里的 `SSH_AUTH_SOCK`，可先用 `ssh-add -l` 确认 agent 在当前会话可用。
+- 服务器需要 Linux/macOS 与 POSIX `sh`；Windows 的 OpenSSH 服务器不在当前范围。远程仓库只读：编辑、暂存、提交、fetch/pull/push、终端、外部打开、ripgrep 与交互式 rebase 都不可用，请到服务器上操作。
+- 远程刷新是每 5 秒一次的轮询；网络慢时状态与 diff 会滞后，属预期。断网后恢复连接需要手动刷新或等待下一次轮询。
 
 ### Git hooks 失败（`hook.failed`）
 

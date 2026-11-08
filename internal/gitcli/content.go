@@ -59,6 +59,9 @@ func objectName(rev Revision, path string) string {
 // Read loads path at rev, bounded by ContentLimit.
 func (r *Runner) Read(ctx context.Context, repo domain.Repo, rev Revision, path string) (Content, error) {
 	if rev.Kind == "worktree" {
+		if repo.IsSSH() {
+			return r.ssh().ReadFile(ctx, repo, path)
+		}
 		return readWorktree(filepath.Join(repo.Root, filepath.FromSlash(path)))
 	}
 	name := objectName(rev, path)
