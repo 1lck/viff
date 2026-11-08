@@ -285,9 +285,15 @@ func (w *Window) TrayMenu() []app.MenuItem {
 		{Title: "Show Viff", OnSelect: w.ShowFromTray},
 		{Separator: true},
 		{Title: "Quit Viff", OnSelect: func() {
-			if quit != nil {
-				quit()
+			if quit == nil {
+				return
 			}
+			if w.dirtyEdit() != nil {
+				// The menu can be used while the window is hidden; a dialog
+				// behind it would ask nobody.
+				w.ShowFromTray()
+			}
+			w.confirmDiscardEdits(quit)
 		}},
 	}
 }
@@ -332,6 +338,7 @@ func (w *Window) Config() app.Config {
 		Invalidator:    &w.inv,
 		OnWake:         w.onWake,
 		OnClosed:       w.onClosed,
+		OnCloseRequest: w.onCloseRequest,
 	}
 	// Origin reopens the window where it was left, including on a second
 	// display: Viva places the content area there, keeps it on a connected
@@ -394,6 +401,26 @@ func (w *Window) ShowCrashNotice(crashPath string) {
 	w.ws.Notify(vapp.NoticeWarning, "Viff closed unexpectedly last time", body,
 		vapp.NoticeAction{Title: "Report a Problem…", Run: w.openReportProblem},
 		vapp.NoticeAction{Title: "Open Log Folder", Run: w.openLogFolder})
+}
+
+// onCloseRequest keeps the window open while an editor buffer has unsaved
+// text. Before this, closing the window was the one common exit that discarded
+// an edit silently.
+func (w *Window) onCloseRequest(allow func()) {
+	if w.dirtyEdit() == nil {
+		allow()
+		return
+	}
+	w.confirmDiscardEdits(allow)
+	// The native close request is not a paint; the confirmation needs one.
+	w.Invalidate()
+}
+
+// ConfirmQuit is the application-level quit guard: macOS menu and Dock Quit
+// reach the application, not the window's close button. It shares the editor
+// confirmation with the window close request.
+func (w *Window) ConfirmQuit(allow func()) {
+	w.onCloseRequest(allow)
 }
 
 func (w *Window) onClosed() {
@@ -568,6 +595,7 @@ func (w *Window) syncRepo() {
 	w.cm.reset()
 	setText(w.cm.msg, w.commitDrafts[w.lastRoot])
 	w.fm.reset()
+	w.clearEditInput()
 	w.ed.reset()
 	w.lg.reset()
 	w.st.sel = -1
@@ -755,6 +783,25 @@ func (w *Window) textInput(ctx app.TextInputContext) *app.TextInput {
 	if ctx.ID == idTerminal && w.termOpen && w.term.emu != nil {
 		return w.ensureTerminalInput()
 	}
+	if ctx.ID == idDiffText {
+		if t := w.ed.cur(); t != nil && t.edit != nil {
+			if w.inputs == nil {
+				w.inputs = make(map[ui.ID]*app.TextInput)
+			}
+			in := w.inputs[ctx.ID]
+			if in == nil {
+				in = &app.TextInput{}
+				w.inputs[ctx.ID] = in
+			}
+			// Own the event loop so pasted CRLF is normalized before it
+			// reaches the editor; the editor still applies every command.
+			in.Editor = nil
+			in.State = app.TextStateOf(t.edit.ed)
+			in.OnEvent = t.edit.applyText
+			in.NavigationKeys = false
+			return in
+		}
+	}
 	ed, ok := w.editors[ctx.ID]
 	if !ok {
 		return nil
@@ -809,16 +856,18 @@ func (w *Window) pressed(id ui.ID) bool { return w.c.Pressed() == id }
 func (w *Window) repo() *vapp.RepoState { return w.ws.Repo }
 
 func (w *Window) openRepo(dir string) {
-	w.ws.Open(dir, func(err error) {
-		switch {
-		case err == nil:
-		case vapp.IsNotRepository(err):
-			// A folder that is not itself a repository may contain several
-			// repositories: offer discovery instead of Git's raw error.
-			w.after(func() { w.openRepositoryDiscovery(dir) })
-		default:
-			w.ws.NotifyError("Cannot open "+filepath.Base(dir), err)
-		}
+	w.confirmDiscardEdits(func() {
+		w.ws.Open(dir, func(err error) {
+			switch {
+			case err == nil:
+			case vapp.IsNotRepository(err):
+				// A folder that is not itself a repository may contain several
+				// repositories: offer discovery instead of Git's raw error.
+				w.after(func() { w.openRepositoryDiscovery(dir) })
+			default:
+				w.ws.NotifyError("Cannot open "+filepath.Base(dir), err)
+			}
+		})
 	})
 }
 

@@ -41,6 +41,27 @@ const (
 	FileviewShowHistory      = Key("fileview.showHistory")
 	FileviewCodemap          = Key("fileview.codemap")
 
+	FileviewEdit            = Key("fileview.edit")
+	FileviewSave            = Key("fileview.save")
+	FileviewRevert          = Key("fileview.revert")
+	FileviewDone            = Key("fileview.done")
+	FileviewEditing         = Key("fileview.editing")
+	FileviewModified        = Key("fileview.modified")
+	FileviewEditLabel       = Key("fileview.editLabel")
+	FileviewDiscardTitle    = Key("fileview.discardTitle")
+	FileviewDiscardBody     = Key("fileview.discardBody")
+	FileviewDiscardButton   = Key("fileview.discardButton")
+	FileviewSaveFailed      = Key("fileview.saveFailed")
+	FileviewChangedTitle    = Key("fileview.changedTitle")
+	FileviewChangedBody     = Key("fileview.changedBody")
+	FileviewReload          = Key("fileview.reload")
+	FileviewEditNotUTF8     = Key("fileview.editNotUTF8")
+	FileviewEditTooLarge    = Key("fileview.editTooLarge")
+	FileviewEditReadOnly    = Key("fileview.editReadOnly")
+	FileviewEditUnavailable = Key("fileview.editUnavailable")
+	FileviewSaveTooLarge    = Key("fileview.saveTooLarge")
+	FileviewFileMissing     = Key("fileview.fileMissing")
+
 	RevisionTitle   = Key("revision.title")
 	RevisionFilter  = Key("revision.filter")
 	RevisionLoading = Key("revision.loading")
@@ -89,6 +110,27 @@ func init() {
 		FileviewShowHistory:      "Show History",
 		FileviewCodemap:          "Code Map",
 
+		FileviewEdit:            "Edit",
+		FileviewSave:            "Save",
+		FileviewRevert:          "Revert",
+		FileviewDone:            "Done",
+		FileviewEditing:         "Editing",
+		FileviewModified:        "Modified",
+		FileviewEditLabel:       "File editor",
+		FileviewDiscardTitle:    "Discard unsaved changes?",
+		FileviewDiscardBody:     "%s has unsaved changes. Discard them?",
+		FileviewDiscardButton:   "Discard",
+		FileviewSaveFailed:      "Cannot save %s",
+		FileviewChangedTitle:    "File changed on disk",
+		FileviewChangedBody:     "Your changes were not saved. Reload the file to see the current contents.",
+		FileviewReload:          "Reload",
+		FileviewEditNotUTF8:     "This file is not UTF-8 text. Open it in an external editor.",
+		FileviewEditTooLarge:    "This file is too large to edit in Viff. Open it in an external editor.",
+		FileviewEditReadOnly:    "This file is read-only.",
+		FileviewEditUnavailable: "This file cannot be edited in Viff.",
+		FileviewSaveTooLarge:    "The edited text is larger than the 1 MiB editing limit. Shorten it before saving.",
+		FileviewFileMissing:     "The file no longer exists. Reload the view to see the current state.",
+
 		RevisionTitle:   "Repository at %s",
 		RevisionFilter:  "Filter files",
 		RevisionLoading: "Loading the files of this revision…",
@@ -134,6 +176,27 @@ func init() {
 		FileviewOpenExternal:     "用外部编辑器打开",
 		FileviewShowHistory:      "显示历史",
 		FileviewCodemap:          "代码缩略图",
+
+		FileviewEdit:            "编辑",
+		FileviewSave:            "保存",
+		FileviewRevert:          "还原",
+		FileviewDone:            "完成",
+		FileviewEditing:         "正在编辑",
+		FileviewModified:        "已修改",
+		FileviewEditLabel:       "文件编辑器",
+		FileviewDiscardTitle:    "放弃未保存的修改？",
+		FileviewDiscardBody:     "%s 有未保存的修改，确定放弃？",
+		FileviewDiscardButton:   "放弃",
+		FileviewSaveFailed:      "无法保存 %s",
+		FileviewChangedTitle:    "文件已在磁盘上更改",
+		FileviewChangedBody:     "你的修改未保存。请重新加载文件后再试。",
+		FileviewReload:          "重新加载",
+		FileviewEditNotUTF8:     "该文件不是 UTF-8 文本，请用外部编辑器打开。",
+		FileviewEditTooLarge:    "该文件过大，无法在 Viff 中编辑，请用外部编辑器打开。",
+		FileviewEditReadOnly:    "该文件是只读的。",
+		FileviewEditUnavailable: "该文件无法在 Viff 中编辑。",
+		FileviewSaveTooLarge:    "编辑后的文本超过 1 MiB 上限，请缩短后再保存。",
+		FileviewFileMissing:     "文件已不存在。请重新加载视图查看当前状态。",
 
 		RevisionTitle:   "%s 的仓库内容",
 		RevisionFilter:  "筛选文件",

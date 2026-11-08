@@ -283,6 +283,9 @@ func run() (code int) {
 			return err
 		}
 		win.SetTray(native, application.Quit)
+		// macOS menu and Dock Quit bypass the window's close button; keep the
+		// same unsaved-editor confirmation on that path.
+		application.OnQuitRequest(func(allow func()) { win.ConfirmQuit(allow) })
 		// A desktop with no status area (a Linux session without a
 		// StatusNotifier host) still runs; only the icon is missing then.
 		if _, err := application.AddStatusItem(app.StatusItemConfig{

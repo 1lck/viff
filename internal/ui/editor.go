@@ -72,8 +72,19 @@ type diffTab struct {
 	blameN    int
 
 	// textSel is the read-only file view's text selection (selection.go). It
-	// is meaningful only when src.View.
+	// is meaningful only when src.View and edit is nil.
 	textSel textSel
+
+	// edit is the in-app editor state while the tab edits its working-tree
+	// file (fileedit.go); nil means the read-only viewer.
+	edit *fileEdit
+	// editOK is the content half of canEdit, computed once per load so the
+	// toolbar does not scan the file on every paint. Conflicts are checked
+	// live in canEdit because they change with the status.
+	editOK bool
+	// reenterEdit asks loadTab to switch back to the editor once a reload
+	// requested by Reload has landed.
+	reenterEdit bool
 
 	// The right edge's caches, filled once per load by prepareTab. marks hold
 	// one entry per changed stretch; codeMap holds the file viewer's character
@@ -124,6 +135,9 @@ func (t *diffTab) title() string {
 	if t.src.View && t.src.Commit != "" {
 		name += " (" + domain.ShortHash(t.src.Commit) + ")"
 	}
+	if t.edit != nil && t.edit.dirty {
+		name += " *"
+	}
 	return name
 }
 
@@ -146,6 +160,12 @@ func (w *Window) showDiff(src vapp.DiffSource, pin bool) {
 	t := &diffTab{src: src, preview: !pin, selOld: map[int]bool{}, selNew: map[int]bool{}, search: text.NewEditor(""), anchor: -1}
 	for i, o := range v.tabs {
 		if o.preview {
+			if o.edit != nil && o.edit.dirty {
+				// The preview holds unsaved text: keep it as a pinned tab and
+				// open the new source beside it instead of replacing it.
+				o.preview = false
+				continue
+			}
 			v.tabs[i] = t
 			v.activate(i)
 			w.loadTab(t)
@@ -163,6 +183,23 @@ func (w *Window) showDiff(src vapp.DiffSource, pin bool) {
 // when they jump to a file's source; this keeps that tab and adds the file
 // beside it.
 func (w *Window) showDiffInNewTab(src vapp.DiffSource) *diffTab {
+	// A single-version view has one editable buffer: a second tab for the same
+	// path would let two editors race the same file, and the hash check would
+	// make the loser fail with only Reload as recovery. Reuse the open tab.
+	if src.View {
+		key := src.Key()
+		for i, t := range w.ed.tabs {
+			if t.src.Key() != key {
+				continue
+			}
+			t.preview = false
+			w.ed.activate(i)
+			if t.res == nil && !t.loading {
+				w.loadTab(t)
+			}
+			return t
+		}
+	}
 	t := &diffTab{src: src, selOld: map[int]bool{}, selNew: map[int]bool{}, search: text.NewEditor(""), anchor: -1}
 	w.ed.tabs = append(w.ed.tabs, t)
 	w.ed.activate(len(w.ed.tabs) - 1)
@@ -175,10 +212,14 @@ func (w *Window) closeTab(i int) {
 	if i < 0 || i >= len(v.tabs) {
 		return
 	}
-	// Drop the decoded pictures before the tab leaves the slice: one image diff
-	// can hold 16 MiB per side, and nothing would free it until the garbage
-	// collector happened to run.
+	// Drop the decoded pictures and the editor before the tab leaves the slice:
+	// one image diff can hold 16 MiB per side, and a dirty editor holds its own
+	// copy of the file text.
 	v.tabs[i].picOld, v.tabs[i].picNew = nil, nil
+	if v.tabs[i].edit != nil {
+		w.clearEditInput()
+	}
+	v.tabs[i].edit = nil
 	v.tabs = append(v.tabs[:i], v.tabs[i+1:]...)
 	if v.active >= len(v.tabs) {
 		v.active = len(v.tabs) - 1
@@ -215,6 +256,7 @@ func (w *Window) loadTab(t *diffTab) {
 		t.loading = false
 		t.err = err
 		if err != nil {
+			t.reenterEdit = false
 			return
 		}
 		first := t.res == nil
@@ -222,6 +264,12 @@ func (w *Window) loadTab(t *diffTab) {
 		t.picOldErr, t.picNewErr = "", ""
 		t.res = res
 		w.prepareTab(t)
+		if t.edit != nil {
+			// A reload that lands while the tab is editing (the user pressed
+			// ⌘E again before it finished) must not leave the disk rows under
+			// the existing buffer; the next sync rebuilds from the editor.
+			t.edit.synced = false
+		}
 		if first {
 			t.cur = -1
 			if len(res.Blocks) > 0 {
@@ -235,6 +283,10 @@ func (w *Window) loadTab(t *diffTab) {
 		clear(t.selNew)
 		t.clearTextSel() // the display lines this selection indexed are gone
 		t.hitQuery = "\x00"
+		if t.reenterEdit {
+			t.reenterEdit = false
+			w.enterEdit(t)
+		}
 	})
 }
 
@@ -246,6 +298,7 @@ func (w *Window) prepareTab(t *diffTab) {
 		oldLines = res.Conflict.Current.Lines
 		newLines = nil
 	}
+	t.editOK = editableContent(t)
 	t.oldDisp = expandAll(oldLines)
 	t.newDisp = expandAll(newLines)
 	t.oldSyn = highlight(t.src.Path, t.oldDisp)
@@ -355,6 +408,12 @@ func (w *Window) refreshTabs() {
 	v := &w.ed
 	for i := len(v.tabs) - 1; i >= 0; i-- {
 		t := v.tabs[i]
+		if t.edit != nil {
+			// An open editor buffer is the user's text, not the status's. A
+			// save re-reads the file itself and refuses an external change;
+			// Reload is the explicit way to take the new disk contents.
+			continue
+		}
 		live := t.src.Working || t.src.View && t.src.Commit == ""
 		if !live || t.loading || !t.statusAt.Before(rs.StatusTime) {
 			continue
@@ -428,6 +487,11 @@ func (w *Window) paintTabs(r ui.Rect) {
 	for i, t := range v.tabs {
 		id := scTabs.At(i)
 		cid := scTabClose.At(i)
+		if t.edit != nil {
+			// The tab bar is painted before the file body; sync the dirty flag
+			// here so this frame's title already carries the marker.
+			t.edit.sync(t)
+		}
 		name := t.title()
 		tw := w.p.width(name, fontUI, regular)
 		width := 8 + 16 + 6 + tw + 6 + 18 + 6
@@ -465,7 +529,7 @@ func (w *Window) paintTabs(r ui.Rect) {
 		w.c.HitWithOptions(cid, cr, w.t(i18n.WorkspaceButtonClose), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
 		if w.c.Clicked(cid) {
 			i := i
-			w.after(func() { w.closeTab(i) })
+			w.after(func() { w.requestCloseTab(i) })
 		} else if w.c.Clicked(id) {
 			i := i
 			w.after(func() { v.activate(i) })
@@ -474,13 +538,28 @@ func (w *Window) paintTabs(r ui.Rect) {
 		w.onContext(id, func(x, y float32) {
 			i := i
 			w.openMenu(x, y, []item{
-				{title: w.t(i18n.WorkspaceButtonClose), shortcut: "⌘W", run: func() { w.closeTab(i) }},
+				{title: w.t(i18n.WorkspaceButtonClose), shortcut: "⌘W", run: func() { w.requestCloseTab(i) }},
 				{title: w.t(i18n.WorkspaceMenuCloseOtherTabs), run: func() {
-					v.tabs = []*diffTab{t}
-					t.clearTextSel()
-					v.active = 0
+					w.confirmDiscardOtherEdits(t, func() {
+						for _, o := range v.tabs {
+							if o != t && o.edit != nil {
+								w.clearEditInput()
+							}
+							if o != t {
+								o.edit = nil
+							}
+						}
+						v.tabs = []*diffTab{t}
+						t.clearTextSel()
+						v.active = 0
+					})
 				}},
-				{title: w.t(i18n.WorkspaceMenuCloseAllTabs), run: func() { v.reset() }},
+				{title: w.t(i18n.WorkspaceMenuCloseAllTabs), run: func() {
+					w.confirmDiscardEdits(func() {
+						w.clearEditInput()
+						v.reset()
+					})
+				}},
 				sep(),
 				{title: w.t(i18n.WorkspaceMenuKeepTabOpen), disabled: !t.preview, run: func() { t.preview = false }},
 				{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, run: func() { w.copyText(path.Join(w.repo().Repo.Root, t.src.Path)) }},
@@ -631,6 +710,12 @@ func inArea(entries []domain.StatusEntry, p string) bool {
 }
 
 func (w *Window) closeTabOf(t *diffTab) {
+	if t.edit != nil && t.edit.dirty {
+		// A preview that became an editor keeps its buffer: pin it instead of
+		// following the next selection.
+		t.preview = false
+		return
+	}
 	for i, o := range w.ed.tabs {
 		if o == t {
 			w.closeTab(i)

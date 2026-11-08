@@ -678,22 +678,38 @@ func (w *Window) removeRepository(v *repositoriesView) {
 	if !ok {
 		return
 	}
-	if err := w.ws.RemoveRepository(s.Root); err != nil {
-		v.err = w.t(i18n.ReposCannotRemove, repositoryOneLine(w.ws.ErrorText(err)))
+	active := w.repositoryActive(s.Root)
+	remove := func() {
+		if err := w.ws.RemoveRepository(s.Root); err != nil {
+			v.err = w.t(i18n.ReposCannotRemove, repositoryOneLine(w.ws.ErrorText(err)))
+			w.Invalidate()
+			return
+		}
+		if active {
+			// The workspace is closed without a repository, so Paint no longer
+			// runs syncRepo; drop the tabs of the repository that just left.
+			w.clearEditInput()
+			w.ed.reset()
+		}
+		v.err = ""
+		if w.pendingRepositoryFile != nil && w.pendingRepositoryFile.root == s.Root {
+			w.pendingRepositoryFile = nil
+		}
+		if n := len(w.ws.Repositories); n == 0 {
+			v.sel = 0
+		} else if v.sel >= n {
+			v.sel = n - 1
+		}
+		v.files = scroller{}
 		w.Invalidate()
+	}
+	// Removing another repository leaves the active one and its editor tabs
+	// alone; only removing the active repository can drop a buffer.
+	if active {
+		w.confirmDiscardEdits(remove)
 		return
 	}
-	v.err = ""
-	if w.pendingRepositoryFile != nil && w.pendingRepositoryFile.root == s.Root {
-		w.pendingRepositoryFile = nil
-	}
-	if n := len(w.ws.Repositories); n == 0 {
-		v.sel = 0
-	} else if v.sel >= n {
-		v.sel = n - 1
-	}
-	v.files = scroller{}
-	w.Invalidate()
+	remove()
 }
 
 // switchRepository makes root the active repository and closes the overview.
@@ -702,10 +718,34 @@ func (w *Window) removeRepository(v *repositoriesView) {
 // older one that is still in flight, so a switch must never look like a no-op
 // just because the click happens to hit the current row.
 func (w *Window) switchRepository(root string) {
-	w.dialog = nil
 	// An explicit switch wins over a file the user clicked earlier: that
 	// pending target must not open a diff after this activation lands.
 	w.pendingRepositoryFile = nil
+	if w.repositoryActive(root) {
+		// Confirming the active row is not a switch; its activation is still
+		// sent so it supersedes an older request, but no buffer is dropped.
+		w.switchRepositoryNow(root)
+		return
+	}
+	t := w.dirtyEdit()
+	if t == nil {
+		w.switchRepositoryNow(root)
+		return
+	}
+	// The overview dialog is replaced by the confirmation. Cancel reopens it
+	// on the next wake, because closeDialog clears the dialog after onCancel.
+	w.openDialog(&dialog{
+		title: w.t(i18n.FileviewDiscardTitle), ok: w.t(i18n.FileviewDiscardButton), width: 440,
+		body: func(f *form) { f.text(w.t(i18n.FileviewDiscardBody, t.src.Path)) },
+		onOK: func() bool { w.switchRepositoryNow(root); return true },
+		onCancel: func() {
+			w.after(w.openRepositories)
+		},
+	})
+}
+
+func (w *Window) switchRepositoryNow(root string) {
+	w.dialog = nil
 	w.ws.ActivateRepository(root, func(err error) {
 		w.after(func() {
 			if err != nil {
@@ -755,22 +795,24 @@ func (w *Window) openRepositoryFile(root, path string, area domain.Area) {
 		w.Invalidate()
 		return
 	}
-	w.pendingRepositoryFile = t
-	w.ws.ActivateRepository(root, func(err error) {
-		if w.pendingRepositoryFile != t {
-			return // superseded by a newer request or cleared by the user
-		}
-		if err != nil {
-			w.pendingRepositoryFile = nil
-			w.ws.NotifyError("Cannot open repository "+filepath.Base(root), err)
+	w.confirmDiscardEdits(func() {
+		w.pendingRepositoryFile = t
+		w.ws.ActivateRepository(root, func(err error) {
+			if w.pendingRepositoryFile != t {
+				return // superseded by a newer request or cleared by the user
+			}
+			if err != nil {
+				w.pendingRepositoryFile = nil
+				w.ws.NotifyError("Cannot open repository "+filepath.Base(root), err)
+				w.Invalidate()
+				return
+			}
+			// The status query may still be running; the paint path opens the
+			// file when it has landed.
 			w.Invalidate()
-			return
-		}
-		// The status query may still be running; the paint path opens the file
-		// when it has landed.
+		})
 		w.Invalidate()
 	})
-	w.Invalidate()
 }
 
 // applyPendingRepositoryFile runs from paintMain: once the requested repository
