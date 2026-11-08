@@ -10,6 +10,8 @@ package i18n
 const (
 	AppNoticeFailed = Key("app.notice.failed")
 
+	AppNoticeSavingFile = Key("app.notice.savingFile")
+
 	AppNoticeFileChanged     = Key("app.notice.fileChanged")
 	AppNoticeFileChangedBody = Key("app.notice.fileChangedBody")
 
@@ -224,6 +226,8 @@ func init() {
 	register(EN, map[Key]string{
 		AppNoticeFailed: "%s failed",
 
+		AppNoticeSavingFile: "Saving %s",
+
 		AppNoticeFileChanged:     "File changed",
 		AppNoticeFileChangedBody: "the file changed after the diff was shown; review the new diff and try again",
 
@@ -429,6 +433,8 @@ func init() {
 
 	register(ZHCN, map[Key]string{
 		AppNoticeFailed: "%s 失败",
+
+		AppNoticeSavingFile: "正在保存 %s",
 
 		AppNoticeFileChanged:     "文件已更改",
 		AppNoticeFileChangedBody: "显示 diff 之后文件又发生了变化；请查看新的 diff 后重试。",
