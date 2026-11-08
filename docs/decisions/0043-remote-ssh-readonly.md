@@ -39,7 +39,7 @@ ssh -T -o BatchMode=yes -o ConnectTimeout=10 ... host \
 
 - `Runner.command` 对 `ssh://` 仓库运行命令白名单，写命令在启动 `ssh` 前就返回 `repo.read_only`。白名单按子命令与参数形态判断（`branch`/`tag`/`stash`/`remote`/`config`/`worktree`/`submodule`/`lfs` 等只允许读形态），缺项一律拒绝。
 - 应用层的写任务入口（`Workspace.run`）再次拒绝 `ssh://` 仓库，避免某条快捷键绕过界面。
-- 界面隐藏或禁用写入口：暂存/提交/回滚、分支与标签写操作、merge/rebase/cherry-pick/revert/reset、stash、fetch/pull/push、worktree 创建/删除、submodule 增删/更新、应用内编辑、冲突接受某侧、交互式 rebase、终端、外部打开、ripgrep 搜索与后台自动 fetch。
+- 界面隐藏或禁用写入口：暂存/提交/回滚、分支与标签写操作、merge/rebase/cherry-pick/revert/reset、stash、fetch/pull/push、worktree 创建/删除、submodule 增删/更新、应用内编辑、冲突接受某侧、交互式 rebase、终端、外部打开、ripgrep 搜索与后台自动 fetch。worktree/submodule 列表面板仍可打开，面板内的写按钮禁用。
 - 没有只读的 fetch：fetch 会更新远端跟踪引用，属于写操作，留给服务器或终端。
 
 ### 3. 工作区文件读取
@@ -52,7 +52,7 @@ SSH 没有本地文件事件。活动远程仓库每 5 秒跑一次 `git status`
 
 ### 5. 本机专属能力
 
-远程模式下禁用：应用内编辑、冲突逐块接受、终端、外部编辑器/文件管理器、ripgrep（`git grep` 仍可用）、worktree 创建/删除、submodule 增删、交互式 rebase/history rewrite、fetch/pull/push。服务器需要是 POSIX 系统（Linux/macOS）并安装 Git；Windows 的 OpenSSH 服务器不在这一版范围。认证只支持已加载的 key/agent，不提供密码或口令弹窗。
+远程模式下禁用：应用内编辑、冲突逐块接受、终端、外部编辑器/文件管理器、ripgrep（`git grep` 仍可用）、worktree 创建/删除、submodule 增删、交互式 rebase/history rewrite、fetch/pull/push。worktree/submodule 列表面板仍可打开，写按钮禁用。“只读”指 Viff 不发送写命令、不写服务器上的文件；服务器自己的 Git 配置/hook 仍可能执行，这是用户服务器环境的一部分。服务器需要是 POSIX 系统（Linux/macOS）并安装 Git；Windows 的 OpenSSH 服务器不在这一版范围。认证只支持已加载的 key/agent，不提供密码或口令弹窗。
 
 ## 代价
 

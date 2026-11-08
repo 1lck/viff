@@ -1,7 +1,6 @@
 package viffui
 
 import (
-	"path"
 	"path/filepath"
 
 	vapp "viff/internal/app"
@@ -52,16 +51,6 @@ func repoRootHint(root string) string {
 		return sshpath.Display(root) + "\n" + root
 	}
 	return root
-}
-
-// repoJoin is used where a path only feeds a local operation that is disabled
-// for remote repositories; it keeps path semantics for a URL so a stray call
-// cannot produce "ssh:/host".
-func repoJoin(root, rel string) string {
-	if sshpath.Is(root) {
-		return sshpath.DisplayPath(root, rel)
-	}
-	return path.Join(root, rel)
 }
 
 // guardReadOnly is the common refusal for a write dialog that a shortcut or a

@@ -304,6 +304,18 @@ func operationStateName(op domain.Operation) string {
 	return "none"
 }
 
+// refreshIfIdle starts a refresh only when none is running. It reports whether
+// it started one; the remote watcher uses that answer to decide whether its
+// status key is now accounted for. It runs on the UI thread.
+func (w *Workspace) refreshIfIdle(meta bool) bool {
+	rs := w.Repo
+	if rs == nil || rs.refreshing {
+		return false
+	}
+	w.Refresh(meta)
+	return true
+}
+
 // Refresh queries status and operation state again, and refs when meta is
 // set. Overlapping refreshes are coalesced: one runs, and one more follows if
 // requests arrived meanwhile, so an event storm costs two queries.

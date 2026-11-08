@@ -120,6 +120,9 @@ func (w *Window) openRename(r domain.Ref) {
 }
 
 func (w *Window) openSetUpstream(r domain.Ref) {
+	if w.guardReadOnly() {
+		return
+	}
 	choices := w.repo().RefsOf(domain.RefRemote)
 	sel := w.defaultRemote() + "/" + r.Short
 	w.openDialog(&dialog{
@@ -662,7 +665,7 @@ func (w *Window) settingsMenu() []item {
 	if w.ws.Repo != nil {
 		items = append(items,
 			item{title: w.t(i18n.MenuManageRemotes), run: w.openRemotes},
-			item{title: w.t(i18n.MenuFetch), icon: icons.Fetch, disabled: len(w.repo().Remotes) == 0, run: func() { w.ws.Fetch(false) }},
+			item{title: w.t(i18n.MenuFetch), icon: icons.Fetch, disabled: w.readOnly() || len(w.repo().Remotes) == 0, run: func() { w.ws.Fetch(false) }},
 			sep(),
 		)
 	}

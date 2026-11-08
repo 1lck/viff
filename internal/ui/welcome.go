@@ -117,14 +117,14 @@ func (w *Window) paintWelcome(full ui.Rect) {
 	// Top row: search and buttons.
 	top := rect(main.X+20, main.Y+16, main.Width-40, 30)
 	bx := right(top)
-	for i, b := range []struct {
+	for _, b := range []struct {
 		label string
 		id    ui.ID
 		fn    func()
 	}{{w.t(i18n.WelcomeOpenRemote), idWelRemote, w.openRemote}, {"Clone", idWelClone, w.openClone}, {"Open", idWelOpen, w.chooseRepoNow}, {"New Repository", idWelInit, w.openInit}, {"Repositories…", idWelcomeRepositories, w.openRepositories}} {
 		bw := w.buttonWidth(b.label)
 		kind := btnNormal
-		if i == 1 {
+		if b.id == idWelOpen {
 			kind = btnDefault
 		}
 		if w.button(b.id, rect(bx-bw, top.Y+1, bw, buttonH), b.label, kind, false) {
@@ -133,7 +133,7 @@ func (w *Window) paintWelcome(full ui.Rect) {
 		}
 		bx -= bw + 10
 	}
-	w.field(idWelSearch, v.search, rect(top.X, top.Y, min(bx-top.X-10, 420), 30), fieldOpts{icon: icons.Search, placeholder: "Search projects", nav: true})
+	w.field(idWelSearch, v.search, rect(top.X, top.Y, max(80, min(bx-top.X-10, 420)), 30), fieldOpts{icon: icons.Search, placeholder: "Search projects", nav: true})
 	w.onKeys(idWelSearch, func(e ui.KeyEvent) bool {
 		switch e.Key {
 		case ui.KeyDown:

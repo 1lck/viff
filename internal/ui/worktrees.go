@@ -12,6 +12,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/i18n"
+	"viff/internal/sshpath"
 	"viff/internal/ui/icons"
 	"viff/internal/wslpath"
 )
@@ -24,9 +25,6 @@ const worktreeRowH = 48
 // openWorktrees shows the worktree list, loading it first when the repository
 // state has not been read yet.
 func (w *Window) openWorktrees() {
-	if w.guardReadOnly() {
-		return
-	}
 	rs := w.repo()
 	if rs == nil {
 		return
@@ -55,7 +53,7 @@ func (w *Window) showWorktrees() {
 		body: func(f *form) {
 			f.custom(30, func(r ui.Rect) {
 				bw := w.buttonWidth("New Worktree…")
-				if w.button(idWorktreeNew, rect(r.X, r.Y, bw, 28), "New Worktree…", btnNormal, false) {
+				if w.button(idWorktreeNew, rect(r.X, r.Y, bw, 28), "New Worktree…", btnNormal, w.readOnly()) {
 					w.after(w.openNewWorktree)
 				}
 				if rs := w.repo(); rs != nil {
@@ -104,7 +102,7 @@ func (w *Window) showWorktrees() {
 				}
 				chosen := pick
 				canOpen := picked && w.openableWorktree(chosen)
-				canDelete := picked && !chosen.Bare && !w.repo().IsCurrentWorktree(chosen)
+				canDelete := picked && !w.readOnly() && !chosen.Bare && !w.repo().IsCurrentWorktree(chosen)
 				x := right(r)
 				for _, b := range []struct {
 					id      ui.ID
@@ -119,7 +117,13 @@ func (w *Window) showWorktrees() {
 						})
 					}},
 					{idWorktreeDelete, "Delete…", canDelete, func() { w.confirmDeleteWorktree(chosen) }},
-					{idWorktreeCopy, "Copy Path", picked, func() { w.copyText(chosen.Path) }},
+					{idWorktreeCopy, "Copy Path", picked, func() {
+						if sshpath.Is(chosen.Path) {
+							w.copyText(sshpath.Display(chosen.Path))
+							return
+						}
+						w.copyText(chosen.Path)
+					}},
 				} {
 					bw := w.buttonWidth(b.label)
 					x -= bw
@@ -192,7 +196,7 @@ func (w *Window) paintWorktreeRow(wt domain.Worktree, i, sel int, row ui.Rect) b
 	}
 
 	pathW := right(row) - tx - 100
-	path := w.fitPathLeft(shortenHome(wt.Path), fontSmall, regular, pathW)
+	path := w.fitPathLeft(repoRootLabel(wt.Path), fontSmall, regular, pathW)
 	pw := w.p.text(path, rect(tx, row.Y+27, pathW, 16), fontSmall, regular, w.pal.TextSecond)
 	if note := worktreeNote(wt); note != "" {
 		w.p.text("  ·  "+note, rect(tx+pw, row.Y+27, max(0, right(row)-tx-pw-100), 16), fontSmall, regular, w.pal.Warning)
@@ -522,6 +526,9 @@ func (w *Window) newWorktreeBranchProblem(name string) string {
 // in a directory next to the repository, or an existing local branch that no
 // worktree has yet. New branch is the default mode and keeps the old behaviour.
 func (w *Window) openNewWorktree() {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if rs == nil {
 		return
@@ -661,6 +668,9 @@ func (w *Window) openNewWorktree() {
 
 // confirmDeleteWorktree removes a worktree, explaining that its branch stays.
 func (w *Window) confirmDeleteWorktree(wt domain.Worktree) {
+	if w.guardReadOnly() {
+		return
+	}
 	force := false
 	name := worktreeName(wt)
 	w.openDialog(&dialog{

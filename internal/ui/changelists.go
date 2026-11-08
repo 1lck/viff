@@ -137,6 +137,9 @@ func (w *Window) stageableCount() int {
 // stageAllVisible stages the unstaged and untracked files the active filter
 // shows. With no filter this is every such file, as before.
 func (w *Window) stageAllVisible() {
+	if w.readOnly() {
+		return
+	}
 	var paths []string
 	for _, a := range []domain.Area{domain.AreaUnstaged, domain.AreaUntracked} {
 		for _, e := range w.changeListEntries(a) {

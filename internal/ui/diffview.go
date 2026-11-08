@@ -756,12 +756,14 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 	// it stands, and offering "Stage" for it would only produce an svn error.
 	staging := w.ws.Caps.Index || t.src.Area == domain.AreaUntracked
 	if t.src.Working && t.src.Area != domain.AreaConflicts {
-		if w.action(idDiffOpen, rx-actionSize, y, icons.Edit, w.t(i18n.DiffActionOpenEditor), actOpts{}) {
-			p := t.src.Path
-			w.after(func() { w.openExternal(p, w.currentLine(t)) })
+		if !w.readOnly() {
+			if w.action(idDiffOpen, rx-actionSize, y, icons.Edit, w.t(i18n.DiffActionOpenEditor), actOpts{}) {
+				p := t.src.Path
+				w.after(func() { w.openExternal(p, w.currentLine(t)) })
+			}
+			rx -= actionSize + 6
 		}
-		rx -= actionSize + 6
-		if staging {
+		if staging && !w.readOnly() {
 			label := w.t(i18n.DiffActionStageFile)
 			if t.src.Area == domain.AreaStaged {
 				label = w.t(i18n.DiffActionUnstageFile)

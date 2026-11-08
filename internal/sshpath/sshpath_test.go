@@ -77,7 +77,7 @@ func TestHostInput(t *testing.T) {
 			t.Errorf("HostInput(%q) = %q %q %d, want %q %q %d", c.in, user, host, port, c.user, c.host, c.port)
 		}
 	}
-	for _, in := range []string{"", "-dev", "user name@dev", "dev:", "dev:70000", "[::1", "a@b@c"} {
+	for _, in := range []string{"", "-dev", "user name@dev", "dev:", "dev:70000", "dev:+22", "dev: 22", "[::1", "a@b@c"} {
 		if _, _, _, err := HostInput(in); err == nil {
 			t.Errorf("HostInput(%q) succeeded, want an error", in)
 		}
@@ -94,6 +94,11 @@ func TestURL(t *testing.T) {
 	}
 	if _, err := URL("dev", "relative"); err == nil {
 		t.Error("URL accepted a relative path")
+	}
+	for _, p := range []string{"/srv/../etc", "/srv/app\x01"} {
+		if _, err := URL("dev", p); err == nil {
+			t.Errorf("URL accepted %q", p)
+		}
 	}
 	got, err = URL("dev", "/")
 	if err != nil || got != "ssh://dev/" {
@@ -151,7 +156,7 @@ func TestAbsPath(t *testing.T) {
 
 func TestDisplayAndName(t *testing.T) {
 	r, _ := Parse("ssh://me@dev:2222/srv/my app")
-	if got := r.Display(); got != "me@dev:/srv/my app" {
+	if got := r.Display(); got != "ssh://me@dev:2222/srv/my app" {
 		t.Errorf("Display = %q", got)
 	}
 	if got := Name("ssh://me@dev/srv/my app"); got != "my app" {

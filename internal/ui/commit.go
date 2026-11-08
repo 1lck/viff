@@ -198,7 +198,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	// The LFS warning sits below the operation banner: an in-progress merge or
 	// rebase is the more urgent state, and both clear once the effective
 	// problem is resolved.
-	if rs.LFS.NeedsInstall() {
+	if rs.LFS.NeedsInstall() && !w.readOnly() {
 		content = w.paintLFSBanner(content)
 	}
 	if rs.Repo.IsSSH() {
@@ -829,6 +829,9 @@ func (w *Window) selectedEntries() []changeRow {
 }
 
 func (w *Window) toggleStageSelection() {
+	if w.guardReadOnly() {
+		return
+	}
 	var stage, unstage []string
 	for _, r := range w.selectedEntries() {
 		switch r.area {
@@ -857,6 +860,9 @@ func (w *Window) toggleStageSelection() {
 }
 
 func (w *Window) stageArea(areas ...domain.Area) {
+	if w.guardReadOnly() {
+		return
+	}
 	var paths []string
 	for _, a := range areas {
 		for _, e := range w.repo().Entries(a) {
@@ -906,6 +912,9 @@ func (w *Window) rollbackTargets() []changeRow {
 }
 
 func (w *Window) openRollback() {
+	if w.guardReadOnly() {
+		return
+	}
 	targets := w.rollbackTargets()
 	if len(targets) == 0 {
 		return
@@ -994,12 +1003,12 @@ func (w *Window) changesMenu() []item {
 	items := []item{
 		{title: w.t(i18n.WorkspaceActionShowDiff), icon: icons.Diff, shortcut: "⌘D", run: func() { w.showDiff(w.sourceFor(first), true) }},
 	}
-	if !readOnly && len(sel) == 1 && first.entry.IsSubmodule() {
+	if len(sel) == 1 && first.entry.IsSubmodule() {
 		sub := first.entry.Path
-		items = append(items,
-			item{title: w.t(i18n.WorkspaceMenuUpdateSubmodule), icon: icons.Download, run: func() { w.ws.UpdateSubmodule(sub, true, nil) }},
-			item{title: w.t(i18n.WorkspaceMenuOpenSubmodule), icon: icons.Folder, run: func() { w.openSubmodule(sub) }},
-		)
+		if !readOnly {
+			items = append(items, item{title: w.t(i18n.WorkspaceMenuUpdateSubmodule), icon: icons.Download, run: func() { w.ws.UpdateSubmodule(sub, true, nil) }})
+		}
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuOpenSubmodule), icon: icons.Folder, run: func() { w.openSubmodule(sub) }})
 	}
 	if !readOnly {
 		if stage {
@@ -1022,9 +1031,7 @@ func (w *Window) changesMenu() []item {
 	items = append(items,
 		item{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(first.entry.Path) }},
 	)
-	if w.canAnnotate(first) {
-		items = append(items, item{title: w.t(i18n.WorkspaceMenuAnnotate), run: func() { w.openFileView(first.entry.Path, "", true) }})
-	}
+	items = append(items, item{title: w.t(i18n.WorkspaceMenuAnnotate), disabled: !w.canAnnotate(first), run: func() { w.openFileView(first.entry.Path, "", true) }})
 	if !readOnly {
 		items = append(items,
 			item{title: w.t(i18n.WorkspaceMenuOpenInEditor), icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(first.entry.Path, 0) }},
@@ -1050,7 +1057,7 @@ func (w *Window) canAnnotate(r changeRow) bool {
 		return false
 	}
 	if w.readOnly() {
-		return true
+		return r.entry.KindIn(r.area) != domain.ChangeDeleted
 	}
 	st, err := os.Stat(w.repoPath(r.entry.Path))
 	return err == nil && st.Mode().IsRegular()
@@ -1292,6 +1299,9 @@ func (w *Window) toggleAmend() {
 }
 
 func (w *Window) doCommit(push bool) {
+	if w.guardReadOnly() {
+		return
+	}
 	v := &w.cm
 	rs := w.repo()
 	committable := w.ws.CommittableCount()
@@ -1347,11 +1357,8 @@ func runeToByte(s string, r int) int {
 	return len(s)
 }
 
-// canAnnotate reports whether a working-tree file has history to blame: it
-// is tracked, not conflicted and still on disk.
-
 // paintRemoteBanner states the read-only contract at the top of the Commit
-// panel. It mirrors the operation banner so the two never overlap: the
+// panel. It sits below the operation banner when an operation is active: the
 // operation state is the more urgent fact, and both are cleared by the same
 // refresh.
 func (w *Window) paintRemoteBanner(r ui.Rect) ui.Rect {

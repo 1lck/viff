@@ -90,6 +90,12 @@ func TestRemoteReadOnlyAllowlist(t *testing.T) {
 		{"clean", "-f"},
 		{"diff", "--output=patch.txt"},
 		{"log", "--output=log.txt"},
+		{"grep", "-O", "pattern"},
+		{"grep", "--open-files-in-pager=less", "pattern"},
+		{"cat-file", "--filters", "HEAD:file"},
+		{"diff", "--ext-diff"},
+		{"show", "--textconv", "HEAD"},
+		{"help", "-a"},
 		{"update-index", "--refresh"},
 		{"gc"},
 	}
@@ -344,5 +350,103 @@ func TestRemoteOperationScriptWithLocalShell(t *testing.T) {
 	}
 	if op.Kind != domain.OpRebase || op.HeadName != "topic" || op.Step != 2 || op.Total != 5 || !op.Interactive || op.Incoming != "cafebabe" {
 		t.Fatalf("rebase = %+v", op)
+	}
+}
+
+func TestSSHArgs(t *testing.T) {
+	cases := []struct {
+		name   string
+		target sshpath.Repo
+		want   []string
+	}{
+		{
+			name:   "alias default port",
+			target: sshpath.Repo{User: "me", Host: "dev", Path: "/srv/app"},
+			want:   []string{"me@dev", "cmd"},
+		},
+		{
+			name:   "ipv6 raw host and port",
+			target: sshpath.Repo{User: "me", Host: "::1", Port: 2222, Path: "/srv/app"},
+			want:   []string{"-p", "2222", "me@::1", "cmd"},
+		},
+		{
+			name:   "ipv6 without user",
+			target: sshpath.Repo{Host: "2001:db8::1", Path: "/"},
+			want:   []string{"2001:db8::1", "cmd"},
+		},
+	}
+	for _, c := range cases {
+		args := sshArgs(c.target, "cmd")
+		joined := strings.Join(args, " ")
+		for _, want := range c.want {
+			if !strings.Contains(joined, want) {
+				t.Errorf("%s: args %q do not contain %q", c.name, joined, want)
+			}
+		}
+		if strings.Contains(joined, "[") || strings.Contains(joined, "]") {
+			t.Errorf("%s: brackets must not reach ssh: %q", c.name, joined)
+		}
+	}
+}
+
+func TestSSHAuthClassificationWins(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a POSIX shell to produce an exit status")
+	}
+	cmd := exec.Command("sh", "-c", "exit 255")
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("expected an exit error")
+	}
+	r := &Runner{}
+	got := r.wrap(context.Background(), "ssh://me@dev/srv/app", []string{"status"}, err,
+		"Permission denied (publickey).", "")
+	if KindOf(got) != ErrSSHAuth {
+		t.Fatalf("classify = %v, want ErrSSHAuth (%v)", KindOf(got), got)
+	}
+}
+
+func TestParseRemoteContentLargeAndDirectory(t *testing.T) {
+	large, err := parseRemoteContent("big.bin", []byte("F 9000000 100644\npreview"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !large.Exists || !large.TooLarge || large.Data != nil || large.Size != 9000000 {
+		t.Fatalf("large content = %+v", large)
+	}
+	dir, err := parseRemoteContent("sub", []byte("D\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !dir.Exists || !dir.Submodule || dir.Mode != "160000" {
+		t.Fatalf("directory content = %+v", dir)
+	}
+}
+
+func TestSafeObjectID(t *testing.T) {
+	for _, good := range []string{"abcd", "0123456789abcdef0123456789abcdef01234567"} {
+		if !safeObjectID(good) {
+			t.Errorf("safeObjectID(%q) = false", good)
+		}
+	}
+	for _, bad := range []string{"", "abc", "--output=/tmp/x", "abcd ", "HEAD", "refs/heads/main", "xyz1"} {
+		if safeObjectID(bad) {
+			t.Errorf("safeObjectID(%q) = true", bad)
+		}
+	}
+}
+
+func TestRemoteExecutableLabel(t *testing.T) {
+	r := &Runner{}
+	got, err := r.CachedExecutableIn("ssh://me@dev:2222/srv/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "git (on dev)" {
+		t.Fatalf("CachedExecutableIn = %q", got)
+	}
+	got, err = r.ExecutableIn(context.Background(), "ssh://me@dev/srv/app")
+	if err != nil || got != "git (on dev)" {
+		t.Fatalf("ExecutableIn = %q, %v", got, err)
 	}
 }

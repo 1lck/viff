@@ -159,3 +159,89 @@ func TestRemoteStatusKeyChanges(t *testing.T) {
 		t.Fatal("a changed branch counter did not change the key")
 	}
 }
+
+func TestRemoteWatchSeesServerChange(t *testing.T) {
+	f := newFixture(t)
+	f.write("base.txt", "base\n")
+	f.git("add", "base.txt")
+	f.git("commit", "-q", "-m", "base")
+	tr := &appLocalSSH{dir: f.dir, env: f.env}
+	w := NewWorkspace(&gitcli.Runner{Env: f.env, SSH: tr}, storage.Defaults(), nil)
+	w.remotePollEvery = 10 * time.Millisecond
+	w.remoteMetaEvery = 1000
+	t.Cleanup(w.Close)
+	w.Open(remoteIdentity(t, f.dir), func(err error) {
+		if err != nil {
+			t.Errorf("open: %v", err)
+		}
+	})
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		w.Drain()
+		if rs := w.Repo; rs != nil && rs.StatusLoaded && !rs.refreshing {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("remote repository did not open")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := os.WriteFile(filepath.Join(f.dir, "from-server.txt"), []byte("new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		w.Drain()
+		rs := w.Repo
+		if rs != nil {
+			for _, e := range rs.Status.Entries {
+				if e.Path == "from-server.txt" {
+					return
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("poll did not pick up the server change")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestRemoteRunRefusesCallbacks(t *testing.T) {
+	f := newFixture(t)
+	f.write("base.txt", "base\n")
+	f.git("add", "base.txt")
+	f.git("commit", "-q", "-m", "base")
+	w := NewWorkspace(&gitcli.Runner{Env: f.env, SSH: &appLocalSSH{dir: f.dir, env: f.env}}, storage.Defaults(), nil)
+	t.Cleanup(w.Close)
+	w.Open(remoteIdentity(t, f.dir), func(err error) {
+		if err != nil {
+			t.Errorf("open: %v", err)
+		}
+	})
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		w.Drain()
+		if rs := w.Repo; rs != nil && rs.StatusLoaded && !rs.refreshing {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("remote repository did not open")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	var got error
+	always := false
+	w.Run("Stage", func(context.Context, domain.Repo, func(string)) error {
+		t.Error("op ran for a read-only remote repository")
+		return nil
+	}, RunOptions{
+		OnError: func(err error) bool { got = err; return true },
+		Always:  func() { always = true },
+	})
+	if gitcli.KindOf(got) != gitcli.ErrReadOnlyRemote {
+		t.Fatalf("error = %v, want ErrReadOnlyRemote", got)
+	}
+	if !always {
+		t.Fatal("Always did not run after the refusal")
+	}
+}

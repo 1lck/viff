@@ -98,8 +98,11 @@ func (w *Window) writePatch(dest string, paths []string, staged bool) {
 
 // gitWindowMenu is the Git tool window's action menu.
 func (w *Window) gitWindowMenu() []item {
-	if w.repo() == nil || w.readOnly() {
+	if w.repo() == nil {
 		return nil
+	}
+	if w.readOnly() {
+		return w.gitMenu()
 	}
 	items := []item{
 		{title: w.t(i18n.PatchApply), icon: icons.Patch, run: func() { w.choosePatch(false) }},

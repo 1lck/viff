@@ -73,10 +73,13 @@ func (r Repo) String() string {
 	return Scheme + authority + cleanPath(r.Path)
 }
 
-// Display is the copy-friendly spelling: user@host:path. The port is not
-// included because scp takes it as a separate flag; a tooltip can show the
-// full identity instead.
+// Display is the copy-friendly spelling: user@host:path. A non-default port
+// keeps the full ssh:// URL, because scp-style spelling cannot carry a port
+// without ambiguity.
 func (r Repo) Display() string {
+	if r.Port != 0 && r.Port != 22 {
+		return r.String()
+	}
 	host := r.Host
 	if strings.Contains(host, ":") {
 		host = "[" + host + "]"
@@ -136,18 +139,27 @@ func URL(hostInput, remotePath string) (string, error) {
 	return Repo{User: user, Host: host, Port: port, Path: cleanPath(p)}.String(), nil
 }
 
-// ValidatePath checks that p can be an absolute path on the server. Newlines
-// and NUL are refused because the value becomes a command-line argument and a
-// log field; spaces are allowed and quoted later.
+// ValidatePath checks that p can be an absolute path on the server. Control
+// characters are refused because the value becomes a command-line argument and
+// a log field; spaces are allowed and quoted later. ".." is refused so a path
+// typed into the dialog cannot silently address a different directory than the
+// one shown.
 func ValidatePath(p string) error {
 	if p == "" {
 		return fmt.Errorf("the path is empty")
 	}
-	if strings.ContainsAny(p, "\x00\r\n") {
-		return fmt.Errorf("the path contains a control character")
+	for _, r := range p {
+		if unicode.IsControl(r) {
+			return fmt.Errorf("the path contains a control character")
+		}
 	}
 	if !strings.HasPrefix(p, "/") {
 		return fmt.Errorf("the path must be absolute on the server, for example /srv/app")
+	}
+	for _, part := range strings.Split(p, "/") {
+		if part == ".." {
+			return fmt.Errorf("the path must not contain '..'")
+		}
 	}
 	if cleanPath(p) == "" {
 		return fmt.Errorf("the path is empty")
@@ -344,6 +356,11 @@ func splitHostPort(s string) (host string, port int, err error) {
 func parsePort(s string) (int, error) {
 	if s == "" {
 		return 0, fmt.Errorf("the port is empty")
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("the port %q is not a number between 1 and 65535", s)
+		}
 	}
 	n, err := strconv.Atoi(s)
 	if err != nil || n < 1 || n > 65535 {

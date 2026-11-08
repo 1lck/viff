@@ -82,7 +82,9 @@ func (w *Window) openBranchPopup(anchor ui.Rect) {
 			items = append(items, w.branchItem(r))
 		}
 	}
-	if w.ws.Caps.Worktrees != nil && !readOnly {
+	if w.ws.Caps.Worktrees != nil {
+		// The panel is a read-only view; its New/Delete actions disable for a
+		// remote repository, but opening the list is still useful.
 		items = append(items, sep(), item{title: w.t(i18n.ChromeMenuWorktrees), icon: icons.Folder, run: w.openWorktrees})
 	}
 	p := &popup{x: anchor.X, y: bottom(anchor) + 4, items: items, sel: -1, minWidth: 340, title: w.t(i18n.ChromePopupGitBranch), search: text.NewEditor("")}

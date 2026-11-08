@@ -121,6 +121,11 @@ type Workspace struct {
 	// every list change; the next success clears it.
 	workspaceSaveWarned bool
 
+	// remotePollEvery and remoteMetaEvery are test seams for the SSH watcher.
+	// Zero means the production defaults in remote_watch.go.
+	remotePollEvery time.Duration
+	remoteMetaEvery int
+
 	Notifications []Notification
 	Console       []ConsoleEntry
 	Tasks         []*Task
@@ -616,6 +621,13 @@ func (w *Workspace) NotifyError(title string, err error) {
 	w.notify(NoticeError, title, w.ErrorText(err), gitcli.CodeOf(err))
 }
 
+// ReadOnly reports whether the active repository is opened over SSH and
+// therefore accepts no writes in this version. The interface uses it to hide
+// write actions instead of showing them and failing afterwards.
+func (w *Workspace) ReadOnly() bool {
+	return w.Repo != nil && w.Repo.Repo.IsSSH()
+}
+
 // ErrorText is the message of an error suitable for the UI, with a hint for
 // failures the user can act on.
 //
@@ -624,13 +636,6 @@ func (w *Workspace) NotifyError(title string, err error) {
 // Telling a Subversion user to configure a Git credential helper would send
 // them looking in the wrong place, so the tool recorded on the error decides
 // which hint is right.
-// ReadOnly reports whether the active repository is opened over SSH and
-// therefore accepts no writes in this version. The interface uses it to hide
-// write actions instead of showing them and failing afterwards.
-func (w *Workspace) ReadOnly() bool {
-	return w.Repo != nil && w.Repo.Repo.IsSSH()
-}
-
 func (w *Workspace) ErrorText(err error) string {
 	svn := errorFromSVN(err)
 	var ge *gitcli.Error

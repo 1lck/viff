@@ -478,7 +478,10 @@ func (r *Runner) wrap(ctx context.Context, dir string, args []string, err error,
 	// output never starts with one, so decoding unconditionally is safe.
 	stderr, stdout = decodeWSLText(stderr), decodeWSLText(stdout)
 	kind := classify(stderr+"\n"+stdout, exit, ctx.Err())
-	if kind == ErrOther && sshpath.Is(dir) {
+	// ssh's own failures can look like Git's: "Permission denied (publickey)"
+	// matches the credential-helper pattern too. For an SSH repository the
+	// transport classification wins unless the command was canceled.
+	if ctx.Err() == nil && sshpath.Is(dir) {
 		if sshKind, ok := classifySSH(stderr, stdout, exit); ok {
 			kind = sshKind
 		}

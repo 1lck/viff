@@ -45,7 +45,11 @@ func (w *Window) lfsStatusTip(rs *vapp.RepoState) string {
 		tip = w.t(i18n.ChromeTipLFSRules, len(rs.LFS.Patterns))
 	}
 	if rs.LFS.NeedsInstall() {
-		tip += "\n" + w.t(i18n.ChromeTipLFSMissing)
+		if w.readOnly() {
+			tip += "\n" + w.t(i18n.ChromeTipLFSMissingRemote)
+		} else {
+			tip += "\n" + w.t(i18n.ChromeTipLFSMissing)
+		}
 	}
 	return tip
 }
@@ -76,7 +80,7 @@ func (w *Window) paintLFSBanner(r ui.Rect) ui.Rect {
 // the paint path.
 func (w *Window) warnLFSSetup() {
 	rs := w.ws.Repo
-	if rs == nil || !rs.LFS.NeedsInstall() || w.lfsWarnedGen == rs.Gen {
+	if rs == nil || w.readOnly() || !rs.LFS.NeedsInstall() || w.lfsWarnedGen == rs.Gen {
 		return
 	}
 	w.lfsWarnedGen = rs.Gen

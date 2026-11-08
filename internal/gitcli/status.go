@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -27,18 +28,33 @@ func (r *Runner) Discover(ctx context.Context, dir string) (domain.Repo, error) 
 	// the server; the identity is the Windows UNC spelling or the ssh:// URL,
 	// so every layer outside gitcli sees one path domain (wsl.go, ssh.go).
 	// Repositories outside those domains pass through unchanged.
-	identity := func(p string) string {
-		v := toIdentityPath(dir, p)
-		if sshpath.Is(dir) {
-			return v
+	identity := func(p string) (string, error) {
+		v, err := toIdentityPath(dir, p)
+		if err != nil {
+			return "", fmt.Errorf("map repository path %q on the server: %w", p, err)
 		}
-		return filepath.Clean(v)
+		if sshpath.Is(dir) {
+			return v, nil
+		}
+		return filepath.Clean(v), nil
+	}
+	root, err := identity(lines[0])
+	if err != nil {
+		return domain.Repo{}, err
+	}
+	meta, err := identity(lines[1])
+	if err != nil {
+		return domain.Repo{}, err
+	}
+	common, err := identity(lines[2])
+	if err != nil {
+		return domain.Repo{}, err
 	}
 	repo := domain.Repo{
-		Root:      identity(lines[0]),
+		Root:      root,
 		Kind:      domain.KindGit,
-		MetaDir:   identity(lines[1]),
-		CommonDir: identity(lines[2]),
+		MetaDir:   meta,
+		CommonDir: common,
 	}
 	return repo, nil
 }
@@ -247,12 +263,27 @@ func (r *Runner) Operation(ctx context.Context, repo domain.Repo) domain.Operati
 	case exists("BISECT_LOG"):
 		op.Kind = domain.OpBisect
 	}
-	if op.Incoming != "" && op.Kind != domain.OpBisect {
+	if op.Incoming != "" && op.Kind != domain.OpBisect && safeObjectID(op.Incoming) {
 		if out, err := r.Run(ctx, repo.Root, "log", "-1", "--format=%s", op.Incoming, "--"); err == nil {
 			op.IncomingSubject = strings.TrimSpace(string(out))
 		}
 	}
 	return op
+}
+
+// safeObjectID keeps a hash read from .git state out of Git's option position.
+// The files normally hold a full object ID, but a damaged or crafted repository
+// must not turn a read into `log --output=...`.
+func safeObjectID(s string) bool {
+	if len(s) < 4 || len(s) > 128 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 // Conflicts lists unmerged paths with their index stages.

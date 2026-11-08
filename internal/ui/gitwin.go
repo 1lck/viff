@@ -226,7 +226,7 @@ func (w *Window) paintLogFilters(r ui.Rect) {
 	// No separate publish step means no fetch either: the update already talks
 	// to the server, and a fetch button would silently do nothing.
 	if w.ws.Caps.SeparatePush {
-		if w.action(idLogFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
+		if w.action(idLogFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: w.readOnly() || len(rs.Remotes) == 0}) {
 			w.after(func() { w.ws.Fetch(false) })
 		}
 		ax -= actionSize + 2
@@ -809,6 +809,9 @@ func reverse(s []string) []string {
 // compareWithWorking lists files that differ between a commit and the
 // working tree and opens the first.
 func (w *Window) confirmCheckoutRevision(hash string) {
+	if w.guardReadOnly() {
+		return
+	}
 	short := domain.ShortHash(hash)
 	w.confirm(w.t(i18n.ChromeDialogCheckoutRevision), w.t(i18n.ChromeDialogCheckoutRevisionMessage, short), w.t(i18n.ChromeActionCheckout), func() {
 		w.ws.CheckoutRevision(hash)
@@ -891,12 +894,12 @@ func (w *Window) paintBranches(r ui.Rect) {
 	rs := w.repo()
 	tb := splitTop(&r, 38)
 	x, y := tb.X+8, tb.Y+(tb.Height-actionSize)/2
-	if w.action(idBrNew, x, y, icons.Add, w.t(i18n.ChromeMenuNewBranch), actOpts{disabled: !rs.HasHead()}) {
+	if w.action(idBrNew, x, y, icons.Add, w.t(i18n.ChromeMenuNewBranch), actOpts{disabled: w.readOnly() || !rs.HasHead()}) {
 		w.after(func() { w.openNewBranch("", rs.HeadLabel()) })
 	}
 	x += actionSize + 2
 	if w.ws.Caps.SeparatePush {
-		if w.action(idBrFetch, x, y, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0}) {
+		if w.action(idBrFetch, x, y, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: w.readOnly() || len(rs.Remotes) == 0}) {
 			w.after(func() { w.ws.Fetch(false) })
 		}
 	}
@@ -997,7 +1000,7 @@ func (w *Window) paintBranches(r ui.Rect) {
 				// the second one checks the branch out only when the user asked
 				// for that in the settings. Otherwise it stays a selection, so a
 				// stray double-click never rewrites the working tree.
-				if !w.ws.Settings.CheckoutOnDoubleClick {
+				if w.readOnly() || !w.ws.Settings.CheckoutOnDoubleClick {
 					return
 				}
 				if ref.Kind != domain.RefTag && !ref.Current {
@@ -1234,9 +1237,9 @@ func (w *Window) paintReflog(r ui.Rect) {
 			v.sel = ii
 			w.openMenu(x, y, []item{
 				{title: w.t(i18n.ChromeMenuCopyRevision), icon: icons.Copy, run: func() { w.copyText(hash) }},
-				{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, run: func() { w.openNewBranch(hash, short) }},
-				{title: w.t(i18n.ChromeMenuCheckoutRevision, short), run: func() { w.confirmCheckoutRevision(hash) }},
-				{title: w.t(i18n.ChromeMenuResetHere), icon: icons.Reset, run: func() { w.openReset(domain.Commit{Hash: hash, Subject: e.Message}) }},
+				{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, disabled: w.readOnly(), run: func() { w.openNewBranch(hash, short) }},
+				{title: w.t(i18n.ChromeMenuCheckoutRevision, short), disabled: w.readOnly(), run: func() { w.confirmCheckoutRevision(hash) }},
+				{title: w.t(i18n.ChromeMenuResetHere), icon: icons.Reset, disabled: w.readOnly(), run: func() { w.openReset(domain.Commit{Hash: hash, Subject: e.Message}) }},
 			})
 		})
 	}

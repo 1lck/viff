@@ -27,25 +27,42 @@ const (
 )
 
 type remoteWatcher struct {
-	once sync.Once
-	stop chan struct{}
+	once   sync.Once
+	stop   chan struct{}
+	cancel context.CancelFunc
 }
 
-func (p *remoteWatcher) Close() { p.once.Do(func() { close(p.stop) }) }
+func (p *remoteWatcher) Close() {
+	p.once.Do(func() {
+		if p.cancel != nil {
+			p.cancel()
+		}
+		close(p.stop)
+	})
+}
 
 // startRemoteWatch replaces the file watcher of an SSH repository. It returns
 // the same Watcher contract so closing a repository or switching away stops
 // the goroutine exactly like a local watch.
 func (w *Workspace) startRemoteWatch(repo domain.Repo) Watcher {
-	p := &remoteWatcher{stop: make(chan struct{})}
+	base, cancel := context.WithCancel(context.Background())
+	p := &remoteWatcher{stop: make(chan struct{}), cancel: cancel}
 	state := w.Repo
 	git := w.Git
+	pollEvery := w.remotePollEvery
+	if pollEvery <= 0 {
+		pollEvery = remotePollEvery
+	}
+	metaEvery := w.remoteMetaEvery
+	if metaEvery <= 0 {
+		metaEvery = remoteMetaEvery
+	}
 	last := ""
 	if state != nil && state.StatusLoaded {
 		last = remoteStatusKey(state.Status)
 	}
 	go func() {
-		ticker := time.NewTicker(remotePollEvery)
+		ticker := time.NewTicker(pollEvery)
 		defer ticker.Stop()
 		notified := false
 		ticks := 0
@@ -55,10 +72,13 @@ func (w *Workspace) startRemoteWatch(repo domain.Repo) Watcher {
 				return
 			case <-ticker.C:
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), remotePollTimeout)
+			ctx, cancelStatus := context.WithTimeout(base, remotePollTimeout)
 			status, err := git.Status(ctx, repo)
-			cancel()
+			cancelStatus()
 			if err != nil {
+				if base.Err() != nil {
+					return
+				}
 				if !notified {
 					notified = true
 					w.post(func() {
@@ -72,24 +92,25 @@ func (w *Workspace) startRemoteWatch(repo domain.Repo) Watcher {
 			notified = false
 			ticks++
 			key := remoteStatusKey(status)
-			if key == last && ticks%remoteMetaEvery != 0 {
+			if key == last && ticks%metaEvery != 0 {
 				continue
 			}
-			if key == last {
-				// The periodic metadata refresh still needs the full query set.
-				w.post(func() {
-					if w.Repo == state {
-						w.Refresh(true)
-					}
-				})
-				continue
-			}
-			last = key
+			started := make(chan bool, 1)
 			w.post(func() {
-				if w.Repo == state {
-					w.Refresh(true)
+				if w.Repo != state {
+					started <- false
+					return
 				}
+				started <- w.refreshIfIdle(true)
 			})
+			select {
+			case ok := <-started:
+				if key != last && ok {
+					last = key
+				}
+			case <-p.stop:
+				return
+			}
 		}
 	}()
 	return p

@@ -241,9 +241,10 @@ func run() (code int) {
 	}
 
 	// A path argument opens that repository; otherwise the last one, as
-	// IntelliJ reopens the last project. A remote path (a WSL checkout) is
-	// passed on without a stat: probing it can block for seconds on a file
-	// system that has to boot first, and Discover reports failures anyway.
+	// IntelliJ reopens the last project. A remote path (an ssh:// URL or a WSL
+	// checkout) is passed on without a stat: probing it can block on the
+	// network or on a file system that has to boot first, and Discover reports
+	// failures anyway.
 	dir := ""
 	if len(os.Args) > 1 {
 		if sshpath.Is(os.Args[1]) {

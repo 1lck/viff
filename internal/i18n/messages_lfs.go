@@ -11,6 +11,9 @@ const (
 	ChromeTipLFSFiles   = Key("chrome.tip.lfsFiles")
 	ChromeTipLFSRules   = Key("chrome.tip.lfsRules")
 	ChromeTipLFSMissing = Key("chrome.tip.lfsMissing")
+	// The server's git-lfs is missing; the install command belongs to the
+	// server, not to the client this status bar is running on.
+	ChromeTipLFSMissingRemote = Key("chrome.tip.lfsMissingRemote")
 
 	// Commit-panel warning and the notification shown once per repository.
 	WorkspaceLFSMissingTitle = Key("workspace.lfs.missingTitle")
@@ -24,10 +27,11 @@ const (
 
 func init() {
 	register(EN, map[Key]string{
-		ChromeStatusLFS:     "LFS",
-		ChromeTipLFSFiles:   "Git LFS: %d managed files",
-		ChromeTipLFSRules:   "Git LFS: %d rules",
-		ChromeTipLFSMissing: "git-lfs is not installed",
+		ChromeStatusLFS:           "LFS",
+		ChromeTipLFSFiles:         "Git LFS: %d managed files",
+		ChromeTipLFSRules:         "Git LFS: %d rules",
+		ChromeTipLFSMissing:       "git-lfs is not installed",
+		ChromeTipLFSMissingRemote: "git-lfs is not installed on the server",
 
 		WorkspaceLFSMissingTitle: "Git LFS is not installed",
 		WorkspaceLFSRuleOne:      "%d LFS rule",
@@ -39,10 +43,11 @@ func init() {
 	})
 
 	register(ZHCN, map[Key]string{
-		ChromeStatusLFS:     "LFS",
-		ChromeTipLFSFiles:   "Git LFS：%d 个受管文件",
-		ChromeTipLFSRules:   "Git LFS：%d 条规则",
-		ChromeTipLFSMissing: "未安装 git-lfs",
+		ChromeStatusLFS:           "LFS",
+		ChromeTipLFSFiles:         "Git LFS：%d 个受管文件",
+		ChromeTipLFSRules:         "Git LFS：%d 条规则",
+		ChromeTipLFSMissing:       "未安装 git-lfs",
+		ChromeTipLFSMissingRemote: "服务器上未安装 git-lfs",
 
 		WorkspaceLFSMissingTitle: "未安装 Git LFS",
 		WorkspaceLFSRuleOne:      "%d 条 LFS 规则",

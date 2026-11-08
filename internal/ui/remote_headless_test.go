@@ -81,6 +81,18 @@ func TestRemoteRepositoryReadOnly(t *testing.T) {
 	if len(rs.Refs) == 0 {
 		t.Fatal("remote refs are empty")
 	}
+	if !f.s.HasText("SSH · read-only") {
+		t.Fatal("status bar does not show the read-only SSH badge")
+	}
+	f.win.openRemote()
+	f.win.Invalidate()
+	f.s.Settle(20*time.Millisecond, 2*time.Second)
+	if !f.s.HasText("Open Remote Repository") || !f.s.HasText("Read-only over SSH.") {
+		t.Fatal("remote dialog did not show its title and read-only note")
+	}
+	f.win.closeDialog()
+	f.win.Invalidate()
+	f.s.Settle(20*time.Millisecond, 2*time.Second)
 	if len(f.ws.Settings.Recent) == 0 || f.ws.Settings.Recent[0].Path != rs.Repo.Root {
 		t.Fatalf("recent = %+v", f.ws.Settings.Recent)
 	}

@@ -51,6 +51,9 @@ const (
 // itself checks again, so a change made in between still cannot be discarded
 // silently.
 func (w *Window) startSubmoduleAction(sm domain.Submodule, action submoduleAction) {
+	if w.guardReadOnly() {
+		return
+	}
 	w.ws.SubmoduleDirty(sm.Path, func(dirty bool, err error) {
 		w.after(func() {
 			if err != nil {
@@ -139,6 +142,9 @@ func (w *Window) confirmSubmoduleAction(sm domain.Submodule, action submoduleAct
 // validates the path before Git starts because a bad path is a typo, while a
 // clone failure is Git's to report.
 func (w *Window) openSubmoduleAdd() {
+	if w.guardReadOnly() {
+		return
+	}
 	url := text.NewEditor("")
 	path := text.NewEditor("")
 	lastAuto := ""

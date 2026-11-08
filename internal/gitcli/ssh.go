@@ -77,25 +77,7 @@ func (r *Runner) sshCommand(ctx context.Context, target sshpath.Repo, remote str
 	if err != nil {
 		return nil, &Error{Kind: ErrNoSSH, Args: []string{"ssh"}, Err: err}
 	}
-	host := target.Host
-	if strings.Contains(host, ":") {
-		host = "[" + host + "]"
-	}
-	if target.User != "" {
-		host = target.User + "@" + host
-	}
-	args := []string{
-		"-T",
-		"-o", "BatchMode=yes",
-		"-o", "ConnectTimeout=10",
-		"-o", "ServerAliveInterval=15",
-		"-o", "ServerAliveCountMax=3",
-	}
-	if target.Port != 0 && target.Port != 22 {
-		args = append(args, "-p", strconv.Itoa(target.Port))
-	}
-	args = append(args, host, remote)
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := exec.CommandContext(ctx, binary, sshArgs(target, remote)...)
 	process.HideConsoleWindow(cmd)
 	// Keep ssh's own diagnostics in English so the error classification does
 	// not depend on the user's locale. The remote Git environment is set by
@@ -162,7 +144,7 @@ func parseRemoteContent(rel string, out []byte) (Content, error) {
 	case "M":
 		return Content{}, nil
 	case "D":
-		return Content{Exists: true, Submodule: true}, nil
+		return Content{Exists: true, Mode: "160000", Submodule: true}, nil
 	case "O":
 		return Content{Exists: true}, nil
 	case "L":
@@ -177,14 +159,18 @@ func parseRemoteContent(rel string, out []byte) (Content, error) {
 			return Content{}, fmt.Errorf("read %s on the server: bad size in %q", rel, header)
 		}
 		c := Content{Exists: true, Size: size, Mode: fields[2], TooLarge: size > ContentLimit}
+		if c.TooLarge {
+			// The preview is binary detection only, like the local reader; the
+			// body must not be mistaken for the file's contents.
+			c.Binary = isBinary(body)
+			return c, nil
+		}
 		c.Data = body
-		if !c.TooLarge {
-			if int64(len(c.Data)) < size {
-				return Content{}, fmt.Errorf("read %s on the server: got %d of %d bytes", rel, len(c.Data), size)
-			}
-			if int64(len(c.Data)) > size {
-				c.Data = c.Data[:size]
-			}
+		if int64(len(c.Data)) < size {
+			return Content{}, fmt.Errorf("read %s on the server: got %d of %d bytes", rel, len(c.Data), size)
+		}
+		if int64(len(c.Data)) > size {
+			c.Data = c.Data[:size]
 		}
 		c.Binary = isBinary(c.Data)
 		return c, nil
@@ -208,7 +194,7 @@ func (t sshTransport) Operation(ctx context.Context, repo domain.Repo) (domain.O
 	if err != nil {
 		return domain.Operation{}, err
 	}
-	if op.Incoming != "" && op.Kind != domain.OpBisect {
+	if op.Incoming != "" && op.Kind != domain.OpBisect && safeObjectID(op.Incoming) {
 		if out, err := t.r.Run(ctx, repo.Root, "log", "-1", "--format=%s", op.Incoming, "--"); err == nil {
 			op.IncomingSubject = strings.TrimSpace(string(out))
 		}
@@ -341,10 +327,16 @@ func (r *Runner) runRemoteScript(ctx context.Context, repo domain.Repo, script s
 // fails closed instead of mutating the server. Only read-only commands and
 // their read-only argument shapes are accepted.
 func remoteReadCommand(args []string) bool {
-	// --output writes a file on the server. None of the read commands Viff
-	// runs need it, so reject it before looking at the subcommand.
+	// These options write on the server or hand data to a pager/filter. None
+	// of the read commands Viff runs need them, so reject them before looking
+	// at the subcommand.
 	for _, a := range args {
-		if a == "--output" || strings.HasPrefix(a, "--output=") {
+		switch a {
+		case "--output", "-O", "--open-files-in-pager", "--filters", "--ext-diff", "--textconv":
+			return false
+		}
+		if strings.HasPrefix(a, "--output=") || strings.HasPrefix(a, "--open-files-in-pager=") ||
+			strings.HasPrefix(a, "--filters=") || strings.HasPrefix(a, "-O") {
 			return false
 		}
 	}
@@ -359,8 +351,7 @@ func remoteReadCommand(args []string) bool {
 	case "status", "log", "show", "diff", "cat-file", "rev-parse", "rev-list",
 		"for-each-ref", "show-ref", "merge-base", "blame", "ls-files", "ls-tree",
 		"grep", "describe", "check-ref-format", "count-objects", "diff-tree",
-		"diff-index", "check-ignore", "check-attr", "name-rev", "shortlog", "var",
-		"help":
+		"diff-index", "check-ignore", "check-attr", "name-rev", "shortlog", "var":
 		return true
 	case "symbolic-ref":
 		for _, a := range rest {
@@ -508,6 +499,28 @@ func readOnlyConfig(rest []string) bool {
 		}
 	}
 	return read
+}
+
+// sshArgs is the local ssh argv. OpenSSH does not accept the URL's bracketed
+// IPv6 spelling as a destination: it treats "[::1]" as a DNS name. The host
+// therefore goes in raw ("::1") and only the URL/display spelling keeps
+// brackets. Keeping the argv in one place also makes it testable.
+func sshArgs(target sshpath.Repo, remote string) []string {
+	host := target.Host
+	if target.User != "" {
+		host = target.User + "@" + host
+	}
+	args := []string{
+		"-T",
+		"-o", "BatchMode=yes",
+		"-o", "ConnectTimeout=10",
+		"-o", "ServerAliveInterval=15",
+		"-o", "ServerAliveCountMax=3",
+	}
+	if target.Port != 0 && target.Port != 22 {
+		args = append(args, "-p", strconv.Itoa(target.Port))
+	}
+	return append(args, host, remote)
 }
 
 // readOnlyRemote refuses a write on an SSH repository before any local file

@@ -15,16 +15,15 @@ const (
 	AppErrorSSHHostKey     = Key("app.error.sshHostKey")
 	AppErrorSSHGitMissing  = Key("app.error.sshGitMissing")
 
-	RemoteDialogTitle            = Key("remote.dialog.title")
-	RemoteDialogHost             = Key("remote.dialog.host")
-	RemoteDialogHostPlaceholder  = Key("remote.dialog.hostPlaceholder")
-	RemoteDialogPath             = Key("remote.dialog.path")
-	RemoteDialogPathPlaceholder  = Key("remote.dialog.pathPlaceholder")
-	RemoteDialogNote             = Key("remote.dialog.note")
-	RemoteDialogOpen             = Key("remote.dialog.open")
-	RemoteDialogInvalidHost      = Key("remote.dialog.invalidHost")
-	RemoteDialogInvalidPath      = Key("remote.dialog.invalidPath")
-	RemoteDialogInvalidAuthority = Key("remote.dialog.invalidAuthority")
+	RemoteDialogTitle           = Key("remote.dialog.title")
+	RemoteDialogHost            = Key("remote.dialog.host")
+	RemoteDialogHostPlaceholder = Key("remote.dialog.hostPlaceholder")
+	RemoteDialogPath            = Key("remote.dialog.path")
+	RemoteDialogPathPlaceholder = Key("remote.dialog.pathPlaceholder")
+	RemoteDialogNote            = Key("remote.dialog.note")
+	RemoteDialogOpen            = Key("remote.dialog.open")
+	RemoteDialogInvalidHost     = Key("remote.dialog.invalidHost")
+	RemoteDialogInvalidPath     = Key("remote.dialog.invalidPath")
 
 	ChromeMenuOpenRemote    = Key("chrome.menu.openRemote")
 	WelcomeOpenRemote       = Key("welcome.openRemote")
@@ -51,16 +50,15 @@ func init() {
 		AppErrorSSHHostKey:     "The server's host key is not trusted yet. Run `ssh <host>` once in a terminal, confirm the key, then try again.",
 		AppErrorSSHGitMissing:  "Git is not installed on the server, or the non-interactive SSH PATH cannot find it.",
 
-		RemoteDialogTitle:            "Open Remote Repository",
-		RemoteDialogHost:             "Host",
-		RemoteDialogHostPlaceholder:  "dev or me@host:2222",
-		RemoteDialogPath:             "Repository path",
-		RemoteDialogPathPlaceholder:  "/srv/app",
-		RemoteDialogNote:             "Read-only over SSH. Viff uses the system ssh and your ~/.ssh/config; the host key must be trusted and a key must be loaded into ssh-agent.",
-		RemoteDialogOpen:             "Open",
-		RemoteDialogInvalidHost:      "Enter a host such as dev or me@host:2222.",
-		RemoteDialogInvalidPath:      "Enter an absolute path on the server, such as /srv/app.",
-		RemoteDialogInvalidAuthority: "The host contains characters Viff cannot pass to ssh safely.",
+		RemoteDialogTitle:           "Open Remote Repository",
+		RemoteDialogHost:            "Host",
+		RemoteDialogHostPlaceholder: "dev or me@host:2222",
+		RemoteDialogPath:            "Repository path",
+		RemoteDialogPathPlaceholder: "/srv/app",
+		RemoteDialogNote:            "Read-only over SSH. Viff uses the system ssh and your ~/.ssh/config; the host key must be trusted and a key must be loaded into ssh-agent.",
+		RemoteDialogOpen:            "Open",
+		RemoteDialogInvalidHost:     "Enter a host such as dev or me@host:2222.",
+		RemoteDialogInvalidPath:     "Enter an absolute path on the server, such as /srv/app.",
 
 		ChromeMenuOpenRemote:    "Open Remote Repository…",
 		WelcomeOpenRemote:       "Open Remote",
@@ -85,16 +83,15 @@ func init() {
 		AppErrorSSHHostKey:     "服务器的主机密钥尚未被信任。请先在终端执行一次 `ssh <host>`，确认密钥后重试。",
 		AppErrorSSHGitMissing:  "服务器上没有安装 Git，或非交互式 SSH 的 PATH 找不到 git。",
 
-		RemoteDialogTitle:            "打开远程仓库",
-		RemoteDialogHost:             "主机",
-		RemoteDialogHostPlaceholder:  "dev 或 me@host:2222",
-		RemoteDialogPath:             "仓库路径",
-		RemoteDialogPathPlaceholder:  "/srv/app",
-		RemoteDialogNote:             "通过 SSH 只读打开。Viff 使用系统 ssh 和你的 ~/.ssh/config；主机密钥需已信任，密钥需已加载到 ssh-agent。",
-		RemoteDialogOpen:             "打开",
-		RemoteDialogInvalidHost:      "请输入主机，例如 dev 或 me@host:2222。",
-		RemoteDialogInvalidPath:      "请输入服务器上的绝对路径，例如 /srv/app。",
-		RemoteDialogInvalidAuthority: "主机里含有无法安全传给 ssh 的字符。",
+		RemoteDialogTitle:           "打开远程仓库",
+		RemoteDialogHost:            "主机",
+		RemoteDialogHostPlaceholder: "dev 或 me@host:2222",
+		RemoteDialogPath:            "仓库路径",
+		RemoteDialogPathPlaceholder: "/srv/app",
+		RemoteDialogNote:            "通过 SSH 只读打开。Viff 使用系统 ssh 和你的 ~/.ssh/config；主机密钥需已信任，密钥需已加载到 ssh-agent。",
+		RemoteDialogOpen:            "打开",
+		RemoteDialogInvalidHost:     "请输入主机，例如 dev 或 me@host:2222。",
+		RemoteDialogInvalidPath:     "请输入服务器上的绝对路径，例如 /srv/app。",
 
 		ChromeMenuOpenRemote:    "打开远程仓库…",
 		WelcomeOpenRemote:       "打开远程",
