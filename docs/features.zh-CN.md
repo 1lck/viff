@@ -8,6 +8,7 @@
 
 - **欢迎页**：最近项目（支持搜索和移除，不存在的路径标红）、打开、克隆、新建仓库，也可以把文件夹拖进窗口。搜索框在有查询词时同时匹配工作区里已添加的仓库，因此最近列表装不下的项目也能直接找到并打开，见 [0041](decisions/0041-commit-time-and-clock-format.md)。
 - **多仓库工作区**：欢迎页或项目菜单的 Repositories 可添加仓库、统一查看分支与改动、切换和移除条目。打开不是仓库的父目录时，Viff 会提供发现对话框，扫描并勾选其中的子仓库批量导入（包括仓库内嵌套的仓库、submodule 与 linked worktree）；扫描在后台执行、可取消，结果不会自动改变工作区，见 [0036](decisions/0036-repository-discovery.md)。点击文件会先切到所属仓库再查看 Diff；移除不删除磁盘文件，切换保留当前窗口内各仓库的提交说明草稿。
+- **远程仓库（SSH，只读）**：欢迎页或项目菜单的“打开远程仓库…”输入主机（`dev`、`me@host:2222`）与服务器上的绝对路径（`/srv/app`）。Viff 用系统 `ssh` 在服务器上执行 Git，读取状态、历史、diff、引用、文件树与工作树文件；不会暂存、提交、fetch/pull/push 或修改服务器。认证继承 `~/.ssh/config`、ssh-agent 与 known_hosts；首次连接前需在终端信任主机密钥，当前不提供密码输入框。文件变化靠每 5 秒轮询 `git status`（每第 6 次轮询补一次完整元数据刷新，以看到服务器上新建的分支/标签），没有本地文件监听；编辑、冲突逐块接受、终端、外部打开、ripgrep、交互式 rebase、worktree/submodule 增删都在该模式下禁用，但 worktree/submodule 列表仍可只读查看。见 [0043](decisions/0043-remote-ssh-readonly.md)。
 - **Commit 工具窗口**
   - 分组：Merge Conflicts / Staged / Changes / Unversioned Files，可按目录分组。
   - ChangeList：创建、重命名、删除清单，右键分配文件并按清单筛选。筛选仅影响未暂存和未跟踪文件；始终显示全部已暂存文件，提交仍包含全部暂存内容。筛选后的批量暂存只作用于可见文件。
@@ -125,5 +126,6 @@ VIFF_SHOTS=/some/dir go test -tags vivahead ./internal/ui/  # 同时把截图写
   - 不支持 rebase、stash、worktree、reflog、submodule；这些入口按能力位隐藏，而不是显示后报错。
   - 分支是目录约定加 `switch` 语义，不是轻量引用，所以「分支」操作的效果与 Git 不同。
   - 冲突解决后会在工作副本留下 `.mine` / `.r2` / `.r3` 辅助文件；Viff 已把它们从状态列表中过滤，但用户仍可能在文件系统里看到。
+- 远程仓库是只读观察模式：只能使用 key/agent 认证，不弹密码/口令；服务器需为 Linux/macOS 并安装 Git，不支持 Windows 的 OpenSSH 服务器；本机设置里的 Git 路径、签名、凭据助手与 SSH 命令对远程仓库不生效。fetch/pull/push、应用内编辑、冲突接受、终端、外部打开、ripgrep、交互式 rebase 与 worktree/submodule 增删均不可用（worktree/submodule 面板可只读查看）；刷新依赖 5 秒轮询并每 30 秒补一次元数据刷新，未做连接复用。见 [0043](decisions/0043-remote-ssh-readonly.md)。
 - 终端目前只有一个本地会话：不连 SSH、不支持多标签/分屏、搜索、链接、内联图片与鼠标上报；隐藏工具窗时 shell 继续运行，会话不跨重启恢复。切换仓库不会改写已在运行的 shell 的当前目录，新会话才从新仓库根目录开始。Windows 使用 ConPTY（需要 Windows 10 1809+），本机未做 Windows 实机验收。见 [0028](decisions/0028-integrated-terminal.md)。
 - Windows 版可直接打开 WSL 发行版内的仓库（`\\wsl.localhost\...` 或旧的 `\\wsl$`，两种写法视为同一仓库）：Git 由发行版执行，文件经 9P 读取，因此 diff 与刷新比本地磁盘慢；设置里针对 Windows git 的取值（Git 路径、GPG 程序、签名密钥、凭据助手、SSH 命令）对 WSL 仓库不生效，认证、签名与 hooks 全部取自 Linux 侧。文件监听在 WSL 仓库上放宽到 5 秒。内置终端与 `rg` 内容搜索仍走 Windows 侧，未针对 WSL 适配。见 [0038](decisions/0038-wsl-repositories.md)。

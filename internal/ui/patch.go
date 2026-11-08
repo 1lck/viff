@@ -101,6 +101,9 @@ func (w *Window) gitWindowMenu() []item {
 	if w.repo() == nil {
 		return nil
 	}
+	if w.readOnly() {
+		return w.gitMenu()
+	}
 	items := []item{
 		{title: w.t(i18n.PatchApply), icon: icons.Patch, run: func() { w.choosePatch(false) }},
 		{title: w.t(i18n.PatchApplyIndex), icon: icons.Patch, run: func() { w.choosePatch(true) }},
@@ -115,6 +118,9 @@ func (w *Window) gitWindowMenu() []item {
 
 // choosePatch asks for a saved patch and applies it.
 func (w *Window) choosePatch(cached bool) {
+	if w.guardReadOnly() {
+		return
+	}
 	paths, err := app.OpenFiles(app.OpenFileOptions{
 		Title: "Apply Patch",
 		Filters: []app.FileFilter{

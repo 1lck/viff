@@ -52,6 +52,23 @@ func (w *Workspace) run(title string, undo *undoSpec, op Op, o RunOptions) {
 	if rs == nil {
 		return
 	}
+	// The first remote version is an observation mode. A write never reaches
+	// the server; the UI hides the actions, and this is the shared backstop for
+	// a keyboard shortcut or a dialog that slipped through.
+	if !o.Read && rs.Repo.IsSSH() {
+		err := &gitcli.Error{Kind: gitcli.ErrReadOnlyRemote, Stderr: "remote repositories are read-only in Viff"}
+		if o.OnError != nil {
+			if !o.OnError(err) {
+				w.NotifyError(w.tr(i18n.AppNoticeReadOnlyRemote), err)
+			}
+		} else {
+			w.Notify(NoticeInfo, w.tr(i18n.AppNoticeReadOnlyRemote), w.tr(i18n.AppNoticeReadOnlyRemoteBody))
+		}
+		if o.Always != nil {
+			o.Always()
+		}
+		return
+	}
 	task, ctx, finish := w.startTask(title, !o.Read)
 	repo := rs.Repo
 	go func() {

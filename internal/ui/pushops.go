@@ -20,6 +20,9 @@ import (
 
 // openPushUpToCommit pushes c and every commit before it to a remote branch.
 func (w *Window) openPushUpToCommit(c domain.Commit) {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNoRemoteTitle), w.t(i18n.NotifyNoRemoteBody))
@@ -77,6 +80,9 @@ func (w *Window) openPushUpToCommit(c domain.Commit) {
 // openPushAnother pushes HEAD to a different remote or under another branch
 // name, leaving the local branch and its upstream alone.
 func (w *Window) openPushAnother(r domain.Ref) {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNoRemoteTitle), w.t(i18n.NotifyNoRemoteBody))
@@ -128,6 +134,9 @@ func (w *Window) openPushAnother(r domain.Ref) {
 // openDeleteRemoteTag deletes one tag on the chosen remote. The local tag is
 // kept, so the confirmation says so explicitly.
 func (w *Window) openDeleteRemoteTag(name string) {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNoRemoteTitle), w.t(i18n.PushNoRemoteForTag))

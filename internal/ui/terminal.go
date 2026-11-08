@@ -9,6 +9,7 @@ import (
 	"github.com/vivaui/viva/app"
 	"github.com/vivaui/viva/ui"
 
+	vapp "viff/internal/app"
 	"viff/internal/i18n"
 	"viff/internal/platform/pty"
 	"viff/internal/ui/term"
@@ -93,6 +94,10 @@ func (w *Window) toggleTerminal() {
 // welcome screen has no place to dock it.
 func (w *Window) openTerminal() {
 	if w.repo() == nil {
+		return
+	}
+	if w.readOnly() {
+		w.ws.Notify(vapp.NoticeInfo, w.t(i18n.ChromeStatusReadOnly), w.t(i18n.WorkspaceTipReadOnly))
 		return
 	}
 	w.termOpen = true

@@ -173,7 +173,7 @@ func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
 		})
 	}
 	rx := right(r) - 8
-	if t.src.Commit == "" {
+	if t.src.Commit == "" && !w.readOnly() {
 		y := r.Y + (r.Height-actionSize)/2
 		if w.action(idDiffOpen, rx-actionSize, y, icons.Edit, w.t(i18n.FileviewOpenExternal)+"\tF4", actOpts{}) {
 			p := t.src.Path
@@ -220,7 +220,7 @@ func (w *Window) paintEditToolbar(t *diffTab, r ui.Rect) {
 	}
 	x += bw + 10
 	rx := right(r) - 8
-	if t.src.Commit == "" {
+	if t.src.Commit == "" && !w.readOnly() {
 		if w.action(idDiffOpen, rx-actionSize, r.Y+(r.Height-actionSize)/2, icons.Edit, w.t(i18n.FileviewOpenExternal)+"\tF4", actOpts{}) {
 			p := t.src.Path
 			w.after(func() { w.openExternal(p, w.currentLine(t)) })

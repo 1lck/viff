@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"viff/internal/domain"
+	"viff/internal/sshpath"
 )
 
 // Discover finds the repository containing dir.
@@ -22,14 +24,37 @@ func (r *Runner) Discover(ctx context.Context, dir string) (domain.Repo, error) 
 	if len(lines) < 3 {
 		return domain.Repo{}, &Error{Kind: ErrNotRepository, Args: []string{"rev-parse"}, Stderr: "not a git repository (bare repositories are not supported)"}
 	}
-	// A WSL git reports Linux absolute paths; the repository identity is the
-	// \\wsl.localhost spelling so every layer outside gitcli sees one path
-	// domain (wsl.go). Repositories outside WSL pass through unchanged.
+	// A WSL git reports Linux absolute paths and a remote git reports paths on
+	// the server; the identity is the Windows UNC spelling or the ssh:// URL,
+	// so every layer outside gitcli sees one path domain (wsl.go, ssh.go).
+	// Repositories outside those domains pass through unchanged.
+	identity := func(p string) (string, error) {
+		v, err := toIdentityPath(dir, p)
+		if err != nil {
+			return "", fmt.Errorf("map repository path %q on the server: %w", p, err)
+		}
+		if sshpath.Is(dir) {
+			return v, nil
+		}
+		return filepath.Clean(v), nil
+	}
+	root, err := identity(lines[0])
+	if err != nil {
+		return domain.Repo{}, err
+	}
+	meta, err := identity(lines[1])
+	if err != nil {
+		return domain.Repo{}, err
+	}
+	common, err := identity(lines[2])
+	if err != nil {
+		return domain.Repo{}, err
+	}
 	repo := domain.Repo{
-		Root:      filepath.Clean(toWinPath(dir, lines[0])),
+		Root:      root,
 		Kind:      domain.KindGit,
-		MetaDir:   filepath.Clean(toWinPath(dir, lines[1])),
-		CommonDir: filepath.Clean(toWinPath(dir, lines[2])),
+		MetaDir:   meta,
+		CommonDir: common,
 	}
 	return repo, nil
 }
@@ -180,6 +205,10 @@ func parseBranchHeader(b *domain.BranchStatus, line string) {
 
 // Operation reads the in-progress operation from the Git directory.
 func (r *Runner) Operation(ctx context.Context, repo domain.Repo) domain.Operation {
+	if repo.IsSSH() {
+		op, _ := r.ssh().Operation(ctx, repo)
+		return op
+	}
 	gd := repo.MetaDir
 	read := func(name string) string {
 		b, err := os.ReadFile(filepath.Join(gd, name))
@@ -234,12 +263,27 @@ func (r *Runner) Operation(ctx context.Context, repo domain.Repo) domain.Operati
 	case exists("BISECT_LOG"):
 		op.Kind = domain.OpBisect
 	}
-	if op.Incoming != "" && op.Kind != domain.OpBisect {
+	if op.Incoming != "" && op.Kind != domain.OpBisect && safeObjectID(op.Incoming) {
 		if out, err := r.Run(ctx, repo.Root, "log", "-1", "--format=%s", op.Incoming, "--"); err == nil {
 			op.IncomingSubject = strings.TrimSpace(string(out))
 		}
 	}
 	return op
+}
+
+// safeObjectID keeps a hash read from .git state out of Git's option position.
+// The files normally hold a full object ID, but a damaged or crafted repository
+// must not turn a read into `log --output=...`.
+func safeObjectID(s string) bool {
+	if len(s) < 4 || len(s) > 128 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 // Conflicts lists unmerged paths with their index stages.

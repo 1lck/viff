@@ -3,7 +3,6 @@ package viffui
 import (
 	"context"
 	"os"
-	"path"
 	"sort"
 	"strings"
 
@@ -16,6 +15,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/i18n"
+	"viff/internal/sshpath"
 	"viff/internal/ui/icons"
 )
 
@@ -177,8 +177,11 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	// second tab's index stays 1 whenever it exists, which is what commitTab
 	// and paintStash rely on.
 	tabs := []string{w.t(i18n.WorkspacePanelCommit)}
-	if w.ws.Caps.Stash != nil {
+	if w.ws.Caps.Stash != nil && !w.readOnly() {
 		tabs = append(tabs, w.t(i18n.WorkspacePanelStash))
+	}
+	if w.readOnly() {
+		w.commitTab = 0
 	}
 	content, ax := w.toolHeader(r, idBanner, tabs, w.commitTab, func(i int) { w.commitTab = i })
 	if w.action(idHideCommit, ax-actionSize, r.Y+(headerH-actionSize)/2, icons.Hide, w.t(i18n.WorkspaceActionHide)+"\t⇧⎋", actOpts{}) {
@@ -195,8 +198,11 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	// The LFS warning sits below the operation banner: an in-progress merge or
 	// rebase is the more urgent state, and both clear once the effective
 	// problem is resolved.
-	if rs.LFS.NeedsInstall() {
+	if rs.LFS.NeedsInstall() && !w.readOnly() {
 		content = w.paintLFSBanner(content)
+	}
+	if rs.Repo.IsSSH() {
+		content = w.paintRemoteBanner(content)
 	}
 
 	// Toolbar.
@@ -207,7 +213,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	}
 	x += actionSize + 2
 	sel := w.selectedEntries()
-	if w.action(idCmRollback, x, y, icons.Revert, w.t(i18n.WorkspaceActionRollback)+"\t⌥⌘Z", actOpts{disabled: len(w.rollbackTargets()) == 0}) {
+	if w.action(idCmRollback, x, y, icons.Revert, w.t(i18n.WorkspaceActionRollback)+"\t⌥⌘Z", actOpts{disabled: w.readOnly() || len(w.rollbackTargets()) == 0}) {
 		w.after(w.openRollback)
 	}
 	x += actionSize + 2
@@ -219,14 +225,14 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	staged, _, _, _ := rs.Status.Counts()
 	// Stage All follows the filter: with a list selected it stages only the
 	// files that list shows, never the hidden ones.
-	if w.action(idCmStage, x, y, icons.Add, w.t(i18n.WorkspaceActionStageAll), actOpts{disabled: w.stageableCount() == 0}) {
+	if w.action(idCmStage, x, y, icons.Add, w.t(i18n.WorkspaceActionStageAll), actOpts{disabled: w.readOnly() || w.stageableCount() == 0}) {
 		w.after(w.stageAllVisible)
 	}
 	if w.cm.listID != "" {
 		w.tip(idCmStage, w.t(i18n.WorkspaceActionStageAllIn, w.changeListFilterName()))
 	}
 	x += actionSize + 2
-	if w.action(idCmUnstage, x, y, icons.Hide, w.t(i18n.WorkspaceActionUnstageAll), actOpts{disabled: staged == 0}) {
+	if w.action(idCmUnstage, x, y, icons.Hide, w.t(i18n.WorkspaceActionUnstageAll), actOpts{disabled: w.readOnly() || staged == 0}) {
 		w.after(func() { w.unstageAll() })
 	}
 	x += actionSize + 8
@@ -248,7 +254,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	}
 	x += actionSize + 2
 	if w.ws.Caps.Stash != nil {
-		if w.action(idCmStash, x, y, icons.Shelve, w.t(i18n.WorkspaceActionStashChanges), actOpts{disabled: rs.Status.Clean()}) {
+		if w.action(idCmStash, x, y, icons.Shelve, w.t(i18n.WorkspaceActionStashChanges), actOpts{disabled: w.readOnly() || rs.Status.Clean()}) {
 			w.after(w.openStashDialog)
 		}
 		x += actionSize + 2
@@ -326,6 +332,9 @@ func (w *Window) paintOperationBanner(r ui.Rect) ui.Rect {
 	w.p.text(title, rect(br.X+32, br.Y+6, br.Width-40, 22), fontUI, semibold, w.pal.Text)
 	w.p.text(detail, rect(br.X+32, br.Y+26, br.Width-40, 18), fontSmall, regular, w.pal.TextMuted)
 	bx, by := br.X+32, br.Y+h-34
+	if w.readOnly() {
+		return r
+	}
 	if op.CanContinue() {
 		label := w.t(i18n.WorkspaceButtonContinue)
 		bw := w.buttonWidth(label)
@@ -456,7 +465,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 		if row.kind != rowFile {
 			checked = w.changesRowChecked(i)
 		}
-		if w.checkbox(scChangeChecks.At(i), cbX, rr.Y, rowH, "", checked, false) {
+		if w.checkbox(scChangeChecks.At(i), cbX, rr.Y, rowH, "", checked, w.readOnly()) {
 			i := i
 			w.after(func() { w.toggleRowCheck(i) })
 		}
@@ -558,6 +567,9 @@ func (w *Window) changesRowChecked(i int) bool {
 
 // rowAction paints the hover +/- action at the right of a row.
 func (w *Window) rowAction(i int, row changeRow, hl ui.Rect) {
+	if w.readOnly() {
+		return
+	}
 	id := scChangeAction.At(i)
 	if !(w.hovered(scChangeRows.At(i)) || w.hovered(id)) {
 		return
@@ -771,9 +783,11 @@ func (w *Window) changesKey(e ui.KeyEvent) bool {
 			w.activateRow(v.rows[cur])
 		}
 	case ui.KeySpace:
-		w.toggleStageSelection()
+		if !w.readOnly() {
+			w.toggleStageSelection()
+		}
 	case ui.KeyDelete, ui.KeyBackspace:
-		if len(w.rollbackTargets()) > 0 {
+		if !w.readOnly() && len(w.rollbackTargets()) > 0 {
 			w.openRollback()
 		}
 	default:
@@ -815,6 +829,9 @@ func (w *Window) selectedEntries() []changeRow {
 }
 
 func (w *Window) toggleStageSelection() {
+	if w.guardReadOnly() {
+		return
+	}
 	var stage, unstage []string
 	for _, r := range w.selectedEntries() {
 		switch r.area {
@@ -843,6 +860,9 @@ func (w *Window) toggleStageSelection() {
 }
 
 func (w *Window) stageArea(areas ...domain.Area) {
+	if w.guardReadOnly() {
+		return
+	}
 	var paths []string
 	for _, a := range areas {
 		for _, e := range w.repo().Entries(a) {
@@ -892,6 +912,9 @@ func (w *Window) rollbackTargets() []changeRow {
 }
 
 func (w *Window) openRollback() {
+	if w.guardReadOnly() {
+		return
+	}
 	targets := w.rollbackTargets()
 	if len(targets) == 0 {
 		return
@@ -958,6 +981,7 @@ func (w *Window) changesMenu() []item {
 	if len(sel) == 0 {
 		return nil
 	}
+	readOnly := w.readOnly()
 	var stage, unstage bool
 	conflict := false
 	untrackedOnly := true
@@ -975,39 +999,46 @@ func (w *Window) changesMenu() []item {
 		}
 	}
 	first := sel[0]
-	root := w.repo().Repo.Root
-	full := path.Join(root, first.entry.Path)
+	full := w.repoPath(first.entry.Path)
 	items := []item{
 		{title: w.t(i18n.WorkspaceActionShowDiff), icon: icons.Diff, shortcut: "⌘D", run: func() { w.showDiff(w.sourceFor(first), true) }},
 	}
 	if len(sel) == 1 && first.entry.IsSubmodule() {
 		sub := first.entry.Path
-		items = append(items,
-			item{title: w.t(i18n.WorkspaceMenuUpdateSubmodule), icon: icons.Download, run: func() { w.ws.UpdateSubmodule(sub, true, nil) }},
-			item{title: w.t(i18n.WorkspaceMenuOpenSubmodule), icon: icons.Folder, run: func() { w.openSubmodule(sub) }},
-		)
+		if !readOnly {
+			items = append(items, item{title: w.t(i18n.WorkspaceMenuUpdateSubmodule), icon: icons.Download, run: func() { w.ws.UpdateSubmodule(sub, true, nil) }})
+		}
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuOpenSubmodule), icon: icons.Folder, run: func() { w.openSubmodule(sub) }})
 	}
-	if stage {
-		items = append(items, item{title: w.t(i18n.WorkspaceMenuStage), icon: icons.Add, shortcut: "Space", run: w.toggleStageSelection})
-	}
-	if unstage {
-		items = append(items, item{title: w.t(i18n.WorkspaceMenuUnstage), icon: icons.Hide, shortcut: "Space", run: w.toggleStageSelection})
-	}
-	if conflict {
-		items = append(items, item{title: w.t(i18n.WorkspaceMenuMarkResolved), icon: icons.Checked, run: func() { w.markResolved(first.entry.Path) }})
-	}
-	if move := w.changeListMoveItems(sel); len(move) > 0 {
-		items = append(items, item{title: w.t(i18n.WorkspaceMenuMoveToChangeList), icon: icons.Changelist, sub: move})
-	}
-	items = append(items, item{title: w.t(i18n.WorkspaceActionRollback), icon: icons.Revert, shortcut: "⌥⌘Z", disabled: len(w.rollbackTargets()) == 0, run: w.openRollback}, sep())
-	if untrackedOnly {
-		items = append(items, item{title: w.t(i18n.WorkspaceMenuAddToGitignore), icon: icons.Gitignore, run: func() { w.addToGitignore(sel) }})
+	if !readOnly {
+		if stage {
+			items = append(items, item{title: w.t(i18n.WorkspaceMenuStage), icon: icons.Add, shortcut: "Space", run: w.toggleStageSelection})
+		}
+		if unstage {
+			items = append(items, item{title: w.t(i18n.WorkspaceMenuUnstage), icon: icons.Hide, shortcut: "Space", run: w.toggleStageSelection})
+		}
+		if conflict {
+			items = append(items, item{title: w.t(i18n.WorkspaceMenuMarkResolved), icon: icons.Checked, run: func() { w.markResolved(first.entry.Path) }})
+		}
+		if move := w.changeListMoveItems(sel); len(move) > 0 {
+			items = append(items, item{title: w.t(i18n.WorkspaceMenuMoveToChangeList), icon: icons.Changelist, sub: move})
+		}
+		items = append(items, item{title: w.t(i18n.WorkspaceActionRollback), icon: icons.Revert, shortcut: "⌥⌘Z", disabled: len(w.rollbackTargets()) == 0, run: w.openRollback}, sep())
+		if untrackedOnly {
+			items = append(items, item{title: w.t(i18n.WorkspaceMenuAddToGitignore), icon: icons.Gitignore, run: func() { w.addToGitignore(sel) }})
+		}
 	}
 	items = append(items,
 		item{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(first.entry.Path) }},
-		item{title: w.t(i18n.WorkspaceMenuAnnotate), disabled: !canAnnotate(first, full), run: func() { w.openFileView(first.entry.Path, "", true) }},
-		item{title: w.t(i18n.WorkspaceMenuOpenInEditor), icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(first.entry.Path, 0) }},
-		item{title: w.t(i18n.WorkspaceMenuRevealInFinder), icon: icons.Folder, run: func() { revealPath(full) }},
+	)
+	items = append(items, item{title: w.t(i18n.WorkspaceMenuAnnotate), disabled: !w.canAnnotate(first), run: func() { w.openFileView(first.entry.Path, "", true) }})
+	if !readOnly {
+		items = append(items,
+			item{title: w.t(i18n.WorkspaceMenuOpenInEditor), icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(first.entry.Path, 0) }},
+			item{title: w.t(i18n.WorkspaceMenuRevealInFinder), icon: icons.Folder, run: func() { revealPath(full) }},
+		)
+	}
+	items = append(items,
 		sep(),
 		item{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
 		item{title: w.t(i18n.WorkspaceActionCopyRelativePath), run: func() { w.copyText(first.entry.Path) }},
@@ -1016,6 +1047,20 @@ func (w *Window) changesMenu() []item {
 	items = append(items, sep(),
 		item{title: w.t(i18n.WorkspaceMenuCreatePatch), icon: icons.Patch, disabled: !canPatch, run: func() { w.savePatch(patchPaths, patchStaged) }})
 	return items
+}
+
+// canAnnotate reports whether blame can be opened for this row. A remote row
+// has no local file to stat; the status entry already says whether it is a
+// submodule, and a deleted/untracked row cannot be blamed.
+func (w *Window) canAnnotate(r changeRow) bool {
+	if r.area == domain.AreaUntracked || r.area == domain.AreaConflicts || r.entry.IsSubmodule() {
+		return false
+	}
+	if w.readOnly() {
+		return r.entry.KindIn(r.area) != domain.ChangeDeleted
+	}
+	st, err := os.Stat(w.repoPath(r.entry.Path))
+	return err == nil && st.Mode().IsRegular()
 }
 
 func (w *Window) copyText(s string) {
@@ -1038,6 +1083,10 @@ func (w *Window) setClipboardText(s string) error {
 func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 	v := &w.cm
 	rs := w.repo()
+	if w.readOnly() {
+		w.paintReadOnlyCommitMessage(r)
+		return
+	}
 	// Amend + options row. A backend that cannot rewrite a committed revision
 	// (Subversion) does not offer Amend at all, so the checkbox is absent and
 	// v.amend can never be set from the window.
@@ -1250,6 +1299,9 @@ func (w *Window) toggleAmend() {
 }
 
 func (w *Window) doCommit(push bool) {
+	if w.guardReadOnly() {
+		return
+	}
 	v := &w.cm
 	rs := w.repo()
 	committable := w.ws.CommittableCount()
@@ -1305,12 +1357,32 @@ func runeToByte(s string, r int) int {
 	return len(s)
 }
 
-// canAnnotate reports whether a working-tree file has history to blame: it
-// is tracked, not conflicted and still on disk.
-func canAnnotate(r changeRow, full string) bool {
-	if r.area == domain.AreaUntracked || r.area == domain.AreaConflicts {
-		return false
+// paintRemoteBanner states the read-only contract at the top of the Commit
+// panel. It sits below the operation banner when an operation is active: the
+// operation state is the more urgent fact, and both are cleared by the same
+// refresh.
+func (w *Window) paintRemoteBanner(r ui.Rect) ui.Rect {
+	rs := w.repo()
+	host := rs.Repo.Root
+	if target, err := sshpath.Parse(rs.Repo.Root); err == nil {
+		host = target.Display()
 	}
-	st, err := os.Stat(full)
-	return err == nil && st.Mode().IsRegular()
+	const h = float32(72)
+	b := splitTop(&r, h+8)
+	br := rect(b.X+8, b.Y+4, b.Width-16, h)
+	w.p.outline(br, 8, 1, w.pal.BannerBorder, w.pal.Banner)
+	w.p.iconIn(icons.Vcs, rect(br.X+8, br.Y+6, 20, 22))
+	w.p.text(w.t(i18n.WorkspaceBannerRemoteTitle), rect(br.X+32, br.Y+6, br.Width-40, 20), fontUI, semibold, w.pal.Text)
+	w.p.text(w.t(i18n.WorkspaceBannerRemoteBody, host), rect(br.X+32, br.Y+26, br.Width-40, 18), fontSmall, regular, w.pal.TextMuted)
+	w.p.text(w.t(i18n.WorkspaceTipReadOnly), rect(br.X+32, br.Y+44, br.Width-40, 16), fontSmall, regular, w.pal.TextDisable)
+	return r
+}
+
+// paintReadOnlyCommitMessage replaces the editor and the commit buttons. A
+// disabled editor would still invite typing; a short statement says where the
+// change belongs instead.
+func (w *Window) paintReadOnlyCommitMessage(r ui.Rect) {
+	inner := rect(r.X+10, r.Y+6, r.Width-20, r.Height-12)
+	w.p.text(w.t(i18n.WorkspaceRemoteCommitHint), rect(inner.X, inner.Y, inner.Width, 20), fontUI, semibold, w.pal.Text)
+	w.p.text(w.t(i18n.WorkspaceRemoteCommitBody), rect(inner.X, inner.Y+22, inner.Width, 18), fontSmall, regular, w.pal.TextMuted)
 }

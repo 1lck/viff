@@ -121,6 +121,11 @@ type Workspace struct {
 	// every list change; the next success clears it.
 	workspaceSaveWarned bool
 
+	// remotePollEvery and remoteMetaEvery are test seams for the SSH watcher.
+	// Zero means the production defaults in remote_watch.go.
+	remotePollEvery time.Duration
+	remoteMetaEvery int
+
 	Notifications []Notification
 	Console       []ConsoleEntry
 	Tasks         []*Task
@@ -616,6 +621,13 @@ func (w *Workspace) NotifyError(title string, err error) {
 	w.notify(NoticeError, title, w.ErrorText(err), gitcli.CodeOf(err))
 }
 
+// ReadOnly reports whether the active repository is opened over SSH and
+// therefore accepts no writes in this version. The interface uses it to hide
+// write actions instead of showing them and failing afterwards.
+func (w *Workspace) ReadOnly() bool {
+	return w.Repo != nil && w.Repo.Repo.IsSSH()
+}
+
 // ErrorText is the message of an error suitable for the UI, with a hint for
 // failures the user can act on.
 //
@@ -652,6 +664,18 @@ func (w *Workspace) ErrorText(err error) string {
 		} else {
 			msg = w.tr(i18n.AppErrorToolMissingGit)
 		}
+	case gitcli.ErrNoSSH:
+		msg = w.tr(i18n.AppErrorSSHMissing)
+	case gitcli.ErrSSHConnect:
+		msg += "\n\n" + w.tr(i18n.AppErrorSSHConnect)
+	case gitcli.ErrSSHAuth:
+		msg += "\n\n" + w.tr(i18n.AppErrorSSHAuth)
+	case gitcli.ErrSSHHostKey:
+		msg += "\n\n" + w.tr(i18n.AppErrorSSHHostKey)
+	case gitcli.ErrSSHGitMissing:
+		msg = w.tr(i18n.AppErrorSSHGitMissing)
+	case gitcli.ErrReadOnlyRemote:
+		msg = w.tr(i18n.AppErrorReadOnlyRemote)
 	}
 	if errors.Is(err, ErrUnsupported) {
 		msg = w.tr(i18n.AppErrorUnsupported)
@@ -693,6 +717,18 @@ func ErrorText(err error) string {
 		msg = "The WSL distribution named in the path does not exist. Check the spelling — a WSL repository path looks like \\\\wsl.localhost\\Ubuntu\\home\\you\\repo."
 	case gitcli.ErrNoWSLGit:
 		msg = "Git is not installed inside the WSL distribution. Install it there (for example: sudo apt install git) and try again."
+	case gitcli.ErrNoSSH:
+		msg = "SSH was not found. Install an OpenSSH client and try again."
+	case gitcli.ErrSSHConnect:
+		msg += "\n\nViff could not reach the server. Check the host, port and network."
+	case gitcli.ErrSSHAuth:
+		msg += "\n\nSSH authentication failed. Load a key into ssh-agent or configure IdentityFile in ~/.ssh/config."
+	case gitcli.ErrSSHHostKey:
+		msg += "\n\nThe host key is not trusted yet. Run `ssh <host>` once in a terminal, then retry."
+	case gitcli.ErrSSHGitMissing:
+		msg = "Git is not installed on the server, or the non-interactive SSH PATH cannot find it."
+	case gitcli.ErrReadOnlyRemote:
+		msg = "This remote repository is read-only in Viff. Change it on the server or in another terminal."
 	}
 	if len(msg) > 2000 {
 		msg = msg[:2000] + "…"

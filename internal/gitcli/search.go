@@ -165,7 +165,7 @@ func (r *Runner) searchGit(ctx context.Context, root, query string, opts SearchO
 		if code, ok := exitStatus(waitErr); ok && code == 1 {
 			return res, nil
 		}
-		return SearchResult{}, r.wrap(ctx, args, waitErr, stderr.buf.String(), "")
+		return SearchResult{}, r.wrap(ctx, root, args, waitErr, stderr.buf.String(), "")
 	}
 	return res, nil
 }

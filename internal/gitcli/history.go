@@ -406,7 +406,11 @@ func (r *Runner) Worktrees(ctx context.Context, repo domain.Repo) ([]domain.Work
 			// Git reports the worktree location as an absolute path in its own
 			// file system; the identity Viff compares against (samePath,
 			// WorktreeElsewhere) is the \\wsl.localhost spelling (wsl.go).
-			cur = &domain.Worktree{Path: toWinPath(repo.Root, strings.TrimPrefix(f, "worktree "))}
+			path, err := toIdentityPath(repo.Root, strings.TrimPrefix(f, "worktree "))
+			if err != nil {
+				return nil, err
+			}
+			cur = &domain.Worktree{Path: path}
 		case cur == nil:
 		case strings.HasPrefix(f, "HEAD "):
 			cur.Head = strings.TrimPrefix(f, "HEAD ")

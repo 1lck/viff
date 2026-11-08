@@ -193,6 +193,9 @@ func (w *Window) paintStash(r ui.Rect) {
 }
 
 func (w *Window) confirmDropStash(s domain.Stash) {
+	if w.guardReadOnly() {
+		return
+	}
 	w.confirm(w.t(i18n.WorkspaceStashDropTitle), w.t(i18n.WorkspaceStashDropBody, s.Ref, s.Message), w.t(i18n.WorkspaceStashDropButton), func() {
 		w.ws.StashDrop(s)
 	})
@@ -204,6 +207,9 @@ func (w *Window) openStashBranch(s domain.Stash) {
 
 // openNewBranchFor asks for a branch name and calls fn with it.
 func (w *Window) openNewBranchFor(title string, fn func(string)) {
+	if w.guardReadOnly() {
+		return
+	}
 	name := newEditor()
 	w.openDialog(&dialog{
 		title: title, ok: "Create", width: 440,

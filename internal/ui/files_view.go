@@ -1,7 +1,6 @@
 package viffui
 
 import (
-	"path"
 	"strings"
 
 	"github.com/vivaui/viva/ui"
@@ -50,7 +49,7 @@ func (w *Window) ensureFiles() {
 		v.at = rs.StatusTime
 		v.status = fileStatuses(rs)
 		v.rootName = rs.Repo.Name()
-		v.rootHint = shortenHome(rs.Repo.Root)
+		v.rootHint = repoRootLabel(rs.Repo.Root)
 		if v.sel == "" {
 			v.sel = projectRootKey
 		}
@@ -484,17 +483,23 @@ func (w *Window) filesMenu(row fileRow) []item {
 			{title: w.t(i18n.WorkspaceActionCopyRelativePath), icon: icons.Copy, run: func() { w.copyText(row.path) }},
 		}
 	}
-	rs := w.repo()
-	full := path.Join(rs.Repo.Root, row.path)
-	return []item{
+	full := w.repoPath(row.path)
+	items := []item{
 		{title: w.t(i18n.WorkspaceMenuOpen), icon: icons.OpenNewTab, run: func() { w.openRepoFile(row.path, true) }},
-		{title: w.t(i18n.WorkspaceMenuOpenInEditor), icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(row.path, 0) }},
-		sep(),
-		{title: w.t(i18n.WorkspaceMenuAnnotate), icon: icons.Vcs, run: func() { w.openFileView(row.path, "", true) }},
-		{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(row.path) }},
-		sep(),
-		{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
-		{title: w.t(i18n.WorkspaceActionCopyRelativePath), run: func() { w.copyText(row.path) }},
-		{title: w.t(i18n.WorkspaceMenuRevealInFinder), icon: icons.Folder, run: func() { revealPath(full) }},
 	}
+	if !w.readOnly() {
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuOpenInEditor), icon: icons.Edit, shortcut: "F4", run: func() { w.openExternal(row.path, 0) }})
+	}
+	items = append(items,
+		sep(),
+		item{title: w.t(i18n.WorkspaceMenuAnnotate), icon: icons.Vcs, run: func() { w.openFileView(row.path, "", true) }},
+		item{title: w.t(i18n.WorkspaceMenuShowHistory), icon: icons.History, run: func() { w.showPathHistory(row.path) }},
+		sep(),
+		item{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, shortcut: "⇧⌘C", run: func() { w.copyText(full) }},
+		item{title: w.t(i18n.WorkspaceActionCopyRelativePath), run: func() { w.copyText(row.path) }},
+	)
+	if !w.readOnly() {
+		items = append(items, item{title: w.t(i18n.WorkspaceMenuRevealInFinder), icon: icons.Folder, run: func() { revealPath(full) }})
+	}
+	return items
 }

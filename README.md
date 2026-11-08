@@ -72,6 +72,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Work on the web       | Open commits, branches, comparisons, and the pull request form on GitHub, GitLab, Bitbucket, or Gitea                                                        |
 | Run commands          | Integrated terminal in the current repository: scrollback, selection copy, paste, clear, restart, and resize                                                   |
 | Open WSL repositories | On Windows, open a repository inside a WSL distribution: Git runs in the distribution, files are read through `\\wsl.localhost`                                |
+| Observe SSH repositories | Open a working tree on a Linux/macOS server as `ssh://host/path` in read-only mode: status, history, diffs, refs and files come from the server's Git; nothing is written |
 | Work in your language | English and Simplified Chinese interface, English by default, switchable in Settings                                                                          |
 
 In Log → Branch, type to search local branches, remote branches, and tags.

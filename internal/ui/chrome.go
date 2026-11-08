@@ -13,6 +13,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/i18n"
 	"viff/internal/platform"
+	"viff/internal/sshpath"
 	"viff/internal/storage"
 	"viff/internal/ui/icons"
 )
@@ -130,6 +131,7 @@ func (w *Window) paintToolbar(r ui.Rect) {
 		x = r.X + 10
 	}
 	rs := w.repo()
+	readOnly := w.readOnly()
 	cy := r.Y + (r.Height-28)/2
 
 	// Project widget.
@@ -141,7 +143,7 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	w.p.text(name, rect(x+34, cy, pw, 28), fontUI, semibold, w.pal.Text)
 	w.p.iconIn(icons.ChevronDown, rect(right(pr)-22, cy, 16, 28))
 	w.c.HitWithOptions(idProjectWidget, pr, w.t(i18n.ChromeA11yProject, name), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
-	w.tip(idProjectWidget, rs.Repo.Root)
+	w.tip(idProjectWidget, repoRootHint(rs.Repo.Root))
 	if w.clicked(idProjectWidget, nil) {
 		w.after(func() { w.openMenuBelow(pr, w.projectMenu(), 280) })
 	}
@@ -194,21 +196,21 @@ func (w *Window) paintToolbar(r ui.Rect) {
 	// being shown and doing nothing.
 	separatePush := w.ws.Caps.SeparatePush
 	if separatePush {
-		if w.action(idTbPush, ax, ay, icons.Push, w.t(i18n.ChromeTbPush)+"\t⇧⌘K", actOpts{disabled: !rs.HasHead()}) {
+		if w.action(idTbPush, ax, ay, icons.Push, w.t(i18n.ChromeTbPush)+"\t⇧⌘K", actOpts{disabled: readOnly || !rs.HasHead()}) {
 			w.after(w.openPush)
 		}
 		ax -= actionSize + 4
 	}
-	if w.action(idTbCommit, ax, ay, icons.Commit, w.t(i18n.ChromeTbCommit)+"\t⌘K", actOpts{}) {
+	if w.action(idTbCommit, ax, ay, icons.Commit, w.t(i18n.ChromeTbCommit)+"\t⌘K", actOpts{disabled: readOnly}) {
 		w.after(w.focusCommit)
 	}
 	ax -= actionSize + 4
-	if w.action(idTbUpdate, ax, ay, icons.Update, w.t(i18n.ChromeTbUpdate)+"\t⌘T", actOpts{disabled: len(rs.Remotes) == 0}) {
+	if w.action(idTbUpdate, ax, ay, icons.Update, w.t(i18n.ChromeTbUpdate)+"\t⌘T", actOpts{disabled: readOnly || len(rs.Remotes) == 0}) {
 		w.after(w.openUpdate)
 	}
 	if separatePush {
 		ax -= actionSize + 4
-		if w.action(idTbFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: len(rs.Remotes) == 0 || busy && w.taskRunning("Fetch")}) {
+		if w.action(idTbFetch, ax, ay, icons.Fetch, w.t(i18n.ChromeTbFetch), actOpts{disabled: readOnly || len(rs.Remotes) == 0 || busy && w.taskRunning("Fetch")}) {
 			w.after(func() { w.ws.Fetch(false) })
 		}
 	}
@@ -266,6 +268,7 @@ func (w *Window) projectMenu() []item {
 	var out []item
 	out = append(out, item{title: w.t(i18n.ChromeMenuOpen), icon: icons.Open, shortcut: "⌘O", run: w.chooseRepoNow},
 		item{title: w.t(i18n.ChromeMenuClone), icon: icons.Download, run: w.openClone},
+		item{title: w.t(i18n.ChromeMenuOpenRemote), icon: icons.Vcs, run: w.openRemote},
 		item{title: w.t(i18n.ChromeMenuNewRepository), icon: icons.Add, run: w.openInit},
 		item{title: w.t(i18n.ChromeMenuRepositories), icon: icons.Project, run: w.openRepositories})
 	cur := ""
@@ -280,22 +283,28 @@ func (w *Window) projectMenu() []item {
 				break
 			}
 			path := r.Path
-			name := filepath.Base(path)
-			it := item{title: name, hint: shortenHome(filepath.Dir(path)), run: func() { w.openRepo(path) }, filter: path}
+			name := repoRootName(path)
+			hint := shortenHome(filepath.Dir(path))
+			if sshpath.Is(path) {
+				hint = repoRootLabel(path)
+			}
+			it := item{title: name, hint: hint, run: func() { w.openRepo(path) }, filter: path}
 			if path == cur {
 				it.checked = true
 			}
 			out = append(out, it)
 		}
 	}
+	readOnly := w.readOnly()
 	if w.ws.Repo != nil {
 		// The newest recorded operation, named as the user performed it. The
 		// same action is on Command-Z; the menu is the discoverable copy and
-		// stays disabled while another command is changing the history.
+		// stays disabled while another command is changing the history or the
+		// repository is a read-only remote one.
 		undo := item{title: w.t(i18n.ChromeMenuUndo), icon: icons.Undo, shortcut: "⌘Z", disabled: true}
 		if name := w.ws.UndoName(); name != "" {
 			undo.title = w.t(i18n.ChromeMenuUndoOperation, name)
-			undo.disabled = w.ws.Busy()
+			undo.disabled = w.ws.Busy() || readOnly
 			undo.run = w.ws.Undo
 		}
 		out = append(out, sep(), undo,
@@ -306,9 +315,9 @@ func (w *Window) projectMenu() []item {
 			out = append(out, item{title: w.t(i18n.SearchMenuFindInFiles), icon: icons.Search, shortcut: "⇧⌘F", run: w.openFindInFiles})
 		}
 		out = append(out,
-			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, run: func() { revealPath(cur) }},
-			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, run: w.openTerminal},
-			item{title: w.t(i18n.ChromeMenuOpenSystemTerm), icon: icons.Shell, run: func() { openTerminal(cur) }},
+			item{title: w.t(i18n.ChromeMenuShowInFinder), icon: icons.Folder, disabled: readOnly, run: func() { revealPath(cur) }},
+			item{title: w.t(i18n.ChromeMenuOpenTerminal), icon: icons.Shell, disabled: readOnly, run: w.openTerminal},
+			item{title: w.t(i18n.ChromeMenuOpenSystemTerm), icon: icons.Shell, disabled: readOnly, run: func() { openTerminal(cur) }},
 			sep(),
 			item{title: w.t(i18n.ChromeMenuCloseProject), run: w.closeProject})
 	}
@@ -401,6 +410,16 @@ func (w *Window) paintStatus(r ui.Rect) {
 	x += 18
 	tw = w.p.text(rs.HeadLabel(), rect(x, r.Y, 300, r.Height), fontUI, regular, w.pal.TextMuted)
 	x += tw
+	if rs.Repo.IsSSH() {
+		x += 16
+		label := w.t(i18n.ChromeStatusReadOnly)
+		lw := w.p.width(label, fontUI, regular)
+		lr := rect(x, r.Y, lw+8, r.Height)
+		w.p.text(label, lr, fontUI, regular, w.pal.Warning)
+		w.c.HitWithOptions(idStatusRemote, lr, w.t(i18n.ChromeTipReadOnlyRemote), ui.HitOptions{Role: ui.RoleStatus, SkipFocus: true})
+		w.tip(idStatusRemote, w.t(i18n.ChromeTipReadOnlyRemote))
+		x = right(lr) + 12
+	}
 
 	// A repository that uses Git LFS gets a quiet marker with its managed file
 	// count. It turns into a warning colour when the LFS rules exist but

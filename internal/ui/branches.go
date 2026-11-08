@@ -21,9 +21,10 @@ func (w *Window) canWriteBranches() bool { return w.ws.Caps.Branches != nil }
 // openBranchPopup opens IntelliJ's Git Branches popup under the widget.
 func (w *Window) openBranchPopup(anchor ui.Rect) {
 	rs := w.repo()
+	readOnly := w.readOnly()
 	var items []item
 	op := rs.Operation
-	if op.Active() {
+	if op.Active() && !readOnly {
 		t := op.Kind.Title()
 		if op.CanContinue() {
 			items = append(items, item{title: w.t(i18n.ChromeBranchContinue, t), icon: icons.Success, run: func() { w.ws.OperationAction("continue") }})
@@ -38,17 +39,17 @@ func (w *Window) openBranchPopup(anchor ui.Rect) {
 	}
 	hasRemote := len(rs.Remotes) > 0
 	items = append(items,
-		item{title: w.t(i18n.ChromeTbUpdate), icon: icons.Update, shortcut: "⌘T", disabled: !hasRemote, run: w.openUpdate},
-		item{title: w.t(i18n.ChromeTbCommit), icon: icons.Commit, shortcut: "⌘K", run: w.focusCommit},
+		item{title: w.t(i18n.ChromeTbUpdate), icon: icons.Update, shortcut: "⌘T", disabled: readOnly || !hasRemote, run: w.openUpdate},
+		item{title: w.t(i18n.ChromeTbCommit), icon: icons.Commit, shortcut: "⌘K", disabled: readOnly, run: w.focusCommit},
 	)
 	// A backend whose commit is the server operation has nothing to push.
 	if w.ws.Caps.SeparatePush {
-		items = append(items, item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, shortcut: "⇧⌘K", disabled: !rs.HasHead(), run: w.openPush})
+		items = append(items, item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, shortcut: "⇧⌘K", disabled: readOnly || !rs.HasHead(), run: w.openPush})
 	}
 	items = append(items,
 		sep(),
-		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, shortcut: "⌥⌘N", disabled: !rs.HasHead() || !w.canWriteBranches(), run: func() { w.openNewBranch("", rs.HeadLabel()) }},
-		item{title: w.t(i18n.ChromeMenuCheckoutTagRev), run: w.openCheckoutRevision},
+		item{title: w.t(i18n.ChromeMenuNewBranch), icon: icons.Add, shortcut: "⌥⌘N", disabled: readOnly || !rs.HasHead() || !w.canWriteBranches(), run: func() { w.openNewBranch("", rs.HeadLabel()) }},
+		item{title: w.t(i18n.ChromeMenuCheckoutTagRev), disabled: readOnly, run: w.openCheckoutRevision},
 	)
 	locals := rs.RefsOf(domain.RefLocal)
 	if len(locals) > 0 {
@@ -82,6 +83,8 @@ func (w *Window) openBranchPopup(anchor ui.Rect) {
 		}
 	}
 	if w.ws.Caps.Worktrees != nil {
+		// The panel is a read-only view; its New/Delete actions disable for a
+		// remote repository, but opening the list is still useful.
 		items = append(items, sep(), item{title: w.t(i18n.ChromeMenuWorktrees), icon: icons.Folder, run: w.openWorktrees})
 	}
 	p := &popup{x: anchor.X, y: bottom(anchor) + 4, items: items, sel: -1, minWidth: 340, title: w.t(i18n.ChromePopupGitBranch), search: text.NewEditor("")}
@@ -147,6 +150,20 @@ func (w *Window) favorite(name string) *bool {
 // refActions is the submenu of a branch or tag.
 func (w *Window) refActions(r domain.Ref) []item {
 	rs := w.repo()
+	if w.readOnly() {
+		// Observation mode: compare and browse, never checkout, merge, push,
+		// rename or delete. The current branch keeps the same read-only set so
+		// the submenu cannot become a write back door.
+		items := []item{}
+		if cur := rs.CurrentBranch(); cur != "" && !r.Current {
+			items = append(items, item{title: w.t(i18n.ChromeMenuCompareWith, "'"+cur+"'"), icon: icons.Diff, run: func() { w.compareBranches(cur, r.Short) }})
+		}
+		items = append(items,
+			item{title: w.t(i18n.ChromeMenuShowChanged), icon: icons.Diff, disabled: r.Target == "", run: func() { w.compareBranchFiles(r) }},
+			item{title: w.t(i18n.ChromeMenuShowDiffWorking), icon: icons.Diff, run: func() { w.compareWithWorking(r.Name) }},
+		)
+		return w.withBranchLinks(items, r)
+	}
 	cur := rs.CurrentBranch()
 	curQ := "'" + cur + "'"
 	name := r.Short

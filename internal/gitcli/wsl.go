@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"viff/internal/sshpath"
 	"viff/internal/wslpath"
 )
 
@@ -46,6 +47,9 @@ func toWinPath(dir, p string) string {
 // it instead of failing. Repositories outside WSL pass paths through
 // unchanged: the conversion is only defined against a distro.
 func toGitPath(dir, p string) (string, error) {
+	if sshpath.Is(dir) {
+		return sshpath.GitPathFrom(dir, p)
+	}
 	distro := wslDistroOf(dir)
 	if distro == "" {
 		return p, nil

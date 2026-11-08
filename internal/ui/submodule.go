@@ -5,6 +5,8 @@ import (
 
 	"github.com/vivaui/viva/ui"
 
+	"viff/internal/sshpath"
+
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/i18n"
@@ -19,7 +21,21 @@ func (w *Window) openSubmodule(path string) {
 	if rs == nil {
 		return
 	}
-	dir := filepath.Join(rs.Repo.Root, filepath.FromSlash(path))
+	var dir string
+	if rs.Repo.IsSSH() {
+		abs, err := sshpath.AbsPath(rs.Repo.Root, path)
+		if err != nil {
+			w.ws.NotifyError(w.t(i18n.SubmoduleCannotOpen), err)
+			return
+		}
+		dir, err = sshpath.URLOf(rs.Repo.Root, abs)
+		if err != nil {
+			w.ws.NotifyError(w.t(i18n.SubmoduleCannotOpen), err)
+			return
+		}
+	} else {
+		dir = filepath.Join(rs.Repo.Root, filepath.FromSlash(path))
+	}
 	w.confirmDiscardEdits(func() {
 		w.ws.Open(dir, func(err error) {
 			if err != nil {
@@ -74,7 +90,7 @@ func (w *Window) openSubmodules() {
 		body: func(f *form) {
 			f.custom(34, func(r ui.Rect) {
 				bw := w.buttonWidth("Add Submodule…")
-				if w.button(idSubmoduleAdd, rect(r.X, r.Y+3, bw, 28), "Add Submodule…", btnNormal, false) {
+				if w.button(idSubmoduleAdd, rect(r.X, r.Y+3, bw, 28), "Add Submodule…", btnNormal, w.readOnly()) {
 					w.after(func() {
 						w.dialog = nil
 						w.openSubmoduleAdd()
@@ -82,11 +98,11 @@ func (w *Window) openSubmodules() {
 				}
 				empty := loading || len(subs) == 0
 				x := r.X + bw + 12
-				if w.button(idSubmoduleUpdateAll, rect(x, r.Y+3, 110, 28), "Update All", btnNormal, empty) {
+				if w.button(idSubmoduleUpdateAll, rect(x, r.Y+3, 110, 28), "Update All", btnNormal, empty || w.readOnly()) {
 					w.after(func() { w.ws.UpdateSubmodule("", true, func(error) { reload() }) })
 				}
 				x += 118
-				if w.button(idSubmoduleSyncAll, rect(x, r.Y+3, 100, 28), "Sync All", btnNormal, empty) {
+				if w.button(idSubmoduleSyncAll, rect(x, r.Y+3, 100, 28), "Sync All", btnNormal, empty || w.readOnly()) {
 					w.after(func() { w.ws.SyncSubmodules("", func(error) { reload() }) })
 				}
 			})
@@ -182,7 +198,7 @@ func (w *Window) paintSubmoduleRow(r ui.Rect, i int, sm domain.Submodule, direct
 		}
 		x += widths[j] + 6
 	}
-	action(0, true, func() {
+	action(0, !w.readOnly(), func() {
 		w.after(func() {
 			w.ws.UpdateSubmodule(sm.Path, true, func(err error) {
 				if err == nil {
@@ -191,7 +207,7 @@ func (w *Window) paintSubmoduleRow(r ui.Rect, i int, sm domain.Submodule, direct
 			})
 		})
 	})
-	action(1, true, func() {
+	action(1, !w.readOnly(), func() {
 		w.after(func() {
 			w.ws.SyncSubmodules(sm.Path, func(err error) {
 				if err == nil {
@@ -206,10 +222,10 @@ func (w *Window) paintSubmoduleRow(r ui.Rect, i int, sm domain.Submodule, direct
 			w.openSubmodule(sm.Path)
 		})
 	})
-	action(3, sm.Initialized() && manageable, func() {
+	action(3, !w.readOnly() && sm.Initialized() && manageable, func() {
 		w.after(func() { w.startSubmoduleAction(sm, submoduleDeinit) })
 	})
-	action(4, manageable, func() {
+	action(4, !w.readOnly() && manageable, func() {
 		w.after(func() { w.startSubmoduleAction(sm, submoduleRemove) })
 	})
 }
@@ -222,9 +238,13 @@ func (w *Window) gitMenu() []item {
 	}
 	items := []item{}
 	// Submodules are a Git concept; a backend without them must not open a tool
-	// window that only reports "not available".
+	// window that only reports "not available". The list itself is read-only,
+	// so a remote repository still offers it; the panel disables its writes.
 	if w.ws.Caps.Submodules != nil {
 		items = append(items, item{title: w.t(i18n.SubmoduleMenu), icon: icons.Folder, run: w.openSubmodules})
+	}
+	if w.readOnly() {
+		return items
 	}
 	if len(rs.Remotes) > 0 {
 		items = append(items, sep(), item{title: w.t(i18n.MenuFetch), icon: icons.Fetch, run: func() { w.ws.Fetch(false) }})

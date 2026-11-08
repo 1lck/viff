@@ -46,3 +46,4 @@
 | [0040](0040-branch-double-click.md) | 双击分支默认只筛选，不检出 |
 | [0041](0041-commit-time-and-clock-format.md) | 提交时间的时区与时钟格式 |
 | [0042](0042-in-app-editing.md) | 工作树文本文件的应用内编辑 |
+| [0043](0043-remote-ssh-readonly.md) | 通过 SSH 只读观察远程仓库 |

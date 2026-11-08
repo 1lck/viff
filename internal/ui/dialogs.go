@@ -15,6 +15,7 @@ import (
 	"viff/internal/domain"
 	"viff/internal/gitcli"
 	"viff/internal/i18n"
+	"viff/internal/sshpath"
 	"viff/internal/storage"
 	"viff/internal/ui/icons"
 	"viff/internal/version"
@@ -50,6 +51,9 @@ func (w *Window) branchExists(name string) bool {
 
 // openNewBranch is IntelliJ's Create New Branch dialog.
 func (w *Window) openNewBranch(start, startLabel string) {
+	if w.guardReadOnly() {
+		return
+	}
 	name := text.NewEditor("")
 	checkout, overwrite := true, false
 	problem := func() string {
@@ -89,6 +93,9 @@ func (w *Window) openNewBranch(start, startLabel string) {
 }
 
 func (w *Window) openRename(r domain.Ref) {
+	if w.guardReadOnly() {
+		return
+	}
 	name := text.NewEditor(r.Short)
 	w.openDialog(&dialog{
 		title: w.t(i18n.DialogRenameTitle, r.Short), ok: w.t(i18n.DialogRename), width: 440,
@@ -113,6 +120,9 @@ func (w *Window) openRename(r domain.Ref) {
 }
 
 func (w *Window) openSetUpstream(r domain.Ref) {
+	if w.guardReadOnly() {
+		return
+	}
 	choices := w.repo().RefsOf(domain.RefRemote)
 	sel := w.defaultRemote() + "/" + r.Short
 	w.openDialog(&dialog{
@@ -132,6 +142,9 @@ func (w *Window) openSetUpstream(r domain.Ref) {
 }
 
 func (w *Window) openNewTag(rev, label string) {
+	if w.guardReadOnly() {
+		return
+	}
 	name := text.NewEditor("")
 	msg := text.NewEditor("")
 	w.openDialog(&dialog{
@@ -155,6 +168,9 @@ func (w *Window) openNewTag(rev, label string) {
 }
 
 func (w *Window) openCheckoutRevision() {
+	if w.guardReadOnly() {
+		return
+	}
 	rev := text.NewEditor("")
 	w.openDialog(&dialog{
 		title: w.t(i18n.DialogCheckoutRevTitle), ok: w.t(i18n.DialogCheckout), width: 460,
@@ -170,6 +186,9 @@ func (w *Window) openCheckoutRevision() {
 
 // openReset is IntelliJ's Git Reset dialog.
 func (w *Window) openReset(c domain.Commit) {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	mode := 1
 	modes := []struct {
@@ -208,6 +227,9 @@ func (w *Window) openReset(c domain.Commit) {
 // ---- push -------------------------------------------------------------------
 
 func (w *Window) openPush() {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if r, ok := rs.CurrentRef(); ok {
 		w.openPushFor(r)
@@ -218,6 +240,9 @@ func (w *Window) openPush() {
 
 // openPushFor is IntelliJ's Push dialog for one local branch.
 func (w *Window) openPushFor(r domain.Ref) {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.NotifyNoRemoteTitle), w.t(i18n.NotifyNoRemoteBody))
@@ -382,6 +407,9 @@ func (w *Window) pullMode() gitcli.PullMode {
 // prompted, the same shortcut updates with the stored method and reports the
 // choice in a notification instead of interrupting with a modal dialog.
 func (w *Window) openUpdate() {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	if len(rs.Remotes) == 0 {
 		return
@@ -422,6 +450,9 @@ func (w *Window) openUpdate() {
 // ---- stash ------------------------------------------------------------------
 
 func (w *Window) openStashDialog() {
+	if w.guardReadOnly() {
+		return
+	}
 	msg := text.NewEditor("")
 	untracked, keep := false, false
 	w.openDialog(&dialog{
@@ -490,6 +521,52 @@ func (w *Window) openClone() {
 	})
 }
 
+// openRemote asks for a host and a server-side path, then opens the
+// repository through the SSH backend. The dialog is the only place a remote
+// root is typed; recent projects and the workspace list keep the returned
+// ssh:// identity, so reopening one needs no typing.
+func (w *Window) openRemote() {
+	host := text.NewEditor("")
+	pathEd := text.NewEditor("")
+	w.openDialog(&dialog{
+		title: w.t(i18n.RemoteDialogTitle), ok: w.t(i18n.RemoteDialogOpen), width: 560,
+		body: func(f *form) {
+			f.labelW = 110
+			id := f.field(w.t(i18n.RemoteDialogHost), host, w.t(i18n.RemoteDialogHostPlaceholder), false)
+			if !w.dialog.focused {
+				w.dialog.focus = id
+			}
+			f.field(w.t(i18n.RemoteDialogPath), pathEd, w.t(i18n.RemoteDialogPathPlaceholder), false)
+			f.muted(w.t(i18n.RemoteDialogNote))
+			h, p := strings.TrimSpace(host.String()), strings.TrimSpace(pathEd.String())
+			if h != "" {
+				if _, _, _, err := sshpath.HostInput(h); err != nil {
+					f.message(w.t(i18n.RemoteDialogInvalidHost), w.pal.Error)
+				}
+			}
+			if p != "" {
+				if err := sshpath.ValidatePath(p); err != nil {
+					f.message(w.t(i18n.RemoteDialogInvalidPath), w.pal.Error)
+				}
+			}
+		},
+		okDisabled: func() bool { return !remoteURLValid(host.String(), pathEd.String()) },
+		onOK: func() bool {
+			u, err := sshpath.URL(strings.TrimSpace(host.String()), strings.TrimSpace(pathEd.String()))
+			if err != nil {
+				return false
+			}
+			w.after(func() { w.openRepo(u) })
+			return true
+		},
+	})
+}
+
+func remoteURLValid(host, path string) bool {
+	_, err := sshpath.URL(strings.TrimSpace(host), strings.TrimSpace(path))
+	return err == nil
+}
+
 func repoNameFromURL(u string) string {
 	u = strings.TrimRight(u, "/")
 	u = strings.TrimSuffix(u, ".git")
@@ -525,6 +602,9 @@ func (w *Window) openInit() {
 // ---- remotes ------------------------------------------------------------------
 
 func (w *Window) openRemotes() {
+	if w.guardReadOnly() {
+		return
+	}
 	rs := w.repo()
 	name := text.NewEditor("")
 	url := text.NewEditor("")
@@ -585,7 +665,7 @@ func (w *Window) settingsMenu() []item {
 	if w.ws.Repo != nil {
 		items = append(items,
 			item{title: w.t(i18n.MenuManageRemotes), run: w.openRemotes},
-			item{title: w.t(i18n.MenuFetch), icon: icons.Fetch, disabled: len(w.repo().Remotes) == 0, run: func() { w.ws.Fetch(false) }},
+			item{title: w.t(i18n.MenuFetch), icon: icons.Fetch, disabled: w.readOnly() || len(w.repo().Remotes) == 0, run: func() { w.ws.Fetch(false) }},
 			sep(),
 		)
 	}

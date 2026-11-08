@@ -12,6 +12,7 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/domain"
 	"viff/internal/i18n"
+	"viff/internal/sshpath"
 	"viff/internal/ui/icons"
 )
 
@@ -139,6 +140,11 @@ func (w *Window) repositoryActive(root string) bool {
 	if w.ws.ActiveRoot != "" {
 		return w.ws.ActiveRoot == root
 	}
+	if sshpath.Is(root) || sshpath.Is(w.ws.Repo.Repo.Root) {
+		a, oka := sshpath.Normalize(root)
+		b, okb := sshpath.Normalize(w.ws.Repo.Repo.Root)
+		return oka && okb && a == b
+	}
 	return filepath.Clean(w.ws.Repo.Repo.Root) == filepath.Clean(root)
 }
 
@@ -213,7 +219,7 @@ func (w *Window) paintRepositories(f *form, v *repositoriesView) {
 		default:
 			msg = plural(len(list), "repository", "repositories") + " in the workspace"
 			if active := w.activeRepositoryIndex(); active >= 0 {
-				msg += " · active: " + filepath.Base(list[active].Root)
+				msg += " · active: " + repoRootName(list[active].Root)
 			} else {
 				msg += " · no active repository"
 			}
@@ -325,7 +331,7 @@ func (w *Window) paintRepositoryRow(v *repositoriesView, i int, s repositorySumm
 	}
 	w.p.iconIn(icons.Vcs, rect(r.X+12, r.Y+9, 16, 16))
 	tx := r.X + 36
-	name := filepath.Base(s.Root)
+	name := repoRootName(s.Root)
 	nameW := r.Width - 48
 	if active {
 		badge := "Active"
@@ -420,10 +426,10 @@ func repositoryCounts(st domain.Status) string {
 // status counts, then its changed files.
 func (w *Window) paintRepositoryDetails(v *repositoriesView, s repositorySummary, r ui.Rect) {
 	head := rect(r.X, r.Y, r.Width, repoOverviewHeaderH)
-	w.projectBadge(rect(head.X+2, head.Y+4, 34, 34), filepath.Base(s.Root), 7)
+	w.projectBadge(rect(head.X+2, head.Y+4, 34, 34), repoRootName(s.Root), 7)
 	tx := head.X + 46
 	active := w.repositoryActive(s.Root)
-	name := filepath.Base(s.Root)
+	name := repoRootName(s.Root)
 	nameW := head.Width - 50
 	if active {
 		badge := "Active"
@@ -434,7 +440,7 @@ func (w *Window) paintRepositoryDetails(v *repositoriesView, s repositorySummary
 		nameW -= bw + 12
 	}
 	w.p.text(name, rect(tx, head.Y+2, nameW, 22), 15, semibold, w.pal.Text)
-	w.p.text(shortenHome(s.Root), rect(tx, head.Y+24, head.Width-50, 18), fontSmall, regular, w.pal.TextSecond)
+	w.p.text(repoRootLabel(s.Root), rect(tx, head.Y+24, head.Width-50, 18), fontSmall, regular, w.pal.TextSecond)
 
 	by := head.Y + 48
 	w.p.iconIn(icons.Vcs, rect(tx, by+1, 14, 16))
@@ -749,7 +755,7 @@ func (w *Window) switchRepositoryNow(root string) {
 	w.ws.ActivateRepository(root, func(err error) {
 		w.after(func() {
 			if err != nil {
-				w.ws.NotifyError("Cannot switch repository "+filepath.Base(root), err)
+				w.ws.NotifyError("Cannot switch repository "+repoRootName(root), err)
 			}
 			w.Invalidate()
 		})
@@ -803,7 +809,7 @@ func (w *Window) openRepositoryFile(root, path string, area domain.Area) {
 			}
 			if err != nil {
 				w.pendingRepositoryFile = nil
-				w.ws.NotifyError("Cannot open repository "+filepath.Base(root), err)
+				w.ws.NotifyError("Cannot open repository "+repoRootName(root), err)
 				w.Invalidate()
 				return
 			}

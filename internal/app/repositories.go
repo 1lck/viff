@@ -11,6 +11,7 @@ import (
 
 	"viff/internal/domain"
 	"viff/internal/i18n"
+	"viff/internal/sshpath"
 	"viff/internal/storage"
 	"viff/internal/wslpath"
 )
@@ -83,6 +84,9 @@ func canonicalPath(path string) string {
 	if path == "" {
 		return ""
 	}
+	if n, ok := sshpath.Normalize(path); ok {
+		return n
+	}
 	if n, ok := wslpath.Normalize(path); ok {
 		return n
 	}
@@ -114,7 +118,10 @@ func looseKey(path string) string {
 // so such paths are keyed without disk access and only touched when the user
 // actually opens that repository.
 func isRemotePath(path string) bool {
-	return strings.HasPrefix(path, `\\`) || strings.HasPrefix(filepath.ToSlash(path), "//")
+	// An SSH repository is remote in the same sense: touching it from the
+	// startup path would block on a network round trip, so it is passed on
+	// without a stat and discovered when it is actually opened.
+	return sshpath.Is(path) || strings.HasPrefix(path, `\\`) || strings.HasPrefix(filepath.ToSlash(path), "//")
 }
 
 // entryKey is the list key of a repository path: canonical for local paths,
@@ -122,6 +129,9 @@ func isRemotePath(path string) bool {
 // activating and removing all use it, so one repository is keyed the same way
 // everywhere and a slow share never blocks the window from appearing.
 func entryKey(path string) string {
+	if normalized, ok := sshpath.Normalize(path); ok {
+		return normalized
+	}
 	if normalized, ok := wslpath.Normalize(path); ok {
 		return normalized
 	}
@@ -131,9 +141,10 @@ func entryKey(path string) string {
 	return canonicalPath(path)
 }
 
-// IsRemotePath reports whether path names a repository on a slow, possibly
-// VM-backed file system (a UNC share, which includes WSL checkouts). The
-// composition root uses it to keep such paths off the startup critical path.
+// IsRemotePath reports whether path names a repository that must not be
+// touched from the startup path: an SSH URL, a UNC share, or a WSL checkout
+// (which shares the UNC spelling). The composition root uses it to keep such
+// paths off the startup critical path.
 func IsRemotePath(path string) bool { return isRemotePath(path) }
 
 // loadRepositories reads the persisted list on startup. It only loads: a

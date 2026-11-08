@@ -37,6 +37,7 @@ var (
 	idStatusCancel    = tree.ID(fChrome, "status-cancel")
 	idStatusRecording = tree.ID(fChrome, "status-recording")
 	idStatusLFS       = tree.ID(fChrome, "status-lfs")
+	idStatusRemote    = tree.ID(fChrome, "status-remote")
 	idStatusRepo      = tree.ID(fChrome, "status-repo")
 	idSplitProject    = tree.ID(fChrome, "split-project")
 	idSplitCommit     = tree.ID(fChrome, "split-commit")
@@ -232,6 +233,7 @@ var (
 	// Welcome screen.
 	idWelOpen   = tree.ID(fWelcome, "open")
 	idWelClone  = tree.ID(fWelcome, "clone")
+	idWelRemote = tree.ID(fWelcome, "remote")
 	idWelInit   = tree.ID(fWelcome, "init")
 	idWelSearch = tree.ID(fWelcome, "search")
 	idWelList   = tree.ID(fWelcome, "list")

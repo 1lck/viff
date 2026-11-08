@@ -68,7 +68,7 @@ type fileEdit struct {
 // images, binaries, submodules, symlinks, oversized files and conflicted paths
 // stay read-only.
 func (w *Window) canEdit(t *diffTab) bool {
-	if t == nil || t.res == nil || !t.editOK {
+	if t == nil || t.res == nil || !t.editOK || w.readOnly() {
 		return false
 	}
 	if rs := w.repo(); rs != nil {
