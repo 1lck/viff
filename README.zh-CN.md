@@ -4,7 +4,7 @@
 
 # Viff
 
-**轻量、原生的 Git 与 Subversion 桌面客户端，内置只读项目浏览、中英文界面与可选的 AI 提交说明。**
+**轻量、原生的 Git 与 Subversion 桌面客户端，内置项目浏览与工作树文本编辑、中英文界面与可选的 AI 提交说明。**
 
 Go + Viva。无需 Electron，无需 WebView，不捆绑浏览器运行时。
 
@@ -22,8 +22,8 @@ Go + Viva。无需 Electron，无需 WebView，不捆绑浏览器运行时。
 
 ## 让工具轻一点，让工作流完整一点
 
-Git 仍是核心。围绕它，Viff 提供只读的项目浏览与 Quick Open、图片 diff、
-中英双语界面，以及可选的 AI 提交说明。它使用 Go 和
+Git 仍是核心。围绕它，Viff 提供项目浏览与 Quick Open、工作树文本编辑、
+图片 diff、中英双语界面，以及可选的 AI 提交说明。它使用 Go 和
 [Viva](https://github.com/vivaui/viva) 编写，不依赖浏览器引擎绘制界面，
 通过本机安装的 Git 执行操作。
 
@@ -57,7 +57,7 @@ Git 仍是核心。围绕它，Viff 提供只读的项目浏览与 Quick Open、
 | 整理提交   | 按文件、目录或整组勾选后暂存，也可按块或选中行暂存；取消暂存、回滚、Amend、Sign-off、提交并推送；说明区可折叠，也可让模型生成说明 |
 | 管理工作区 | 多仓库、各仓库独立提交草稿、目录分组、命名 ChangeList、从父目录发现子仓库                                                         |
 | 阅读历史   | 提交图、分支 / 作者 / 路径筛选、多提交文件汇总、Blame、Reflog、历史仓库树                                                         |
-| 浏览文件   | Project 面板（目录折叠、状态着色）、Quick Open、只读查看（可选代码缩略图）、Blame 与文件历史                                                        |
+| 浏览与编辑 | Project 面板（目录折叠、状态着色）、Quick Open、只读查看（可选代码缩略图）、Blame、文件历史，以及工作树 UTF-8 文本编辑（不超过 1 MiB，保存后也需在上限内） |
 | 操作分支   | Checkout、Merge、Rebase、Cherry-pick、Revert、Reset、借助 Stash 切换分支                                                          |
 | 撤销操作   | ⌘Z 撤销本会话内上一次本地提交、合并、rebase、检出或分支改动                                                                       |
 | 解决冲突   | Ours / Result / Theirs 三栏，逐块接受 Ours / Theirs / Both，显式标记解决，可复制冲突上下文给外部 AI                               |
