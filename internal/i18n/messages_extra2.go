@@ -11,6 +11,11 @@ const (
 	WelcomeDropHint     = Key("welcome.dropHint")
 	WelcomeCustomize    = Key("welcome.customize")
 
+	WelcomeSearchName     = Key("welcome.search.name")
+	WelcomeSearchPath     = Key("welcome.search.path")
+	WelcomeSearchNameHint = Key("welcome.search.nameHint")
+	WelcomeSearchPathHint = Key("welcome.search.pathHint")
+
 	HelpReportProblem   = Key("help.reportProblem")
 	HelpStopRecording   = Key("help.stopRecording")
 	HelpSaveDiagnostics = Key("help.saveDiagnostics")
@@ -48,6 +53,11 @@ func init() {
 		WelcomeDropHint:     "You can also drop a repository folder on this window.",
 		WelcomeCustomize:    "Customize",
 
+		WelcomeSearchName:     "Name",
+		WelcomeSearchPath:     "Path",
+		WelcomeSearchNameHint: "Search repository names",
+		WelcomeSearchPathHint: "Search full paths",
+
 		HelpReportProblem:   "Report a Problem…",
 		HelpStopRecording:   "Stop Recording and Save Diagnostics…",
 		HelpSaveDiagnostics: "Save Diagnostics…",
@@ -82,6 +92,11 @@ func init() {
 		WelcomeRemoveRecent: "从最近项目中移除",
 		WelcomeDropHint:     "也可以把仓库文件夹拖到这个窗口。",
 		WelcomeCustomize:    "自定义",
+
+		WelcomeSearchName:     "名称",
+		WelcomeSearchPath:     "路径",
+		WelcomeSearchNameHint: "按仓库名称搜索",
+		WelcomeSearchPathHint: "按完整路径搜索",
 
 		HelpReportProblem:   "报告问题…",
 		HelpStopRecording:   "停止记录并保存诊断…",

@@ -477,3 +477,136 @@ func TestWelcomeSearchFindsWorkspaceRepository(t *testing.T) {
 	f.s.Settle(60*time.Millisecond, 2*time.Second)
 	f.snap("repositories-search-result")
 }
+
+// TestWelcomeSearchScopeSeparatesNamesFromPaths covers the report of a user
+// with a hundred repositories below one parent folder: searching the
+// abbreviation of a project name ("ips") matched the shared parent path of
+// every repository below it, so the list showed 94 candidates. The default
+// scope matches the repository name only; the path scope keeps the old
+// full-path search one menu choice away.
+func TestWelcomeSearchScopeSeparatesNamesFromPaths(t *testing.T) {
+	f := newUIFixture(t)
+	root := filepath.Dir(f.dir)
+	// The fixture repository stays beside the "ips" folder, so only the three
+	// repositories below belong to the workspace.
+	parent := filepath.Join(root, "ips")
+	all := []string{
+		filepath.Join(parent, "alpha"),
+		filepath.Join(parent, "beta"),
+		filepath.Join(root, "ips-service"),
+	}
+	for _, dir := range all {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		f.gitIn(dir, "init", "-q", "-b", "main")
+		f.gitIn(dir, "config", "user.name", "Ada Lovelace")
+		f.gitIn(dir, "config", "user.email", "ada@example.com")
+		f.gitIn(dir, "config", "commit.gpgsign", "false")
+		writeFile(t, filepath.Join(dir, "README.md"), "# "+filepath.Base(dir)+"\n")
+		f.gitIn(dir, "add", "-A")
+		f.gitIn(dir, "commit", "-q", "-m", "Seed "+filepath.Base(dir))
+	}
+
+	f.start(1280, 800)
+	for _, dir := range all {
+		f.ws.AddRepository(dir, func(error) {})
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return len(f.ws.Repositories) == len(all)
+	}, 20*time.Second); err != nil {
+		t.Fatalf("repositories never reached the workspace: %v", err)
+	}
+	f.win.Invalidate()
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+
+	names := func(roots []string) map[string]bool {
+		out := make(map[string]bool, len(roots))
+		for _, r := range roots {
+			out[filepath.Base(r)] = true
+		}
+		return out
+	}
+	f.click("Search projects")
+	if err := f.s.Type("ips"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	got := names(f.win.projectShown())
+	if len(got) != 1 || !got["ips-service"] {
+		t.Fatalf("name search for %q = %v, want only ips-service", "ips", got)
+	}
+	if !f.s.HasText("Name") || !f.s.HasText("ips-service") {
+		t.Fatalf("the name scope or its result was not painted: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.snap("repositories-search-name")
+
+	// The chip is the scope list: a click opens the same list the keyboard
+	// reaches, so neither input method is a second-class way to change scope.
+	f.click("Search repository names")
+	f.s.Settle(40*time.Millisecond, time.Second)
+	if !f.s.HasText("Search full paths") {
+		t.Fatalf("clicking the scope did not open its list: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.s.Keys("escape")
+	f.s.Settle(40*time.Millisecond, time.Second)
+
+	// Tab reaches the scope from the field, Enter opens the list, and the
+	// arrows choose an entry: the whole switch works without a pointer.
+	f.click("Search projects")
+	f.s.Keys("tab")
+	if err := f.s.WaitFor(func(app.Snapshot) bool { return f.win.focused(idWelScope) }, 5*time.Second); err != nil {
+		t.Fatalf("Tab did not reach the search scope (%v); focused id = %v", err, f.win.c.Focused())
+	}
+	f.s.Keys("enter")
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.s.Keys("down") // the first Down selects the first entry
+	f.s.Keys("down")
+	f.s.Keys("enter")
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+	got = names(f.win.projectShown())
+	if len(got) != len(all) || !got["alpha"] || !got["beta"] || !got["ips-service"] {
+		t.Fatalf("path search for %q = %v, want every repository under %s", "ips", got, parent)
+	}
+	if !f.s.HasText("Path") {
+		t.Fatalf("the scope chip did not switch to Path: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if !f.win.focused(idWelSearch) {
+		t.Fatalf("choosing a scope left focus on %v, want the search field", f.win.c.Focused())
+	}
+	f.snap("repositories-search-scope")
+}
+
+// TestWelcomeSearchWrapsInTheMinimumWindow checks the responsive part of the
+// scope control: at 900x600 the five toolbar buttons leave only 80 points for
+// the search field, so the field and its scope move to their own row instead of
+// squeezing the query out of sight.
+func TestWelcomeSearchWrapsInTheMinimumWindow(t *testing.T) {
+	f := newUIFixture(t)
+	f.ws.Settings.AddRecent(f.dir)
+	f.start(900, 600)
+	f.s.Settle(60*time.Millisecond, 2*time.Second)
+
+	field, ok := f.s.Hit("Search projects")
+	if !ok {
+		t.Fatalf("the search field is not reachable: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if field.Bounds.Width < welcomeSearchMinW {
+		t.Fatalf("search field width = %.1f at 900x600, want at least %d", field.Bounds.Width, welcomeSearchMinW)
+	}
+	button, ok := f.s.Hit("Open Remote")
+	if !ok {
+		t.Fatalf("the toolbar button is not reachable: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if field.Bounds.Y < button.Bounds.Y+button.Bounds.Height {
+		t.Fatalf("the search field at %+v still shares the toolbar row with %+v", field.Bounds, button.Bounds)
+	}
+	scope, ok := f.s.Hit("Search repository names")
+	if !ok {
+		t.Fatalf("the scope control is not reachable: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if scope.Bounds.X < field.Bounds.X || scope.Bounds.X+scope.Bounds.Width > field.Bounds.X+field.Bounds.Width+0.5 {
+		t.Fatalf("the scope control at %+v does not sit inside the search field at %+v", scope.Bounds, field.Bounds)
+	}
+	f.snap("repositories-search-900x600")
+}
