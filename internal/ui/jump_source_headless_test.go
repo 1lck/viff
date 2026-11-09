@@ -23,6 +23,9 @@ func TestUnifiedDiffTextSelection(t *testing.T) {
 	// fixture repo has unstaged main.go changes (mainV3); unified mode
 	f.ws.Settings.DiffUnified = true
 	defer func() { f.ws.Settings.DiffUnified = false }()
+	// This test is about cell-to-byte selection, not folding: keep every row
+	// visible so the first wide row can be clicked directly.
+	f.ws.Settings.DiffCollapse = false
 	f.click("main.go")
 	f.settleTab()
 	tab := f.win.ed.cur()
@@ -101,13 +104,16 @@ func TestSideBySideDiffTextSelection(t *testing.T) {
 	f.win.openRepo(f.dir)
 	f.settle()
 
+	f.ws.Settings.DiffUnified = false
+	// This test is about cell-to-byte selection, not folding: keep every row
+	// visible so the first wide row can be clicked directly.
+	f.ws.Settings.DiffCollapse = false
 	f.click("main.go")
 	f.settleTab()
 	tab := f.win.ed.cur()
 	if tab == nil || tab.src.View {
 		t.Fatal("no diff tab opened")
 	}
-	f.ws.Settings.DiffUnified = false
 	if f.ws.Settings.DiffUnified {
 		t.Fatal("side-by-side mode is not active")
 	}

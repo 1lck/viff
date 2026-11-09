@@ -32,9 +32,14 @@ type diffTab struct {
 	seq      uint64
 	statusAt time.Time
 
-	y, yOld float32 // vertical scroll in pixels (new side; old side when unsynced)
-	x       float32
-	cur     int
+	y, yOld                   float32 // vertical scroll in pixels (new side; old side when unsynced)
+	x                         float32
+	split                     float32 // left pane fraction; zero selects the default half width
+	collapse                  bool    // fold unchanged stretches, from the DiffCollapse setting
+	folds                     []foldRange
+	expanded                  map[int]bool
+	foldOld, foldNew, foldUni foldedLines
+	cur                       int
 	// pendingLine, when positive, asks the next paint of the file view to
 	// reveal that 1-based line. openRepoFileAt sets it for a search hit.
 	pendingLine int
@@ -298,6 +303,8 @@ func (w *Window) prepareTab(t *diffTab) {
 		oldLines = res.Conflict.Current.Lines
 		newLines = nil
 	}
+	t.expanded = nil
+	t.collapse = w.ws.Settings.DiffCollapse
 	t.editOK = editableContent(t)
 	t.oldDisp = expandAll(oldLines)
 	t.newDisp = expandAll(newLines)
@@ -367,6 +374,7 @@ func (w *Window) prepareTab(t *diffTab) {
 	if w.ws.Settings.DiffMarks {
 		t.marksUni = buildMarksUnified(t)
 	}
+	t.rebuildFolds()
 	if w.ws.Settings.DiffCodemap && t.src.View {
 		// The map belongs to the file viewer, which shows one version of the
 		// file, so its shape comes from that side alone.

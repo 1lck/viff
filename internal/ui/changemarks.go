@@ -77,22 +77,23 @@ func buildMarksUnified(t *diffTab) []miniMark {
 	return out
 }
 
-// paintChangeMarks draws the marks into r, scaled to total display lines, and
-// frames the range the editor shows. top and view are the editor's scroll
-// offset and height in pixels; lineH is its line height.
-func (w *Window) paintChangeMarks(t *diffTab, r ui.Rect, marks []miniMark, total int, top, view, lineH float32) {
+// paintChangeMarks draws the marks into r, scaled to the visible rows of proj
+// (folds included), and frames the range the editor shows. top and view are the
+// editor's scroll offset and height in pixels; lineH is its line height.
+func (w *Window) paintChangeMarks(t *diffTab, r ui.Rect, marks []miniMark, proj foldedLines, top, view, lineH float32) {
+	total := proj.total
 	if total <= 0 || r.Width <= 0 || r.Height <= 0 {
 		return
 	}
 	w.p.fill(r, w.pal.Island)
 	w.p.vline(r.X, r.Y, r.Height, w.pal.Border)
-	at := func(line float32) float32 {
-		return r.Y + clampF(line/float32(total), 0, 1)*r.Height
+	at := func(row float32) float32 {
+		return r.Y + clampF(row/float32(total), 0, 1)*r.Height
 	}
 	w.c.Clip(r)
 	for _, m := range marks {
-		y0 := at(float32(m.from))
-		h := max(at(float32(m.to))-y0, markMinH)
+		y0 := at(float32(proj.row(m.from)))
+		h := max(at(float32(proj.row(m.to)))-y0, markMinH)
 		w.p.round(rect(r.X+marksInset, y0, max(r.Width-2*marksInset, 1), h), 2, w.blockColor(m.kind))
 	}
 	// The frame goes on top: the marks underneath stay visible through it, and
@@ -113,8 +114,8 @@ func (w *Window) paintChangeMarks(t *diffTab, r ui.Rect, marks []miniMark, total
 	w.onDrag(idDiffMarks, func(e dragEvent) {
 		switch e.Phase {
 		case dragBegin, dragMove:
-			line := (e.Y - r.Y) / max(r.Height, 1) * float32(total)
-			t.y = max(0, line*lineH)
+			row := (e.Y - r.Y) / max(r.Height, 1) * float32(total)
+			t.y = max(0, row*lineH)
 		}
 	})
 }

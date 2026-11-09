@@ -58,7 +58,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 
 | Work                  | What Viff provides                                                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Review changes        | Side-by-side and unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, picture previews, change marks on the right edge   |
+| Review changes        | Side-by-side diffs with resizable panes and collapsible unchanged stretches, unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, picture previews, change marks on the right edge   |
 | Build a commit        | Check files, folders, or groups; stage files, hunks, or lines; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
 | Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, named ChangeLists, and discovery of repositories below a parent folder |
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |

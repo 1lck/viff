@@ -277,3 +277,47 @@ func TestTabTextSelection(t *testing.T) {
 		t.Errorf("old pane select all = %q, want %q", got, "old")
 	}
 }
+
+// TestTextKeyWalksFoldedRows keeps the caret on rows the reader can see: one
+// Down enters a fold row, the second leaves it, and Left/Right step over the
+// whole collapsed stretch like a single item.
+func TestTextKeyWalksFoldedRows(t *testing.T) {
+	lines := make([]string, 10)
+	for i := range lines {
+		lines[i] = string(rune('a' + i))
+	}
+	fold := []foldRange{{oldStart: 2, newStart: 2, count: 4}}
+	tab := &diffTab{res: &vapp.DiffResult{}, oldDisp: lines, newDisp: lines}
+	tab.foldOld = projectFolds(len(lines), fold, true, nil)
+	tab.foldNew = projectFolds(len(lines), fold, false, nil)
+	tab.textSel = textSel{anchor: selPoint{line: 1}, focus: selPoint{line: 1}, set: true, kind: selNewPane}
+	w := &Window{}
+
+	w.textKey(tab, ui.KeyEvent{Key: ui.KeyDown}, selNewPane, 10)
+	if got := tab.textSel.focus; got.line != 2 {
+		t.Fatalf("Down from line 1 landed on %+v, want the fold row at line 2", got)
+	}
+	w.textKey(tab, ui.KeyEvent{Key: ui.KeyDown}, selNewPane, 10)
+	if got := tab.textSel.focus; got.line != 6 {
+		t.Fatalf("Down from the fold row landed on %+v, want line 6 after the fold", got)
+	}
+
+	tab.textSel = textSel{anchor: selPoint{line: 2}, focus: selPoint{line: 2}, set: true, kind: selNewPane}
+	w.textKey(tab, ui.KeyEvent{Key: ui.KeyRight}, selNewPane, 10)
+	if got := tab.textSel.focus; got.line != 6 || got.cell != 0 {
+		t.Fatalf("Right from the fold row = %+v, want line 6 cell 0", got)
+	}
+	tab.textSel = textSel{anchor: selPoint{line: 2}, focus: selPoint{line: 2}, set: true, kind: selNewPane}
+	w.textKey(tab, ui.KeyEvent{Key: ui.KeyLeft}, selNewPane, 10)
+	if got := tab.textSel.focus; got.line != 1 || got.cell != displayCells(lines[1]) {
+		t.Fatalf("Left from the fold row = %+v, want the end of line 1", got)
+	}
+
+	// Shift+Down keeps the anchor and moves the focus through the fold.
+	tab.textSel = textSel{anchor: selPoint{line: 1}, focus: selPoint{line: 1}, set: true, kind: selNewPane}
+	w.textKey(tab, ui.KeyEvent{Key: ui.KeyDown, Modifiers: ui.ModifierShift}, selNewPane, 10)
+	w.textKey(tab, ui.KeyEvent{Key: ui.KeyDown, Modifiers: ui.ModifierShift}, selNewPane, 10)
+	if tab.textSel.anchor.line != 1 || tab.textSel.focus.line != 6 {
+		t.Fatalf("Shift+Down selection = %+v, want anchor 1 focus 6", tab.textSel)
+	}
+}
