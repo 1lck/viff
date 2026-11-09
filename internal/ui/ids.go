@@ -236,6 +236,7 @@ var (
 	idWelRemote = tree.ID(fWelcome, "remote")
 	idWelInit   = tree.ID(fWelcome, "init")
 	idWelSearch = tree.ID(fWelcome, "search")
+	idWelScope  = tree.ID(fWelcome, "search-scope")
 	idWelList   = tree.ID(fWelcome, "list")
 	scWelRecent = tree.Sub(fWelcome, tree.Name("recent"))
 	scWelRemove = tree.Sub(fWelcome, tree.Name("remove"))
