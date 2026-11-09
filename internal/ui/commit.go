@@ -476,7 +476,9 @@ func (w *Window) paintChanges(r ui.Rect) {
 		}
 		w.onDouble(id, func() { w.activateRow(row) })
 		w.onContext(id, func(x, y float32) {
-			if !v.sel[row.key] {
+			// Checking a group or directory selects its files, not its row key.
+			// Keep those checks (and any other selected files) when opening it.
+			if !w.rowChecked(row) {
 				clear(v.sel)
 				v.sel[row.key] = true
 				v.cursor, v.anchor = row.key, row.key
@@ -539,13 +541,18 @@ func (w *Window) toggleRowCheck(i int) {
 	}
 }
 
-// changesRowChecked reports whether every file a row covers is selected, which
-// is what fills a group's or directory's checkbox.
+// changesRowChecked reports whether the row at i has a filled checkbox.
 func (w *Window) changesRowChecked(i int) bool {
 	if i < 0 || i >= len(w.cm.rows) {
 		return false
 	}
-	row := w.cm.rows[i]
+	return w.rowChecked(w.cm.rows[i])
+}
+
+// rowChecked reports whether every file a row covers is selected, which is what
+// fills a group's or directory's checkbox. It takes the row itself so a handler
+// painted for one row keeps answering for it after a refresh rebuilds the rows.
+func (w *Window) rowChecked(row changeRow) bool {
 	if row.kind == rowFile {
 		return w.cm.sel[row.key]
 	}
@@ -800,10 +807,16 @@ func (w *Window) changesKey(e ui.KeyEvent) bool {
 // expand to their files).
 func (w *Window) selectedEntries() []changeRow {
 	v := &w.cm
+	if len(v.sel) == 0 {
+		return nil
+	}
 	var out []changeRow
 	seen := map[string]bool{}
+	var entries map[string]domain.StatusEntry
 	for _, row := range v.rows {
-		if !v.sel[row.key] {
+		// Collapsed nodes can hide explicitly selected files or directories.
+		// Visit them even when the node itself is not selected.
+		if !v.sel[row.key] && (row.kind == rowFile || !v.collapsed[row.key]) {
 			continue
 		}
 		switch row.kind {
@@ -813,11 +826,25 @@ func (w *Window) selectedEntries() []changeRow {
 				out = append(out, row)
 			}
 		default:
-			for _, e := range w.changeListEntries(row.area) {
-				if row.kind == rowDir && domain.DirName(e.Path) != row.dir {
+			// Resolve covered file keys once, so many collapsed directories do
+			// not each scan the entire area's status on every paint.
+			if entries == nil {
+				entries = map[string]domain.StatusEntry{}
+				for _, area := range areaOrder {
+					for _, e := range w.changeListEntries(area) {
+						entries[rowKey(area, e.Path)] = e
+					}
+				}
+			}
+			for _, k := range row.files {
+				e, ok := entries[k]
+				if !ok {
 					continue
 				}
-				k := rowKey(row.area, e.Path)
+				dk := rowKey(row.area, domain.DirName(e.Path)+"/")
+				if !v.sel[row.key] && !v.sel[k] && !v.sel[dk] {
+					continue
+				}
 				if !seen[k] {
 					seen[k] = true
 					out = append(out, changeRow{key: k, area: row.area, kind: rowFile, entry: e})
