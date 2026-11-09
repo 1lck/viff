@@ -154,11 +154,14 @@ type Settings struct {
 	DiffHighlightWords bool    `json:"diffHighlightWords"`
 	// DiffMarks keeps the change ruler on the right edge of the diff, where it
 	// also stands in for the overlay scroll bar. DiffCodemap adds the optional
-	// code minimap next to it. Older files omit both fields, and Load unmarshals
-	// into Defaults, so an absent value keeps its default: marks on, codemap off.
-	DiffMarks   bool `json:"diffMarks"`
-	DiffCodemap bool `json:"diffCodemap"`
-	CommitTree  bool `json:"commitTree"`
+	// code minimap next to it. DiffCollapse folds long unchanged stretches of a
+	// diff down to a few context lines. Older files omit these fields, and Load
+	// unmarshals into Defaults, so an absent value keeps its default: marks on,
+	// codemap off, unchanged stretches folded.
+	DiffMarks    bool `json:"diffMarks"`
+	DiffCodemap  bool `json:"diffCodemap"`
+	DiffCollapse bool `json:"diffCollapse"`
+	CommitTree   bool `json:"commitTree"`
 
 	path     string
 	readOnly bool
@@ -198,7 +201,7 @@ func Defaults() *Settings {
 		SearchTool:        "auto",
 		Window:            Window{Width: 1440, Height: 900},
 		CommitPanelWidth:  340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
-		DiffSyncScroll: true, DiffHighlightWords: true, DiffMarks: true, CommitTree: false,
+		DiffSyncScroll: true, DiffHighlightWords: true, DiffMarks: true, DiffCollapse: true, CommitTree: false,
 	}
 }
 

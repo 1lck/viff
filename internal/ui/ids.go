@@ -93,18 +93,25 @@ var (
 	idCmEmptyCommit     = tree.ID(fCommit, "empty")
 
 	// Editor and diff.
-	scTabs        = tree.Sub(fEditor, tree.Name("tabs"))
-	scTabClose    = tree.Sub(fEditor, tree.Name("tab-close"))
-	idEditorEmpty = tree.ID(fEditor, "empty")
-	idDiffLeft    = tree.ID(fDiff, "left")
-	idDiffRight   = tree.ID(fDiff, "right")
-	idDiffDivider = tree.ID(fDiff, "divider")
-	idDiffPrev    = tree.ID(fDiff, "prev")
-	idDiffNext    = tree.ID(fDiff, "next")
-	idDiffMode    = tree.ID(fDiff, "mode")
-	idDiffWS      = tree.ID(fDiff, "whitespace")
-	idDiffWords   = tree.ID(fDiff, "words")
-	idDiffSync    = tree.ID(fDiff, "sync")
+	scTabs         = tree.Sub(fEditor, tree.Name("tabs"))
+	scTabClose     = tree.Sub(fEditor, tree.Name("tab-close"))
+	idEditorEmpty  = tree.ID(fEditor, "empty")
+	idDiffLeft     = tree.ID(fDiff, "left")
+	idDiffRight    = tree.ID(fDiff, "right")
+	idDiffDivider  = tree.ID(fDiff, "divider")
+	idDiffResize   = tree.ID(fDiff, "resize-panes")
+	idDiffPrev     = tree.ID(fDiff, "prev")
+	idDiffNext     = tree.ID(fDiff, "next")
+	idDiffMode     = tree.ID(fDiff, "mode")
+	idDiffWS       = tree.ID(fDiff, "whitespace")
+	idDiffWords    = tree.ID(fDiff, "words")
+	idDiffSync     = tree.ID(fDiff, "sync")
+	idDiffCollapse = tree.ID(fDiff, "collapse")
+	// Fold rows are drawn one per unchanged stretch; each pane and the unified
+	// viewer own a scope so the same fold can be hit in every projection.
+	scDiffFoldLeft    = tree.Sub(fDiff, tree.Name("fold-left"))
+	scDiffFoldRight   = tree.Sub(fDiff, tree.Name("fold-right"))
+	scDiffFoldUnified = tree.Sub(fDiff, tree.Name("fold-unified"))
 	// The right edge of the diff: the change ruler (which doubles as the
 	// scroll bar) and the optional code map in the file viewer.
 	idDiffMarks       = tree.ID(fDiff, "change-marks")

@@ -20,6 +20,10 @@ const (
 	DiffActionNextDifference = Key("diff.action.nextDifference")
 	DiffActionHighlightWords = Key("diff.action.highlightWords")
 	DiffActionSyncScrolling  = Key("diff.action.syncScrolling")
+	DiffActionCollapse       = Key("diff.action.collapse")
+	DiffResizePanes          = Key("diff.resizePanes")
+	DiffFoldLines            = Key("diff.fold.lines")
+	DiffFoldExpand           = Key("diff.fold.expand")
 	DiffActionOpenEditor     = Key("diff.action.openEditor")
 	DiffActionJumpSource     = Key("diff.action.jumpToSource")
 	DiffActionStageFile      = Key("diff.action.stageFile")
@@ -127,6 +131,10 @@ func init() {
 		DiffActionNextDifference: "Next Difference\tF7",
 		DiffActionHighlightWords: "Highlight Words",
 		DiffActionSyncScrolling:  "Synchronize Scrolling",
+		DiffActionCollapse:       "Collapse Unchanged Fragments",
+		DiffResizePanes:          "Resize diff panes (Left / Right)",
+		DiffFoldLines:            "%d unchanged lines",
+		DiffFoldExpand:           "Show %d unchanged lines",
 		DiffActionOpenEditor:     "Open in External Editor\tF4",
 		DiffActionJumpSource:     "Jump to Source",
 		DiffActionStageFile:      "Stage File",
@@ -232,6 +240,10 @@ func init() {
 		DiffActionNextDifference: "下一处差异\tF7",
 		DiffActionHighlightWords: "高亮单词",
 		DiffActionSyncScrolling:  "同步滚动",
+		DiffActionCollapse:       "折叠未更改的片段",
+		DiffResizePanes:          "调整差异分栏宽度（左 / 右方向键）",
+		DiffFoldLines:            "未更改的 %d 行",
+		DiffFoldExpand:           "展开 %d 行未更改内容",
 		DiffActionOpenEditor:     "在外部编辑器中打开\tF4",
 		DiffActionJumpSource:     "跳转到源",
 		DiffActionStageFile:      "暂存文件",

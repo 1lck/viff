@@ -48,3 +48,4 @@
 | [0042](0042-in-app-editing.md) | 工作树文本文件的应用内编辑 |
 | [0043](0043-remote-ssh-readonly.md) | 通过 SSH 只读观察远程仓库 |
 | [0044](0044-repository-name-search.md) | 欢迎页仓库搜索默认只匹配名称 |
+| [0045](0045-diff-folding-and-pane-resize.md) | Diff 折叠未更改片段与可调分栏 |

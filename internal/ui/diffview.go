@@ -87,7 +87,13 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 		w.paintUnified(t, r)
 		return
 	}
-	paneW := (r.Width - dividerW) / 2
+	available := max(0, r.Width-dividerW)
+	fraction := t.split
+	if fraction == 0 {
+		fraction = 0.5
+	}
+	minPane := min(float32(120), available/2)
+	paneW := clampF(available*fraction, minPane, available-minPane)
 	left := rect(r.X, r.Y, paneW, r.Height)
 	div := rect(r.X+paneW, r.Y, dividerW, r.Height)
 	rightP := rect(right(div), r.Y, r.Width-paneW-dividerW, r.Height)
@@ -106,23 +112,61 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	w.paintTitle(rect(left.X+10, titles.Y, left.Width-16, titles.Height), res.Old.Title, oldPath)
 	w.paintTitle(rect(rightP.X+10, titles.Y, rightP.Width-16, titles.Height), res.New.Title, "")
 	w.p.vline(div.X+dividerW/2, titles.Y, titles.Height, w.pal.Border)
+	// The divider is the splitter: dragging anywhere in it resizes the panes,
+	// except over the per-block buttons painted below, which keep their own
+	// targets. A short grip at its top makes the affordance visible.
+	grip := rect(div.X+dividerW/2-1, div.Y+6, 2, 16)
+	if w.hovered(idDiffResize) || w.pressed(idDiffResize) {
+		w.p.fill(rect(div.X+1, div.Y+1, div.Width-2, div.Height-2), w.pal.ToolHover)
+	}
+	w.p.fill(grip, w.pal.TextMuted)
+	w.c.HitWithOptions(idDiffResize, div, w.t(i18n.DiffResizePanes), ui.HitOptions{Role: ui.RoleSeparator, Cursor: ui.PointerCursorResizeHorizontal})
+	w.tip(idDiffResize, w.t(i18n.DiffResizePanes))
+	start := paneW
+	w.onDrag(idDiffResize, func(e dragEvent) {
+		switch e.Phase {
+		case dragBegin:
+			start = paneW
+		case dragMove:
+			if available > 0 {
+				t.split = clampF(start+e.X-e.StartX, minPane, available-minPane) / available
+			}
+		}
+	})
+	w.onKeys(idDiffResize, func(e ui.KeyEvent) bool {
+		if available <= 0 {
+			return false
+		}
+		switch e.Key {
+		case ui.KeyLeft:
+			t.split = clampF(paneW-16, minPane, available-minPane) / available
+		case ui.KeyRight:
+			t.split = clampF(paneW+16, minPane, available-minPane) / available
+		default:
+			return false
+		}
+		return true
+	})
+	w.onDouble(idDiffResize, func() { t.split = 0 })
 
 	cellW, lineH, _ := w.metrics()
 	h := r.Height
-	newContent := float32(len(t.newDisp)+3) * lineH
-	oldContent := float32(len(t.oldDisp)+3) * lineH
+	newContent := float32(t.foldNew.total+3) * lineH
+	oldContent := float32(t.foldOld.total+3) * lineH
 	sync := w.ws.Settings.DiffSyncScroll
 	t.y = clampF(t.y, 0, max(0, newContent-h))
 	var oldY float32
 	if sync {
-		oldY = float32(domain.MapLine(res.Blocks, float64(t.y/lineH), false)) * lineH
+		source := t.foldNew.source(int(t.y / lineH))
+		oldLine := int(domain.MapLine(res.Blocks, float64(source), false))
+		oldY = float32(t.foldOld.row(oldLine))*lineH + float32(math.Mod(float64(t.y), float64(lineH)))
 		oldY = clampF(oldY, 0, max(0, oldContent-3*lineH))
 	} else {
 		t.yOld = clampF(t.yOld, 0, max(0, oldContent-h))
 		oldY = t.yOld
 	}
 	gutter := w.gutterWidth(max(len(t.oldDisp), len(t.newDisp)), cellW)
-	maxX := max(0, float32(t.maxCells)*cellW+40-(paneW-gutter))
+	maxX := max(0, float32(t.maxCells)*cellW+40-(min(left.Width, rightP.Width)-gutter))
 	t.x = clampF(t.x, 0, maxX)
 
 	w.onScrollIn(left, func(dx, dy float32) {
@@ -148,7 +192,7 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	// the old side follows it when scrolling is synchronized. When it is on it
 	// replaces the overlay bar, so the two never share the edge.
 	if s.DiffMarks {
-		w.paintChangeMarks(t, marksRect, t.marksNew, len(t.newDisp), t.y, h, lineH)
+		w.paintChangeMarks(t, marksRect, t.marksNew, t.foldNew, t.y, h, lineH)
 	} else {
 		w.vbar(idDiffScrollR, rightP, &scroller{Y: t.y}, newContent)
 	}
@@ -243,6 +287,7 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 	} else if view {
 		paneKind = selFile
 	}
+	projection := t.projection(paneKind)
 	selecting := t.textSel.kind == paneKind
 	// Each pane keeps its own hit region: a shared ID let the new pane, which
 	// registers later, swallow every press meant for the old pane.
@@ -251,13 +296,58 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 		textID = idDiffTextOld
 	}
 	w.c.Clip(r)
+	// The text area is declared before the fold rows: a fold row sits on top of
+	// it, so a click on the row expands instead of starting a text selection.
+	if view || !t.src.View {
+		w.textPointer(t, textID, disp, paneKind, tr, top, cellW, lineH)
+	}
+
+	// Line selection for partial staging: click changed line numbers.
+	if w.canApply(t) {
+		gid := scDiffLineSel.At(0)
+		if old {
+			gid = scDiffLineSel.At(1)
+		}
+		w.c.HitWithOptions(gid, gr, "Select lines", ui.HitOptions{SkipFocus: true, Cursor: ui.PointerCursorHand})
+		w.tip(gid, w.t(i18n.DiffTipSelectLines))
+		w.onDrag(gid, func(e dragEvent) {
+			if e.Phase != dragBegin {
+				return
+			}
+			line := projection.source(int((e.Y - r.Y + top) / lineH))
+			if line < 0 || line >= len(blk) || blk[line] < 0 {
+				return
+			}
+			if e.Mods&ui.ModifierShift != 0 && t.anchor >= 0 {
+				for k := min(t.anchor, line); k <= max(t.anchor, line); k++ {
+					if blk[k] >= 0 {
+						sel[k] = true
+					}
+				}
+			} else if sel[line] {
+				delete(sel, line)
+			} else {
+				sel[line] = true
+			}
+			t.anchor = line
+		})
+	}
 	first := max(0, int(top/lineH))
-	last := min(len(disp), int((top+r.Height)/lineH)+1)
+	last := min(projection.total, int((top+r.Height)/lineH)+1)
 	style := ui.TextStyle{Size: fs, Color: w.pal.EditorText, Mono: true, MonoFace: w.mono}
 	words := w.ws.Settings.DiffHighlightWords
 	var runs []ui.TextRun
-	for i := first; i < last; i++ {
-		y := r.Y + float32(i)*lineH - top
+	foldScope := scDiffFoldRight
+	if old {
+		foldScope = scDiffFoldLeft
+	}
+	for row := first; row < last; row++ {
+		i := projection.source(row)
+		y := r.Y + float32(row)*lineH - top
+		if fi, hidden := projection.hiddenAt(row); hidden > 0 {
+			w.paintFoldRow(t, fi, hidden, rect(r.X, y, r.Width, lineH), gr, foldScope.At(fi), lineH, r.Height)
+			continue
+		}
 		bi := blk[i]
 		if bi >= 0 {
 			b := res.Blocks[bi]
@@ -319,7 +409,7 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 		if s != e {
 			continue
 		}
-		y := r.Y + float32(s)*lineH - top
+		y := r.Y + float32(projection.row(s))*lineH - top
 		if y < r.Y-2 || y > bottom(r)+2 {
 			continue
 		}
@@ -327,43 +417,111 @@ func (w *Window) paintPane(t *diffTab, r ui.Rect, old bool, top float32, gutter 
 		w.p.fill(rect(r.X, y-1, r.Width, 2), c)
 	}
 	if !old {
-		w.paintHits(t, tr, top, cellW, lineH)
+		w.paintHits(t, tr, top, cellW, lineH, projection)
 	}
 	w.c.Unclip()
-	if view || !t.src.View {
-		w.textPointer(t, textID, disp, paneKind, tr, top, cellW, lineH)
-	}
 	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
+}
 
-	// Line selection for partial staging: click changed line numbers.
-	if w.canApply(t) {
-		gid := scDiffLineSel.At(0)
-		if old {
-			gid = scDiffLineSel.At(1)
+// paintFoldRow draws one collapsed unchanged stretch and makes it expandable
+// with the pointer and the keyboard. fi indexes the tab's fold list, so the
+// same stretch expands in every view of the tab.
+func (w *Window) paintFoldRow(t *diffTab, fi, hidden int, r, gutter ui.Rect, id ui.ID, lineH, view float32) {
+	bg := w.pal.IslandAlt
+	if w.hovered(id) || w.pressed(id) {
+		bg = w.pal.ToolHover
+	}
+	w.p.fill(r, bg)
+	w.p.iconIn(icons.ChevronRight, rect(r.X+5, r.Y+(lineH-iconSize)/2, iconSize, iconSize))
+	label := w.t(i18n.DiffFoldLines, hidden)
+	w.p.text(label, rect(gutter.X+gutter.Width+8, r.Y, r.Width-gutter.Width-16, lineH), fontSmall, regular, w.pal.TextSecond)
+	w.c.HitWithOptions(id, r, w.t(i18n.DiffFoldExpand, hidden), ui.HitOptions{
+		Role: ui.RoleButton, Cursor: ui.PointerCursorHand, Expandable: true,
+	})
+	w.tip(id, w.t(i18n.DiffFoldExpand, hidden))
+	if w.c.Clicked(id) {
+		w.after(func() { w.expandFold(t, fi) })
+	}
+	w.onKeys(id, func(e ui.KeyEvent) bool {
+		if e.Key == ui.KeyEnter || e.Key == ui.KeySpace {
+			w.after(func() { w.expandFold(t, fi) })
+			return true
 		}
-		w.c.HitWithOptions(gid, gr, "Select lines", ui.HitOptions{SkipFocus: true, Cursor: ui.PointerCursorHand})
-		w.tip(gid, w.t(i18n.DiffTipSelectLines))
-		w.onDrag(gid, func(e dragEvent) {
-			if e.Phase != dragBegin {
-				return
-			}
-			line := int((e.Y - r.Y + top) / lineH)
-			if line < 0 || line >= len(blk) || blk[line] < 0 {
-				return
-			}
-			if e.Mods&ui.ModifierShift != 0 && t.anchor >= 0 {
-				for k := min(t.anchor, line); k <= max(t.anchor, line); k++ {
-					if blk[k] >= 0 {
-						sel[k] = true
-					}
-				}
-			} else if sel[line] {
-				delete(sel, line)
-			} else {
-				sel[line] = true
-			}
-			t.anchor = line
-		})
+		// The focused fold row still scrolls the view like the pane does.
+		return w.scrollKey(t, e, lineH, view)
+	})
+}
+
+// expandFold opens one collapsed stretch. The line at the top of the viewport
+// stays there, so the reader does not lose their place when content appears.
+func (w *Window) expandFold(t *diffTab, fold int) {
+	if t.expanded[fold] {
+		return
+	}
+	_, lineH, _ := w.metrics()
+	top := max(0, int(t.y/lineH))
+	frac := t.y - float32(top)*lineH
+	unified := w.ws.Settings.DiffUnified
+	var uni, newTop, oldTop int
+	var oldFrac float32
+	if unified {
+		uni = t.foldUni.source(top)
+	} else {
+		newTop = t.foldNew.source(top)
+		oldRow := max(0, int(t.yOld/lineH))
+		oldTop = t.foldOld.source(oldRow)
+		oldFrac = t.yOld - float32(oldRow)*lineH
+	}
+	if t.expanded == nil {
+		t.expanded = make(map[int]bool)
+	}
+	t.expanded[fold] = true
+	t.rebuildFolds()
+	if unified {
+		t.y = max(0, float32(t.foldUni.row(uni))*lineH+frac)
+		return
+	}
+	t.y = max(0, float32(t.foldNew.row(newTop))*lineH+frac)
+	t.yOld = max(0, float32(t.foldOld.row(oldTop))*lineH+oldFrac)
+}
+
+// setDiffCollapse turns unchanged-stretch folding on or off for every open
+// diff. Expansion is per load, so turning it back on starts fully folded.
+func (w *Window) setDiffCollapse(on bool) {
+	s := w.ws.Settings
+	if s.DiffCollapse == on {
+		return
+	}
+	s.DiffCollapse = on
+	w.saveSettings()
+	for _, t := range w.ed.tabs {
+		t.expanded = nil
+		t.collapse = on
+		w.refoldTab(t)
+	}
+}
+
+// refoldTab rebuilds a tab's folds after the toggle while keeping the source
+// line at the top of each viewport in place.
+func (w *Window) refoldTab(t *diffTab) {
+	if t.res == nil {
+		return
+	}
+	_, lineH, _ := w.metrics()
+	row := max(0, int(t.y/lineH))
+	frac := t.y - float32(row)*lineH
+	oldRow := max(0, int(t.yOld/lineH))
+	oldFrac := t.yOld - float32(oldRow)*lineH
+	unified := w.ws.Settings.DiffUnified
+	uni := t.foldUni.source(row)
+	newTop := t.foldNew.source(row)
+	oldTop := t.foldOld.source(oldRow)
+	t.rebuildFolds()
+	if unified {
+		t.y = max(0, float32(t.foldUni.row(uni))*lineH+frac)
+	} else {
+		t.y = max(0, float32(t.foldNew.row(newTop))*lineH+frac)
+		t.yOld = max(0, float32(t.foldOld.row(oldTop))*lineH+oldFrac)
 	}
 }
 
@@ -379,10 +537,10 @@ func (w *Window) paintDivider(t *diffTab, div ui.Rect, oldY, newY, lineH float32
 	res := t.res
 	w.c.Clip(div)
 	for bi, b := range res.Blocks {
-		lt := float32(b.OldStart)*lineH - oldY
-		lb := float32(b.OldEnd)*lineH - oldY
-		rt := float32(b.NewStart)*lineH - newY
-		rb := float32(b.NewEnd)*lineH - newY
+		lt := float32(t.foldOld.row(b.OldStart))*lineH - oldY
+		lb := float32(t.foldOld.row(b.OldEnd))*lineH - oldY
+		rt := float32(t.foldNew.row(b.NewStart))*lineH - newY
+		rb := float32(t.foldNew.row(b.NewEnd))*lineH - newY
 		if max(lb, rb) < -4 || min(lt, rt) > div.Height+4 {
 			continue
 		}
@@ -403,8 +561,8 @@ func (w *Window) paintDivider(t *diffTab, div ui.Rect, oldY, newY, lineH float32
 		return
 	}
 	for bi, b := range res.Blocks {
-		lt := div.Y + float32(b.OldStart)*lineH - oldY
-		rt := div.Y + float32(b.NewStart)*lineH - newY
+		lt := div.Y + float32(t.foldOld.row(b.OldStart))*lineH - oldY
+		rt := div.Y + float32(t.foldNew.row(b.NewStart))*lineH - newY
 		if t.src.Area == domain.AreaUnstaged {
 			if rt >= div.Y-2 && rt < bottom(div)-14 {
 				id := scDiffBlockB.At(bi)
@@ -520,8 +678,8 @@ func cloneSet(m map[int]bool) map[int]bool {
 func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 	res := t.res
 	cellW, lineH, fs := w.metrics()
-	n := len(t.unified)
-	content := float32(n+3) * lineH
+	proj := t.foldUni
+	content := float32(proj.total+3) * lineH
 	t.y = clampF(t.y, 0, max(0, content-r.Height))
 	// The right edge belongs to the change ruler, which carries the visible
 	// range and so stands in for the overlay scroll bar. The code map is a
@@ -543,17 +701,25 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 	style := ui.TextStyle{Size: fs, Color: w.pal.EditorText, Mono: true, MonoFace: w.mono}
 	numStyle := ui.TextStyle{Size: fs - 1, Color: w.pal.LineNumber, Mono: true, MonoFace: w.mono}
 	words := w.ws.Settings.DiffHighlightWords
+	// Fold rows sit above the text area, so they win the click that opens them.
+	w.textPointer(t, idDiffText, t.unifDisp, selUnified, tr, t.y, cellW, lineH)
 	first := max(0, int(t.y/lineH))
-	last := min(n, int((t.y+r.Height)/lineH)+1)
+	last := min(proj.total, int((t.y+r.Height)/lineH)+1)
 	var runs []ui.TextRun
 	w.c.Clip(r)
 	prevBlock := -1
 	if first > 0 {
-		prevBlock = t.unified[first-1].block
+		prevBlock = t.unified[proj.source(first-1)].block
 	}
-	for i := first; i < last; i++ {
+	for row := first; row < last; row++ {
+		i := proj.source(row)
+		y := r.Y + float32(row)*lineH - t.y
+		if fi, hidden := proj.hiddenAt(row); hidden > 0 {
+			w.paintFoldRow(t, fi, hidden, rect(r.X, y, r.Width, lineH), gr, scDiffFoldUnified.At(fi), lineH, r.Height)
+			prevBlock = -1
+			continue
+		}
 		u := t.unified[i]
-		y := r.Y + float32(i)*lineH - t.y
 		var disp string
 		var spans []span
 		var orig string
@@ -637,11 +803,8 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 	}
 	w.c.Unclip()
 	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
-	// Unified rows take selectable text like the file view side does: the
-	// selection copies the row's raw content, context rows included once.
-	w.textPointer(t, idDiffText, t.unifDisp, selUnified, tr, t.y, cellW, lineH)
 	if s.DiffMarks {
-		w.paintChangeMarks(t, marksRect, t.marksUni, len(t.unified), t.y, r.Height, lineH)
+		w.paintChangeMarks(t, marksRect, t.marksUni, proj, t.y, r.Height, lineH)
 	} else {
 		sc := scroller{Y: t.y}
 		w.vbar(idDiffScrollR, r, &sc, content)
@@ -748,6 +911,10 @@ func (w *Window) paintDiffToolbar(t *diffTab, r ui.Rect) {
 		})
 	}
 	x += actionSize + 2
+	if w.action(idDiffCollapse, x, y, icons.CollapseAll, w.t(i18n.DiffActionCollapse), actOpts{toggled: s.DiffCollapse, disabled: len(res.Blocks) == 0}) {
+		w.after(func() { w.setDiffCollapse(!s.DiffCollapse) })
+	}
+	x += actionSize + 2
 
 	// Right side: counts and file actions.
 	rx := right(r) - 8
@@ -810,7 +977,18 @@ func (w *Window) currentLine(t *diffTab) int {
 		return t.edit.caretPos().line + 1
 	}
 	_, lineH, _ := w.metrics()
-	return int(t.y/lineH) + 1
+	row := int(t.y / lineH)
+	if w.ws.Settings.DiffUnified && !t.src.View && len(t.unified) > 0 {
+		if i := t.foldUni.source(row); i >= 0 && i < len(t.unified) {
+			if n := t.unified[i].new; n >= 0 {
+				return n + 1
+			}
+			if o := t.unified[i].old; o >= 0 {
+				return o + 1
+			}
+		}
+	}
+	return t.projection(selNewPane).source(row) + 1
 }
 
 // jumpBlock moves to the next or previous changed block.
@@ -841,17 +1019,17 @@ func (w *Window) scrollToBlock(t *diffTab, bi int) {
 	}
 	_, lineH, _ := w.metrics()
 	b := t.res.Blocks[bi]
-	line := b.NewStart
+	row := t.foldNew.row(b.NewStart)
 	if w.ws.Settings.DiffUnified {
 		for i, u := range t.unified {
 			if u.block == bi {
-				line = i
+				row = t.foldUni.row(i)
 				break
 			}
 		}
 	}
-	t.y = max(0, float32(line-4)*lineH)
-	t.yOld = max(0, float32(b.OldStart-4)*lineH)
+	t.y = max(0, float32(row-4)*lineH)
+	t.yOld = max(0, float32(t.foldOld.row(b.OldStart)-4)*lineH)
 }
 
 // ---- search ---------------------------------------------------------------
@@ -954,15 +1132,39 @@ func (w *Window) nextHit(t *diffTab, forward bool) {
 	}
 	_, lineH, _ := w.metrics()
 	h := t.hits[t.hitIdx]
-	t.y = max(0, float32(h.line-6)*lineH)
+	// A hit inside a folded stretch cannot be highlighted behind the fold, so
+	// reveal its stretch before scrolling to it.
+	revealed := false
+	for i, f := range t.folds {
+		if h.line >= f.newStart && h.line < f.newStart+f.count && !t.expanded[i] {
+			if t.expanded == nil {
+				t.expanded = make(map[int]bool)
+			}
+			t.expanded[i] = true
+			revealed = true
+		}
+	}
+	if revealed {
+		t.rebuildFolds()
+	}
+	row := t.foldNew.row(h.line)
+	if w.ws.Settings.DiffUnified {
+		for i, u := range t.unified {
+			if u.new == h.line {
+				row = t.foldUni.row(i)
+				break
+			}
+		}
+	}
+	t.y = max(0, float32(row-6)*lineH)
 }
 
-func (w *Window) paintHits(t *diffTab, tr ui.Rect, top, cellW, lineH float32) {
+func (w *Window) paintHits(t *diffTab, tr ui.Rect, top, cellW, lineH float32, proj foldedLines) {
 	if !t.searchOpen || len(t.hits) == 0 || w.ws.Settings.DiffUnified {
 		return
 	}
 	for k, h := range t.hits {
-		y := tr.Y + float32(h.line)*lineH - top
+		y := tr.Y + float32(proj.row(h.line))*lineH - top
 		if y < tr.Y-lineH || y > bottom(tr) {
 			continue
 		}

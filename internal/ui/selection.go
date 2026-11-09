@@ -389,7 +389,7 @@ func (w *Window) textPointer(t *diffTab, id ui.ID, disp []string, kind selKind, 
 		if len(disp) == 0 {
 			return selPoint{}
 		}
-		line := max(0, min(int((y-tr.Y+top)/lineH), len(disp)-1))
+		line := max(0, min(t.projection(kind).source(int((y-tr.Y+top)/lineH)), len(disp)-1))
 		cell := int((x - (tr.X + 6 - t.x)) / cellW)
 		return selPoint{line: line, cell: max(0, min(cell, displayCells(disp[line])))}
 	}
@@ -451,16 +451,65 @@ func (w *Window) textKey(t *diffTab, e ui.KeyEvent, kind selKind, lineH float32)
 		return false
 	}
 	extend := e.Modifiers&ui.ModifierShift != 0
+	proj := t.projection(kind)
 	if !t.textSel.set {
 		if !extend {
 			return false
 		}
 		// Start at the top of the viewport, so the extension begins where the
-		// reader is looking.
-		line := max(0, min(int(t.y/lineH), len(lines)-1))
+		// reader is looking. Folds make the top row a projection, not a source
+		// line.
+		row := max(0, min(int(t.y/lineH), proj.total-1))
+		line := max(0, min(proj.source(row), len(lines)-1))
 		t.textSel = textSel{anchor: selPoint{line: line}, focus: selPoint{line: line}, set: true, kind: kind}
 	}
-	next := moveCaret(lines, t.textSel.focus, e.Key)
+	focus := t.textSel.focus
+	next := moveCaret(lines, focus, e.Key)
+	if proj.total != len(lines) {
+		// A collapsed stretch occupies one row. The caret walks visible rows so
+		// it never lands on a line the reader cannot see; horizontally, a fold
+		// row steps over the whole stretch like a single word.
+		atRow := func(row int) selPoint {
+			row = max(0, min(row, proj.total-1))
+			line := max(0, min(proj.source(row), len(lines)-1))
+			return selPoint{line: line, cell: max(0, min(focus.cell, displayCells(lines[line])))}
+		}
+		row := proj.row(focus.line)
+		if _, hidden := proj.hiddenAt(row); hidden > 0 {
+			switch e.Key {
+			case ui.KeyUp:
+				next = atRow(row - 1)
+			case ui.KeyDown:
+				next = atRow(row + 1)
+			case ui.KeyRight:
+				if row+1 < proj.total {
+					next = selPoint{line: proj.source(row + 1)}
+				}
+			case ui.KeyLeft:
+				if row > 0 {
+					line := proj.source(row - 1)
+					next = selPoint{line: line, cell: displayCells(lines[line])}
+				}
+			}
+		} else if e.Key == ui.KeyUp || e.Key == ui.KeyDown {
+			if e.Key == ui.KeyUp {
+				next = atRow(row - 1)
+			} else {
+				next = atRow(row + 1)
+			}
+		} else if next.line != focus.line && proj.source(proj.row(next.line)) != next.line {
+			// moveCaret crossed a line boundary into hidden text; land on the
+			// neighbouring visible row instead.
+			foldRow := proj.row(next.line)
+			if next.line > focus.line {
+				next = atRow(foldRow + 1)
+				next.cell = 0
+			} else if foldRow > 0 {
+				line := proj.source(foldRow - 1)
+				next = selPoint{line: line, cell: displayCells(lines[line])}
+			}
+		}
+	}
 	if extend {
 		t.textSel.focus = next
 	} else {

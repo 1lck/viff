@@ -269,6 +269,9 @@ func TestChangeMarksDragScrolls(t *testing.T) {
 	f.start(1440, 900)
 	f.win.openRepo(f.dir)
 	f.settle()
+	// This test scrolls a file taller than the viewport; folding would make the
+	// whole fixture fit and leave nothing to scroll.
+	f.win.ws.Settings.DiffCollapse = false
 	tab := openEdgeTab(t, f)
 
 	area, ok := f.win.areas[idDiffMarks]
