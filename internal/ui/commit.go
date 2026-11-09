@@ -478,7 +478,7 @@ func (w *Window) paintChanges(r ui.Rect) {
 		w.onContext(id, func(x, y float32) {
 			// Checking a group or directory selects its files, not its row key.
 			// Keep those checks (and any other selected files) when opening it.
-			if !w.changesRowChecked(i) {
+			if !w.rowChecked(row) {
 				clear(v.sel)
 				v.sel[row.key] = true
 				v.cursor, v.anchor = row.key, row.key
@@ -541,13 +541,18 @@ func (w *Window) toggleRowCheck(i int) {
 	}
 }
 
-// changesRowChecked reports whether every file a row covers is selected, which
-// is what fills a group's or directory's checkbox.
+// changesRowChecked reports whether the row at i has a filled checkbox.
 func (w *Window) changesRowChecked(i int) bool {
 	if i < 0 || i >= len(w.cm.rows) {
 		return false
 	}
-	row := w.cm.rows[i]
+	return w.rowChecked(w.cm.rows[i])
+}
+
+// rowChecked reports whether every file a row covers is selected, which is what
+// fills a group's or directory's checkbox. It takes the row itself so a handler
+// painted for one row keeps answering for it after a refresh rebuilds the rows.
+func (w *Window) rowChecked(row changeRow) bool {
 	if row.kind == rowFile {
 		return w.cm.sel[row.key]
 	}
