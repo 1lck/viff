@@ -14,17 +14,58 @@ import (
 	"viff/internal/ui/icons"
 )
 
+// welcomeSearchScope selects what the Welcome screen's search field matches.
+// The name scope is the default: a query is a project name in almost every
+// case, and matching the whole path turns a shared parent folder
+// ("~/code/ips" with a hundred repositories below it) into a hundred results
+// when the user typed the abbreviation of one project. The path scope stays
+// available because finding every repository below a folder is a real task.
+type welcomeSearchScope int
+
+const (
+	welcomeSearchName welcomeSearchScope = iota
+	welcomeSearchPath
+)
+
+// welcomeSearchMinW is the narrowest field that keeps the scope control and a
+// readable placeholder next to each other. Below it the search row moves under
+// the toolbar buttons: five buttons leave an 80-point field at the minimum
+// window width, and an 80-point field cannot hold both.
+const welcomeSearchMinW = 240
+
 // welcomeView is the welcome screen's state.
 type welcomeView struct {
 	search *text.Editor
-	nav    int
-	sel    int
-	scroll scroller
+	scope  welcomeSearchScope
+	// focusSearch asks the next paint to put the caret back in the field after
+	// the scope menu closes. A focus request made from the menu's click handler
+	// is overwritten by the closing popup's own focus restore, so the request is
+	// issued from paint, the same way the popup's search field does it.
+	focusSearch bool
+	nav         int
+	sel         int
+	scroll      scroller
 }
 
 func (v *welcomeView) init() {
 	v.search = text.NewEditor("")
 	v.sel = -1
+}
+
+// projectMatches reports whether the repository at root belongs in the search
+// result for q. Name matching is a substring test on the same short name the
+// row shows (repoRootName, so an SSH repository keeps its user@host form),
+// not the subsequence match used for paths: abbreviations are short, and
+// matching "ips" as a subsequence would still return most of a large workspace.
+func projectMatches(root, q string, scope welcomeSearchScope) bool {
+	if q == "" {
+		return true
+	}
+	q = strings.ToLower(q)
+	if scope == welcomeSearchPath {
+		return fuzzy(strings.ToLower(root), q)
+	}
+	return strings.Contains(strings.ToLower(repoRootName(root)), q)
 }
 
 // projectShown lists the Welcome screen's rows for the current query: the
@@ -44,7 +85,7 @@ func (w *Window) projectShown() []string {
 		if seen[root] {
 			return
 		}
-		if q != "" && !fuzzy(strings.ToLower(root), q) {
+		if q != "" && !projectMatches(root, q, w.wel.scope) {
 			return
 		}
 		seen[root] = true
@@ -133,7 +174,16 @@ func (w *Window) paintWelcome(full ui.Rect) {
 		}
 		bx -= bw + 10
 	}
-	w.field(idWelSearch, v.search, rect(top.X, top.Y, max(80, min(bx-top.X-10, 420)), 30), fieldOpts{icon: icons.Search, placeholder: "Search projects", nav: true})
+	search := rect(top.X, top.Y, max(80, min(bx-top.X-10, 420)), 30)
+	listTop := top.Y + 46
+	if search.Width < welcomeSearchMinW {
+		// The five toolbar buttons leave too little room for the field at the
+		// minimum window width. Giving the field and its scope control their
+		// own row keeps both usable instead of clipping the query to a letter.
+		search = rect(top.X, top.Y+40, min(top.Width, 420), 30)
+		listTop = bottom(search) + 16
+	}
+	w.paintWelcomeSearch(search, v)
 	w.onKeys(idWelSearch, func(e ui.KeyEvent) bool {
 		switch e.Key {
 		case ui.KeyDown:
@@ -152,7 +202,7 @@ func (w *Window) paintWelcome(full ui.Rect) {
 		return true
 	})
 
-	list := rect(main.X+10, top.Y+46, main.Width-20, bottom(main)-top.Y-56)
+	list := rect(main.X+10, listTop, main.Width-20, bottom(main)-listTop-10)
 	w.list(idWelList, scWelRecent, list, "Recent projects")
 	rowHt := float32(52)
 	content := float32(len(recent)) * rowHt
@@ -218,6 +268,53 @@ func (w *Window) paintWelcome(full ui.Rect) {
 	}
 	w.c.Unclip()
 	w.vbar(scLogScrollbars.At(30), list, &v.scroll, content)
+}
+
+// paintWelcomeSearch draws the project search field and the scope control that
+// shares its right edge. The scope is painted after the field so its small hit
+// area wins over "click to focus", and it is a focusable combobox of its own:
+// Tab reaches it and Enter opens the same menu as a click.
+func (w *Window) paintWelcomeSearch(r ui.Rect, v *welcomeView) {
+	names, paths := w.t(i18n.WelcomeSearchName), w.t(i18n.WelcomeSearchPath)
+	scopeW := max(w.p.width(names, fontSmall, regular), w.p.width(paths, fontSmall, regular)) + 30
+	w.field(idWelSearch, v.search, r, fieldOpts{
+		icon: icons.Search, placeholder: "Search projects", nav: true, rightPad: scopeW + 2,
+	})
+	if v.focusSearch {
+		v.focusSearch = false
+		w.c.RequestFocus(idWelSearch)
+	}
+	label, hint := names, w.t(i18n.WelcomeSearchNameHint)
+	if v.scope == welcomeSearchPath {
+		label, hint = paths, w.t(i18n.WelcomeSearchPathHint)
+	}
+	sr := rect(right(r)-scopeW-2, r.Y+3, scopeW, r.Height-6)
+	w.p.fill(rect(sr.X-4, sr.Y+5, 1, sr.Height-10), w.pal.ControlBorder)
+	if w.hovered(idWelScope) || w.focused(idWelScope) {
+		w.p.round(sr, 4, w.pal.Hover)
+	}
+	tw := w.p.text(label, rect(sr.X+8, sr.Y, sr.Width-24, sr.Height), fontSmall, regular, w.pal.TextSecond)
+	w.p.iconIn(icons.ChevronDown, rect(sr.X+8+tw+1, sr.Y, 14, sr.Height))
+	w.c.HitWithOptions(idWelScope, sr, hint, ui.HitOptions{Role: ui.RoleCombobox, Value: label})
+	w.tip(idWelScope, hint)
+	if w.c.Clicked(idWelScope) {
+		w.after(func() {
+			w.openMenuBelow(sr, []item{
+				{title: w.t(i18n.WelcomeSearchNameHint), checked: v.scope == welcomeSearchName, run: func() {
+					v.scope, v.sel = welcomeSearchName, -1
+					// Choosing a scope narrows the list, not the typing: the
+					// caret stays in the field so the query can continue.
+					v.focusSearch = true
+					w.Invalidate()
+				}},
+				{title: w.t(i18n.WelcomeSearchPathHint), checked: v.scope == welcomeSearchPath, run: func() {
+					v.scope, v.sel = welcomeSearchPath, -1
+					v.focusSearch = true
+					w.Invalidate()
+				}},
+			}, 220)
+		})
+	}
 }
 
 func (w *Window) paintWelcomeEmpty(r ui.Rect) {
