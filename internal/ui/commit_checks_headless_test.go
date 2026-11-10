@@ -426,7 +426,7 @@ func TestCommitPanelStageSelectedFromCheckedFiles(t *testing.T) {
 		t.Fatal("Commit is enabled while the checked file is not staged")
 	}
 	for _, want := range []string{
-		"Commit includes only staged files",
+		"Commit staged files only",
 		"1 selected file is not staged",
 		"Stage Selected",
 	} {
@@ -447,7 +447,7 @@ func TestCommitPanelStageSelectedFromCheckedFiles(t *testing.T) {
 	f.ws.Settings.CommitPanelWidth = 240
 	f.win.Invalidate()
 	f.s.Settle(80*time.Millisecond, time.Second)
-	for _, want := range []string{"Commit includes only staged files", "Stage Selected"} {
+	for _, want := range []string{"Commit staged files only", "Stage Selected"} {
 		if !f.s.HasText(want) {
 			t.Fatalf("missing %q at a 240px panel\ntexts: %s", want, strings.Join(f.s.Texts(), " | "))
 		}
@@ -540,7 +540,7 @@ func TestCommitScopeWithExistingStagedContent(t *testing.T) {
 		t.Fatal("Commit is disabled although README.md is staged and the message is set")
 	}
 	for _, want := range []string{
-		"Commit includes only staged files",
+		"Commit staged files only",
 		"1 selected file is not staged",
 		"Stage Selected",
 	} {

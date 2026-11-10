@@ -336,7 +336,7 @@ func init() {
 		WorkspaceAIConfirmAsk:           "Generate a commit message with AI?",
 		WorkspaceAIConfirmGenerate:      "Generate",
 
-		WorkspaceCommitScopeHint:      "Commit includes only staged files",
+		WorkspaceCommitScopeHint:      "Commit staged files only",
 		WorkspaceCommitScopeHintPaths: "Commit includes the checked files",
 
 		WorkspaceHintPush:          "Push",
