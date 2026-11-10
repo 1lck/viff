@@ -14,6 +14,14 @@ import (
 
 const dividerW = 30
 
+// The diff's shared horizontal bar lies in a strip below the panes, so it
+// never covers the last row of text. Its right end stops before the change
+// ruler or the vertical scroll bar, whichever claims the edge.
+const (
+	diffBarH    = 12
+	diffBarEdge = 12
+)
+
 // metrics returns the editor font's cell size and the line height.
 func (w *Window) metrics() (cellW, lineH, fs float32) {
 	fs = w.ws.Settings.FontSize
@@ -94,13 +102,34 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	}
 	minPane := min(float32(120), available/2)
 	paneW := clampF(available*fraction, minPane, available-minPane)
+	// The widest line decides whether the bar is needed, and the bar takes its
+	// strip out of the panes before they are laid out. That height has to come
+	// off first, or the bar would sit on the last row of text.
+	s := w.ws.Settings
+	cellW, lineH, _ := w.metrics()
+	gutter := w.gutterWidth(max(len(t.oldDisp), len(t.newDisp)), cellW)
+	rightPaneW := max(0, r.Width-paneW-dividerW)
+	marksW := float32(0)
+	if s.DiffMarks {
+		marksW = min(marksWidth, rightPaneW)
+	}
+	contentW := float32(t.maxCells)*cellW + 40
+	viewW := max(0, min(paneW, rightPaneW-marksW)-gutter)
+	maxX := max(0, contentW-viewW)
+	t.x = clampF(t.x, 0, maxX)
+	trackW := r.Width
+	if s.DiffMarks {
+		trackW -= marksW
+	} else {
+		trackW -= diffBarEdge
+	}
+	bar := diffBarStrip(&r, contentW, viewW, trackW)
 	left := rect(r.X, r.Y, paneW, r.Height)
 	div := rect(r.X+paneW, r.Y, dividerW, r.Height)
 	rightP := rect(right(div), r.Y, r.Width-paneW-dividerW, r.Height)
 	// The right edge belongs to the change ruler, which carries the visible
 	// range and so stands in for the overlay scroll bar. The code map is a
 	// file-view feature and takes no room here.
-	s := w.ws.Settings
 	marksRect := ui.Rect{}
 	if s.DiffMarks {
 		marksRect = splitRight(&rightP, marksWidth)
@@ -149,7 +178,6 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	})
 	w.onDouble(idDiffResize, func() { t.split = 0 })
 
-	cellW, lineH, _ := w.metrics()
 	h := r.Height
 	newContent := float32(t.foldNew.total+3) * lineH
 	oldContent := float32(t.foldOld.total+3) * lineH
@@ -165,9 +193,6 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 		t.yOld = clampF(t.yOld, 0, max(0, oldContent-h))
 		oldY = t.yOld
 	}
-	gutter := w.gutterWidth(max(len(t.oldDisp), len(t.newDisp)), cellW)
-	maxX := max(0, float32(t.maxCells)*cellW+40-(min(left.Width, rightP.Width)-gutter))
-	t.x = clampF(t.x, 0, maxX)
 
 	w.onScrollIn(left, func(dx, dy float32) {
 		t.x = clampF(t.x+dx, 0, maxX)
@@ -205,6 +230,25 @@ func (w *Window) paintDiff(t *diffTab, r ui.Rect) {
 	if !sync {
 		w.wrapBarDrag(idDiffScrollL, func(y float32) { t.yOld = y }, func() float32 { return t.yOld }, oldContent, left.Height)
 	}
+	// One bar under both panes drives their shared horizontal offset. The
+	// panes cannot scroll apart because both read the same t.x.
+	if bar.Height > 0 {
+		w.hbarPage(idDiffScrollX, bar, viewW, contentW, func() float32 { return t.x }, func(x float32) { t.x = x })
+	}
+}
+
+// diffBarStrip reserves the bottom strip of a diff for its shared horizontal
+// scroll bar and returns it, or the zero rect when the widest row fits its
+// viewport. viewW is the width the text scrolls in, contentW the widest row,
+// and trackW the width the bar spans. r is shortened in place, so the panes
+// stop above the bar instead of underneath it.
+func diffBarStrip(r *ui.Rect, contentW, viewW, trackW float32) ui.Rect {
+	if contentW <= viewW+0.5 || viewW <= 0 || trackW <= 24 || r.Height <= diffBarH {
+		return ui.Rect{}
+	}
+	bar := splitBottom(r, diffBarH)
+	bar.Width = trackW
+	return bar
 }
 
 // wrapBarDrag rebinds a scroll bar's drag to a tab field.
@@ -680,21 +724,34 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 	cellW, lineH, fs := w.metrics()
 	proj := t.foldUni
 	content := float32(proj.total+3) * lineH
-	t.y = clampF(t.y, 0, max(0, content-r.Height))
 	// The right edge belongs to the change ruler, which carries the visible
 	// range and so stands in for the overlay scroll bar. The code map is a
 	// file-view feature and takes no room in a diff.
 	s := w.ws.Settings
+	marksW := float32(0)
+	if s.DiffMarks {
+		marksW = min(marksWidth, r.Width)
+	}
+	numW := float32(len(itoa(max(max(len(t.oldDisp), len(t.newDisp)), 99))))*cellW + 12
+	gutter := numW*2 + 24
+	contentW := float32(t.maxCells)*cellW + 40
+	viewW := max(0, r.Width-marksW-gutter)
+	maxX := max(0, contentW-viewW)
+	t.x = clampF(t.x, 0, maxX)
+	trackW := r.Width - marksW
+	if !s.DiffMarks {
+		trackW -= diffBarEdge
+	}
+	bar := diffBarStrip(&r, contentW, viewW, trackW)
 	marksRect := ui.Rect{}
 	if s.DiffMarks {
 		marksRect = splitRight(&r, marksWidth)
 	}
-	numW := float32(len(itoa(max(max(len(t.oldDisp), len(t.newDisp)), 99))))*cellW + 12
-	gutter := numW*2 + 24
+	// Reserving the bar shortened r, so clamp the vertical offset against the
+	// height the text actually has.
+	t.y = clampF(t.y, 0, max(0, content-r.Height))
 	gr := rect(r.X, r.Y, gutter, r.Height)
 	tr := rect(r.X+gutter, r.Y, r.Width-gutter, r.Height)
-	maxX := max(0, float32(t.maxCells)*cellW+40-tr.Width)
-	t.x = clampF(t.x, 0, maxX)
 	w.onScrollIn(r, func(dx, dy float32) { t.y += dy; t.x = clampF(t.x+dx, 0, maxX) })
 	w.c.HitWithOptions(idDiffRight, r, "Diff", ui.HitOptions{Role: ui.RoleGroup})
 	w.diffKeys(t, idDiffRight, lineH, r.Height)
@@ -810,6 +867,9 @@ func (w *Window) paintUnified(t *diffTab, r ui.Rect) {
 		w.vbar(idDiffScrollR, r, &sc, content)
 	}
 	w.wrapBarDrag(idDiffScrollR, func(y float32) { t.y = y }, func() float32 { return t.y }, content, r.Height)
+	if bar.Height > 0 {
+		w.hbarPage(idDiffScrollX, bar, viewW, contentW, func() float32 { return t.x }, func(x float32) { t.x = x })
+	}
 }
 
 // ---- toolbar ---------------------------------------------------------------

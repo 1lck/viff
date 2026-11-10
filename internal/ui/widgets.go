@@ -391,12 +391,24 @@ func (w *Window) vbar(id ui.ID, area ui.Rect, s *scroller, content float32) {
 
 // hbar paints a horizontal overlay scrollbar.
 func (w *Window) hbar(id ui.ID, area ui.Rect, s *scroller, content float32) {
-	view := area.Width
-	if content <= view+0.5 || view <= 0 {
+	w.hbarPage(id, area, area.Width, content, func() float32 { return s.X }, func(x float32) { s.X = x })
+}
+
+// hbarPage paints a horizontal overlay scrollbar for a page that is view wide
+// while its thumb travels the whole of area. The diff uses it for its single
+// bottom bar: the bar spans both panes while the offset scrolls the narrowest
+// one, so the thumb follows view but the drag covers the wider track.
+func (w *Window) hbarPage(id ui.ID, area ui.Rect, view, content float32, get func() float32, set func(float32)) {
+	track := area.Width
+	if content <= view+0.5 || view <= 0 || track <= 0 {
 		return
 	}
-	th := max(view*view/content, 24)
-	tx := area.X + (view-th)*(s.X/(content-view))
+	th := min(max(track*view/content, 24), track)
+	if th >= track {
+		return
+	}
+	x := clampF(get(), 0, max(0, content-view))
+	tx := area.X + (track-th)*(x/(content-view))
 	hot := w.hovered(id) || (w.drag != nil && w.drag.id == id)
 	tw := float32(6)
 	if hot {
@@ -407,14 +419,14 @@ func (w *Window) hbar(id ui.ID, area ui.Rect, s *scroller, content float32) {
 		c = w.pal.ScrollThumbHover
 	}
 	w.p.round(rect(tx, bottom(area)-tw-2, th, tw), tw/2, c)
-	w.c.HitWithOptions(id, rect(area.X, bottom(area)-12, area.Width, 12), w.t(i18n.ChromeA11yScrollBar), ui.HitOptions{SkipFocus: true, SkipTab: true})
-	start := s.X
+	w.c.HitWithOptions(id, rect(area.X, bottom(area)-12, track, 12), w.t(i18n.ChromeA11yScrollBar), ui.HitOptions{SkipFocus: true, SkipTab: true})
+	start := x
 	w.onDrag(id, func(e dragEvent) {
 		switch e.Phase {
 		case dragBegin:
-			start = s.X
+			start = clampF(get(), 0, max(0, content-view))
 		case dragMove:
-			s.X = clampF(start+(e.X-e.StartX)/(view-th)*(content-view), 0, content-view)
+			set(clampF(start+(e.X-e.StartX)/(track-th)*(content-view), 0, content-view))
 		}
 	})
 }

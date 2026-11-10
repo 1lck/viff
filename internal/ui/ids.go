@@ -124,6 +124,7 @@ var (
 	idDiffStageFile   = tree.ID(fDiff, "stage-file")
 	idDiffScrollL     = tree.ID(fDiff, "scroll-left")
 	idDiffScrollR     = tree.ID(fDiff, "scroll-right")
+	idDiffScrollX     = tree.ID(fDiff, "scroll-bottom")
 	idFileAnnotate    = tree.ID(fDiff, "annotate")
 	idFileHistory     = tree.ID(fDiff, "file-history")
 	idFileCodemap     = tree.ID(fDiff, "file-codemap")
