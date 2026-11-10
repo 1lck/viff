@@ -40,7 +40,8 @@ func main() {
 	source, err := png.Decode(file)
 	must(err)
 	must(file.Close())
-	square := appbundle.Downscale(source, 1024)
+	square, err := roundedPlate(appbundle.Downscale(source, 1024))
+	must(err)
 	for _, size := range []int{16, 32, 48, 64, 128, 256, 512, 1024} {
 		name := filepath.Join(dir, "icon-"+strconv.Itoa(size)+".png")
 		if size == 1024 {

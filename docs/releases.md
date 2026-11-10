@@ -163,6 +163,8 @@ GitHub 仓库主分支要求 PR、CI 通过、解决评审讨论及线性历史�
 
 ## 应用图标
 
-应用统一使用白底橙色、无文字的[品牌图标](../assets/branding/README.md)。
-修改原始图稿后，运行 `go run ./cmd/brandassets` 重新生成各平台资源。
+应用统一使用圆角白底、四角透明、无文字的橙色[品牌图标](../assets/branding/README.md)。
+底板四周保留约 4% 画布的透明安全边距，避免桌面在缩放或裁切时切到图形。
+原始图稿 `source.png` 保持整幅白底不变；修改图稿后运行 `go run ./cmd/brandassets`
+会重新生成带圆角 alpha 的各平台资源。
 打包脚本会配置 macOS ICNS、Windows 程序和安装器 ICO，以及 Linux 桌面图标。
