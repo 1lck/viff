@@ -49,3 +49,4 @@
 | [0043](0043-remote-ssh-readonly.md) | 通过 SSH 只读观察远程仓库 |
 | [0044](0044-repository-name-search.md) | 欢迎页仓库搜索默认只匹配名称 |
 | [0045](0045-diff-folding-and-pane-resize.md) | Diff 折叠未更改片段与可调分栏 |
+| [0046](0046-multi-repository-projects.md) | 多仓库项目的 Project 面板聚合（Phase A） |

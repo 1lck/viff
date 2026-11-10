@@ -1,6 +1,7 @@
 package viffui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/vivaui/viva/ui"
@@ -49,7 +50,6 @@ func (w *Window) ensureFiles() {
 		v.at = rs.StatusTime
 		v.status = fileStatuses(rs)
 		v.rootName = rs.Repo.Name()
-		v.rootHint = repoRootLabel(rs.Repo.Root)
 		if v.sel == "" {
 			v.sel = projectRootKey
 		}
@@ -58,16 +58,80 @@ func (w *Window) ensureFiles() {
 	})
 }
 
+// syncProjectRepositories gives the row model the current workspace list. The
+// active root is the repository whose file tree is loaded; a missing active
+// root falls back to the summary matching the open repository, then to that
+// repository's own root, so the panel never loses its active row.
+func (w *Window) syncProjectRepositories(v *filesView) {
+	roots := make([]string, 0, len(w.ws.Repositories))
+	for _, s := range w.ws.Repositories {
+		roots = append(roots, s.Root)
+	}
+	active := w.ws.ActiveRoot
+	if active == "" {
+		for _, s := range w.ws.Repositories {
+			if w.repositoryActive(s.Root) {
+				active = s.Root
+				break
+			}
+		}
+	}
+	if active == "" {
+		if rs := w.repo(); rs != nil {
+			active = rs.Repo.Root
+		}
+	}
+	if active != "" && !slices.Contains(roots, active) {
+		roots = append(roots, active)
+	}
+	v.syncRepositories(roots, active)
+}
+
+// projectRepositoryHint is the muted summary of a repository row: the branch
+// and change counts for a loaded snapshot, the failure for a broken one, or
+// the action that will load it. The active single-repository layout keeps the
+// path hint it had before the workspace row existed.
+func (w *Window) projectRepositoryHint(root string, active bool) (string, ui.Color) {
+	if active {
+		if rs := w.repo(); rs != nil {
+			if !w.fm.grouped() {
+				return repoRootLabel(rs.Repo.Root), w.pal.TextSecond
+			}
+			if rs.StatusLoaded {
+				return repositoryBranchLabel(rs.Status) + " · " + repositoryCounts(rs.Status), w.pal.TextSecond
+			}
+			return w.t(i18n.ReposLoadingStatus), w.pal.TextSecond
+		}
+	}
+	i := w.repositoryIndex(root)
+	if i < 0 {
+		return "", w.pal.TextSecond
+	}
+	s := w.ws.Repositories[i]
+	switch {
+	case s.Err != nil:
+		return w.t(i18n.ReposCannotReadStatus, repositoryOneLine(w.ws.ErrorText(s.Err))), w.pal.Error
+	case !s.Loaded:
+		return w.t(i18n.WorkspaceRepoOpenToLoad), w.pal.TextSecond
+	default:
+		return w.repositorySubtitle(s), w.pal.TextSecond
+	}
+}
+
 func (w *Window) paintProject(r ui.Rect) {
 	rs := w.repo()
 	if rs == nil {
 		return
 	}
 	v := &w.fm
-	w.ensureFiles()
 	if v.filter == nil {
 		v.init()
 	}
+	// The workspace list changes when a repository is added, removed or
+	// switched; the rows follow it before the file list is requested, so a
+	// repository row exists even while its tree is still loading.
+	w.syncProjectRepositories(v)
+	w.ensureFiles()
 	w.island(r)
 
 	// Header: the tool window title and its actions, like IntelliJ's Project
@@ -101,22 +165,11 @@ func (w *Window) paintProject(r ui.Rect) {
 	}
 	rx -= actionSize + 2
 	if w.action(idProjectExpand, rx, hr.Y+(hr.Height-actionSize)/2, icons.ExpandAll, w.t(i18n.WorkspaceActionExpandAll), actOpts{}) {
-		w.after(func() {
-			clear(w.fm.collapsed)
-			w.fm.rootOpen = true
-			w.fm.rebuild()
-		})
+		w.after(w.fm.expandAll)
 	}
 	rx -= actionSize + 2
 	if w.action(idProjectCollapse, rx, hr.Y+(hr.Height-actionSize)/2, icons.CollapseAll, w.t(i18n.WorkspaceActionCollapseAll), actOpts{}) {
-		w.after(func() {
-			for _, row := range w.fm.rows {
-				if row.dir && !row.root {
-					w.fm.collapsed[row.path] = true
-				}
-			}
-			w.fm.rebuild()
-		})
+		w.after(w.fm.collapseAll)
 	}
 	rx -= actionSize + 2
 	if w.action(idProjectRefresh, rx, hr.Y+(hr.Height-actionSize)/2, icons.Refresh, w.t(i18n.WorkspaceActionRefresh), actOpts{}) {
@@ -175,7 +228,7 @@ func (w *Window) paintProject(r ui.Rect) {
 	case len(v.entries) == 0:
 		w.p.textCenter(w.t(i18n.WorkspaceEmptyNoFiles), r, fontUI, regular, w.pal.TextSecond)
 		return
-	case len(v.rows) == 0:
+	case v.query != "" && !v.hasTreeContent():
 		w.p.textCenter(w.t(i18n.RevisionNoMatch), r, fontUI, regular, w.pal.TextSecond)
 		return
 	}
@@ -196,8 +249,8 @@ func (w *Window) paintProject(r ui.Rect) {
 		}
 		rx := rr.X + 8 + float32(row.depth)*fileIndent
 		switch {
-		case row.root:
-			expanded := v.rootOpen
+		case row.workspace:
+			expanded := v.workspaceOpen
 			chev := icons.ChevronRight
 			if expanded {
 				chev = icons.ChevronDown
@@ -206,12 +259,49 @@ func (w *Window) paintProject(r ui.Rect) {
 			rx += 18
 			w.p.iconIn(icons.Project, rect(rx, y, 16, rowH))
 			rx += 20
-			nw := w.p.text(row.name, rect(rx, y, max(0, right(rr)-rx-6), rowH), fontUI, semibold, w.pal.Text)
+			name := w.t(i18n.WorkspaceProjectRoot)
+			nw := w.p.text(name, rect(rx, y, max(0, right(rr)-rx-6), rowH), fontUI, semibold, w.pal.Text)
+			hint := w.pluralT(len(v.repoRoots), i18n.WorkspaceCountRepositoriesOne, i18n.WorkspaceCountRepositoriesMany)
 			hx := rx + nw + 8
-			if row.hint != "" && hx < right(rr)-20 {
-				w.p.text(w.p.truncateMiddle(row.hint, fontSmall, regular, right(rr)-hx-8), rect(hx, y, right(rr)-hx-8, rowH), fontSmall, regular, w.pal.TextSecond)
+			if hx < right(rr)-20 {
+				w.p.text(w.p.truncateMiddle(hint, fontSmall, regular, right(rr)-hx-8), rect(hx, y, right(rr)-hx-8, rowH), fontSmall, regular, w.pal.TextSecond)
 			}
-			w.c.HitWithOptions(id, rr, row.name+" "+row.hint, ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected, Expandable: true, Expanded: expanded})
+			w.c.HitWithOptions(id, rr, name, ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected, Expandable: true, Expanded: expanded})
+		case row.repo:
+			expanded := row.root && v.rootOpen
+			if row.root {
+				chev := icons.ChevronRight
+				if expanded {
+					chev = icons.ChevronDown
+				}
+				w.p.iconIn(chev, rect(rx, y, 16, rowH))
+			}
+			rx += 18
+			icon := icons.Vcs
+			weight := regular
+			if row.root {
+				icon = icons.Project
+				weight = semibold
+			}
+			w.p.iconIn(icon, rect(rx, y, 16, rowH))
+			rx += 20
+			name := row.name
+			if name == "" {
+				name = repoRootName(row.repoRoot)
+			}
+			nw := w.p.text(name, rect(rx, y, max(0, right(rr)-rx-6), rowH), fontUI, weight, w.pal.Text)
+			hint, hintColor := w.projectRepositoryHint(row.repoRoot, row.root)
+			hx := rx + nw + 8
+			if hint != "" && hx < right(rr)-20 {
+				w.p.text(w.p.truncateMiddle(hint, fontSmall, regular, right(rr)-hx-8), rect(hx, y, right(rr)-hx-8, rowH), fontSmall, regular, hintColor)
+			}
+			opts := ui.HitOptions{Role: ui.RoleOption, SkipFocus: true, Selected: selected}
+			if row.root {
+				opts.Expandable = true
+				opts.Expanded = expanded
+			}
+			w.c.HitWithOptions(id, rr, name, opts)
+			w.tip(id, repoRootHint(row.repoRoot))
 		case row.dir:
 			chev := icons.ChevronRight
 			expanded := !v.collapsed[row.path]
@@ -242,10 +332,19 @@ func (w *Window) paintProject(r ui.Rect) {
 		switch {
 		case !row.dir:
 			w.onDouble(id, func() { w.openRepoFile(row.path, true) })
-		case row.root:
+		case row.workspace:
 			w.onDouble(id, func() {
-				v.rootOpen = true
+				v.workspaceOpen = !v.workspaceOpen
 				v.rebuild()
+			})
+		case row.repo:
+			w.onDouble(id, func() {
+				if row.root {
+					v.rootOpen = !v.rootOpen
+					v.rebuild()
+					return
+				}
+				w.switchRepository(row.repoRoot)
 			})
 		default:
 			w.onDouble(id, func() {
@@ -262,8 +361,10 @@ func (w *Window) paintProject(r ui.Rect) {
 	w.vbar(idProjectBar, r, &v.scroll, content)
 }
 
-// clickFileRow selects a row and, for a file, shows it in the preview tab.
-// Directories fold like a project view.
+// clickFileRow selects a row, folds workspace/repository/directory rows, and
+// opens a file in the preview tab. A non-active repository row switches the
+// active repository instead of expanding: its tree is loaded only after the
+// switch, never in parallel for every repository (ADR 0046).
 func (w *Window) clickFileRow(i int) {
 	v := &w.fm
 	if i < 0 || i >= len(v.rows) {
@@ -271,20 +372,26 @@ func (w *Window) clickFileRow(i int) {
 	}
 	row := v.rows[i]
 	v.sel = row.key
-	if row.root {
-		v.rootOpen = !v.rootOpen
+	switch {
+	case row.workspace:
+		v.workspaceOpen = !v.workspaceOpen
 		v.rebuild()
-		return
-	}
-	if row.dir {
+	case row.repo:
+		if row.root {
+			v.rootOpen = !v.rootOpen
+			v.rebuild()
+			return
+		}
+		w.switchRepository(row.repoRoot)
+	case row.dir:
 		v.collapsed[row.path] = !v.collapsed[row.path]
 		v.rebuild()
 		if k := v.rowIndex(row.key); k >= 0 {
 			v.scroll.reveal(float32(k)*rowH, rowH, w.areas[idProjectList].Height)
 		}
-		return
+	default:
+		w.openRepoFile(row.path, false)
 	}
-	w.openRepoFile(row.path, false)
 }
 
 // openRepoFile opens a working-tree file in the read-only viewer. A preview
@@ -348,12 +455,16 @@ func (w *Window) projectKey(e ui.KeyEvent) bool {
 	case ui.KeyLeft:
 		if cur >= 0 {
 			row := v.rows[cur]
-			if row.root && v.rootOpen {
+			switch {
+			case row.workspace && v.workspaceOpen:
+				v.workspaceOpen = false
+				v.rebuild()
+				return true
+			case row.root && v.rootOpen:
 				v.rootOpen = false
 				v.rebuild()
 				return true
-			}
-			if row.dir && !row.root && !v.collapsed[row.path] {
+			case row.dir && !row.repo && !row.workspace && !v.collapsed[row.path]:
 				v.collapsed[row.path] = true
 				v.rebuild()
 				return true
@@ -369,16 +480,30 @@ func (w *Window) projectKey(e ui.KeyEvent) bool {
 	case ui.KeyRight:
 		if cur >= 0 {
 			row := v.rows[cur]
-			if row.root {
-				if !v.rootOpen {
-					v.rootOpen = true
+			switch {
+			case row.workspace:
+				if !v.workspaceOpen {
+					v.workspaceOpen = true
 					v.rebuild()
 				} else if cur+1 < len(v.rows) {
 					move(cur + 1)
 				}
 				return true
-			}
-			if row.dir {
+			case row.repo:
+				if row.root {
+					if !v.rootOpen {
+						v.rootOpen = true
+						v.rebuild()
+					} else if cur+1 < len(v.rows) {
+						move(cur + 1)
+					}
+					return true
+				}
+				// A non-active row has no loaded tree: expanding it means
+				// switching to it, which loads the tree exactly once.
+				w.switchRepository(row.repoRoot)
+				return true
+			case row.dir:
 				if v.collapsed[row.path] {
 					delete(v.collapsed, row.path)
 					v.rebuild()
@@ -390,25 +515,42 @@ func (w *Window) projectKey(e ui.KeyEvent) bool {
 	case ui.KeyEnter:
 		if cur >= 0 {
 			row := v.rows[cur]
-			if row.root {
-				v.rootOpen = !v.rootOpen
+			switch {
+			case row.workspace:
+				v.workspaceOpen = !v.workspaceOpen
 				v.rebuild()
-			} else if row.dir {
+			case row.repo:
+				if row.root {
+					v.rootOpen = !v.rootOpen
+					v.rebuild()
+					return true
+				}
+				w.switchRepository(row.repoRoot)
+			case row.dir:
 				v.collapsed[row.path] = !v.collapsed[row.path]
 				v.rebuild()
-			} else {
+			default:
 				w.openRepoFile(row.path, true)
 			}
 		}
 	case ui.KeySpace:
-		if cur >= 0 && v.rows[cur].dir {
+		if cur >= 0 {
 			row := v.rows[cur]
-			if row.root {
-				v.rootOpen = !v.rootOpen
-			} else {
+			switch {
+			case row.workspace:
+				v.workspaceOpen = !v.workspaceOpen
+				v.rebuild()
+			case row.repo:
+				if row.root {
+					v.rootOpen = !v.rootOpen
+					v.rebuild()
+					return true
+				}
+				w.switchRepository(row.repoRoot)
+			case row.dir:
 				v.collapsed[row.path] = !v.collapsed[row.path]
+				v.rebuild()
 			}
-			v.rebuild()
 		}
 	default:
 		return false
@@ -428,19 +570,8 @@ func (w *Window) projectWindowMenu() []item {
 	}
 	return append(out, []item{
 		sep(),
-		{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: func() {
-			clear(w.fm.collapsed)
-			w.fm.rootOpen = true
-			w.fm.rebuild()
-		}},
-		{title: w.t(i18n.WorkspaceActionCollapseAll), icon: icons.CollapseAll, run: func() {
-			for _, r := range w.fm.rows {
-				if r.dir && !r.root {
-					w.fm.collapsed[r.path] = true
-				}
-			}
-			w.fm.rebuild()
-		}},
+		{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: w.fm.expandAll},
+		{title: w.t(i18n.WorkspaceActionCollapseAll), icon: icons.CollapseAll, run: w.fm.collapseAll},
 		sep(),
 		{title: w.t(i18n.WorkspaceMenuHideProject), shortcut: "⌘1", run: w.toggleProject},
 	}...)
@@ -448,24 +579,26 @@ func (w *Window) projectWindowMenu() []item {
 
 // filesMenu is the context menu of one Files row.
 func (w *Window) filesMenu(row fileRow) []item {
+	if row.workspace {
+		return []item{
+			{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: w.fm.expandAll},
+			{title: w.t(i18n.WorkspaceActionCollapseAll), icon: icons.CollapseAll, run: w.fm.collapseAll},
+		}
+	}
+	if row.repo && !row.root {
+		return []item{
+			{title: w.t(i18n.ReposSwitch), icon: icons.Vcs, run: func() { w.switchRepository(row.repoRoot) }},
+			sep(),
+			{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, run: func() { w.copyText(row.repoRoot) }},
+		}
+	}
 	if row.root {
 		return []item{
 			{title: w.t(i18n.WorkspaceActionRefresh), icon: icons.Refresh, run: func() { w.ws.Refresh(true) }},
-			{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: func() {
-				clear(w.fm.collapsed)
-				w.fm.rootOpen = true
-				w.fm.rebuild()
-			}},
-			{title: w.t(i18n.WorkspaceActionCollapseAll), icon: icons.CollapseAll, run: func() {
-				for _, r := range w.fm.rows {
-					if r.dir && !r.root {
-						w.fm.collapsed[r.path] = true
-					}
-				}
-				w.fm.rebuild()
-			}},
+			{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: w.fm.expandAll},
+			{title: w.t(i18n.WorkspaceActionCollapseAll), icon: icons.CollapseAll, run: w.fm.collapseAll},
 			sep(),
-			{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, run: func() { w.copyText(w.repo().Repo.Root) }},
+			{title: w.t(i18n.WorkspaceActionCopyPath), icon: icons.Copy, run: func() { w.copyText(row.repoRoot) }},
 		}
 	}
 	if row.dir {

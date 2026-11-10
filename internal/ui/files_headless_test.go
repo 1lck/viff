@@ -3,6 +3,7 @@
 package viffui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -158,6 +159,138 @@ func TestProjectPanel(t *testing.T) {
 		return f.win.projectOpen && !f.win.commitOpen
 	}, 5*time.Second); err != nil {
 		t.Fatal("Command+1 did not switch back to the Project panel")
+	}
+}
+
+// TestProjectPanelGroupsWorkspaceRepositories covers Phase A of the
+// multi-repository project view: the Project panel groups the explicit
+// workspace list under one row, keeps the active repository's file tree, and
+// makes a non-active repository active when its row is clicked.
+func TestProjectPanelGroupsWorkspaceRepositories(t *testing.T) {
+	f := newUIFixture(t)
+	repoB := filepath.Join(filepath.Dir(f.dir), "repo-b")
+	makeDiscoverableRepo(t, f, repoB)
+	// A distinct branch makes the cached summary of the non-active row
+	// observable without opening the Repositories dialog.
+	f.gitIn(repoB, "checkout", "-q", "-b", "feature/b")
+
+	f.start(1440, 900)
+	repoARoot := canonicalRootNoFatal(f.dir)
+	repoBRoot := canonicalRootNoFatal(repoB)
+	waitActive := func(root string) {
+		t.Helper()
+		if err := f.s.WaitFor(func(app.Snapshot) bool {
+			return f.ws.Repo != nil && f.ws.Repo.StatusLoaded && !f.ws.Pending() &&
+				canonicalRootNoFatal(f.ws.ActiveRoot) == root
+		}, 20*time.Second); err != nil {
+			t.Fatalf("repository %s did not become active: %v\nactive: %q", root, err, f.ws.ActiveRoot)
+		}
+		f.settle()
+	}
+	// Open the second repository first, then the demo repository: both
+	// statuses are loaded and the demo repository is active.
+	f.win.openRepo(repoB)
+	waitActive(repoBRoot)
+	f.win.openRepo(f.dir)
+	waitActive(repoARoot)
+
+	if err := f.s.Keys("cmd+1"); err != nil {
+		t.Fatal(err)
+	}
+	v := &f.win.fm
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return f.win.projectOpen && v.loaded && v.grouped() && len(v.repoRoots) == 2 &&
+			v.activeRoot == repoARoot
+	}, 10*time.Second); err != nil {
+		t.Fatalf("Project panel did not group the workspace: %v\nrows: %+v", err, v.rows)
+	}
+	if !hasRow(v.rows, projectWorkspaceKey) {
+		t.Fatalf("workspace row missing: %+v", v.rows)
+	}
+	if !hasRow(v.rows, projectRootKey) {
+		t.Fatalf("active repository row missing: %+v", v.rows)
+	}
+	nonActiveKey := repoRowKey(repoBRoot)
+	if !hasRow(v.rows, nonActiveKey) {
+		t.Fatalf("non-active repository row missing: %+v", v.rows)
+	}
+	if !hasRow(v.rows, "internal/store/store.go") {
+		t.Fatalf("active repository tree missing after grouping: %+v", v.rows)
+	}
+
+	// A non-active row is a leaf: its summary is shown, but no files are
+	// loaded for it.
+	i := v.rowIndex(nonActiveKey)
+	if i < 0 || v.rows[i].root {
+		t.Fatalf("non-active row is not a leaf: %+v", v.rows[i])
+	}
+	if hint, _ := f.win.projectRepositoryHint(v.rows[i].repoRoot, false); !strings.Contains(hint, "feature/b") {
+		t.Fatalf("cached summary of %s = %q, want its branch", repoBRoot, hint)
+	}
+	for k := i + 1; k < len(v.rows) && v.rows[k].depth > v.rows[i].depth; k++ {
+		t.Fatalf("non-active repository has file rows: %+v", v.rows[k])
+	}
+	if hint, _ := f.win.projectRepositoryHint(v.rows[v.rowIndex(projectRootKey)].repoRoot, true); !strings.Contains(hint, "main") {
+		t.Fatalf("active repository summary = %q, want its branch", hint)
+	}
+	f.snap("54-project-workspace-repositories")
+
+	// Clicking the non-active row goes through the normal switch path. The
+	// active repository changes, the panel stays open, and the file tree now
+	// belongs to the repository that was clicked.
+	if err := f.s.ClickLabel("repo-b"); err != nil {
+		t.Fatalf("click repo-b: %v\nrows: %+v", err, v.rows)
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		if f.ws.Repo == nil || !f.ws.Repo.StatusLoaded || f.ws.Pending() {
+			return false
+		}
+		return canonicalRootNoFatal(f.ws.ActiveRoot) == repoBRoot
+	}, 20*time.Second); err != nil {
+		t.Fatalf("clicking the non-active row did not switch: %v\nactive: %q", err, f.ws.ActiveRoot)
+	}
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return v.loaded && v.activeRoot == repoBRoot
+	}, 10*time.Second); err != nil {
+		t.Fatalf("Project panel did not reload the clicked repository: %v\nactive: %q", err, v.activeRoot)
+	}
+	f.settle()
+	if !f.win.projectOpen {
+		t.Fatal("clicking a repository row closed the Project panel")
+	}
+	if !hasRow(v.rows, projectWorkspaceKey) || !hasRow(v.rows, repoRowKey(repoARoot)) {
+		t.Fatalf("both repositories are not still listed: %+v", v.rows)
+	}
+	if got := v.rows[v.rowIndex(projectRootKey)].repoRoot; got != repoBRoot {
+		t.Fatalf("active row root = %q, want %q", got, repoBRoot)
+	}
+	if !hasRow(v.rows, "README.md") {
+		t.Fatalf("clicked repository's file tree missing: %+v", v.rows)
+	}
+	if hasRow(v.rows, "internal/store/store.go") {
+		t.Fatalf("previous repository's file tree is still shown: %+v", v.rows)
+	}
+	if hint, _ := f.win.projectRepositoryHint(repoBRoot, true); !strings.Contains(hint, "feature/b") {
+		t.Fatalf("active repository summary = %q, want its branch", hint)
+	}
+	if hint, _ := f.win.projectRepositoryHint(repoARoot, false); !strings.Contains(hint, "main") {
+		t.Fatalf("previous repository lost its summary: %q", hint)
+	}
+	f.snap("55-project-workspace-switched")
+
+	// Folding the active repository hides its tree but not the workspace or
+	// the other repository row.
+	active := v.rowIndex(projectRootKey)
+	f.win.clickFileRow(active)
+	if hasRow(v.rows, "README.md") {
+		t.Fatalf("folding the active repository kept its files: %+v", v.rows)
+	}
+	if !hasRow(v.rows, repoRowKey(repoARoot)) {
+		t.Fatalf("folding the active repository hid another repository: %+v", v.rows)
+	}
+	f.win.clickFileRow(v.rowIndex(projectRootKey))
+	if !hasRow(v.rows, "README.md") {
+		t.Fatalf("unfolding the active repository did not restore its files: %+v", v.rows)
 	}
 }
 

@@ -56,6 +56,8 @@ const (
 	WorkspaceLoadingFiles          = Key("workspace.loading.files")
 	WorkspaceHintProject           = Key("workspace.hint.project")
 	WorkspaceHintOpenFile          = Key("workspace.hint.openFile")
+	WorkspaceProjectRoot           = Key("workspace.project.root")
+	WorkspaceRepoOpenToLoad        = Key("workspace.repo.openToLoad")
 
 	// The Project tool window's own menu and tooltips, where the wording differs
 	// from the toolbar action it repeats.
@@ -203,10 +205,12 @@ const (
 
 	// Counts. The one form is used for one in English; Chinese has one form for
 	// every count and repeats its text in the many form.
-	WorkspaceCountFilesOne      = Key("workspace.count.files.one")
-	WorkspaceCountFilesMany     = Key("workspace.count.files.many")
-	WorkspaceCountConflictsOne  = Key("workspace.count.conflicts.one")
-	WorkspaceCountConflictsMany = Key("workspace.count.conflicts.many")
+	WorkspaceCountFilesOne         = Key("workspace.count.files.one")
+	WorkspaceCountFilesMany        = Key("workspace.count.files.many")
+	WorkspaceCountRepositoriesOne  = Key("workspace.count.repositories.one")
+	WorkspaceCountRepositoriesMany = Key("workspace.count.repositories.many")
+	WorkspaceCountConflictsOne     = Key("workspace.count.conflicts.one")
+	WorkspaceCountConflictsMany    = Key("workspace.count.conflicts.many")
 
 	WorkspaceCountUnversionedOne  = Key("workspace.count.unversionedFiles.one")
 	WorkspaceCountUnversionedMany = Key("workspace.count.unversionedFiles.many")
@@ -262,6 +266,8 @@ func init() {
 		WorkspaceLoadingFiles:          "Loading files…",
 		WorkspaceHintProject:           "Project",
 		WorkspaceHintOpenFile:          "Open File",
+		WorkspaceProjectRoot:           "Workspace",
+		WorkspaceRepoOpenToLoad:        "Open to load status",
 
 		WorkspaceMenuOpen:          "Open",
 		WorkspaceMenuExpand:        "Expand",
@@ -392,10 +398,12 @@ func init() {
 		WorkspaceErrorCannotCopy:     "Cannot copy",
 		WorkspaceErrorCannotShowDiff: "Cannot show diff",
 
-		WorkspaceCountFilesOne:      "%d file",
-		WorkspaceCountFilesMany:     "%d files",
-		WorkspaceCountConflictsOne:  "%d conflict",
-		WorkspaceCountConflictsMany: "%d conflicts",
+		WorkspaceCountFilesOne:         "%d file",
+		WorkspaceCountFilesMany:        "%d files",
+		WorkspaceCountRepositoriesOne:  "%d repository",
+		WorkspaceCountRepositoriesMany: "%d repositories",
+		WorkspaceCountConflictsOne:     "%d conflict",
+		WorkspaceCountConflictsMany:    "%d conflicts",
 
 		WorkspaceCountUnversionedOne:  "%d unversioned file",
 		WorkspaceCountUnversionedMany: "%d unversioned files",
@@ -450,6 +458,8 @@ func init() {
 		WorkspaceLoadingFiles:          "正在加载文件…",
 		WorkspaceHintProject:           "项目",
 		WorkspaceHintOpenFile:          "打开文件",
+		WorkspaceProjectRoot:           "工作区",
+		WorkspaceRepoOpenToLoad:        "打开后加载状态",
 
 		WorkspaceMenuOpen:          "打开",
 		WorkspaceMenuExpand:        "展开",
@@ -580,10 +590,12 @@ func init() {
 		WorkspaceErrorCannotCopy:     "无法复制",
 		WorkspaceErrorCannotShowDiff: "无法显示 diff",
 
-		WorkspaceCountFilesOne:      "%d 个文件",
-		WorkspaceCountFilesMany:     "%d 个文件",
-		WorkspaceCountConflictsOne:  "%d 处冲突",
-		WorkspaceCountConflictsMany: "%d 处冲突",
+		WorkspaceCountFilesOne:         "%d 个文件",
+		WorkspaceCountFilesMany:        "%d 个文件",
+		WorkspaceCountRepositoriesOne:  "%d 个仓库",
+		WorkspaceCountRepositoriesMany: "%d 个仓库",
+		WorkspaceCountConflictsOne:     "%d 处冲突",
+		WorkspaceCountConflictsMany:    "%d 处冲突",
 
 		WorkspaceCountUnversionedOne:  "%d 个未跟踪文件",
 		WorkspaceCountUnversionedMany: "%d 个未跟踪文件",

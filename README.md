@@ -60,7 +60,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Review changes        | Side-by-side diffs with resizable panes and collapsible unchanged stretches, unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, picture previews, change marks on the right edge   |
 | Build a commit        | Check files, folders, or groups; stage files, hunks, or lines; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
-| Organize work         | Multiple repositories, per-repository commit drafts, directory grouping, named ChangeLists, and discovery of repositories below a parent folder |
+| Organize work         | Multiple repositories with per-repository commit drafts, a Project panel that groups the workspace and switches the active repository, directory grouping, named ChangeLists, and discovery of repositories below a parent folder |
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |
 | Browse and edit files | Project tool window with folders, status colours, Quick Open, read-only viewing with an optional code map, blame, file history, and editing of working-tree UTF-8 text files (up to 1 MiB, saved text included) |
 | Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                                                              |
