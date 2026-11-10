@@ -69,6 +69,31 @@ const (
 	rowFile
 )
 
+// Space above the commit buttons: the scope line is always there, and the
+// checked-but-unstaged prompt adds a warning line and its Stage Selected
+// button. The heights are fixed so the layout can reserve them before the
+// change tree is painted.
+const (
+	commitScopeHintH     = 20
+	commitNotStagedHintH = 20
+	commitStageButtonH   = 28
+
+	// commitInlinePromptW is the hint width at which the staged prompt's
+	// warning and its button share a row. Below it the warning gets its own
+	// row, so a narrow Commit panel still shows the full message.
+	commitInlinePromptW = 300
+)
+
+func commitHintHeight(notStaged int, width float32) float32 {
+	if notStaged == 0 {
+		return commitScopeHintH
+	}
+	if width >= commitInlinePromptW {
+		return commitScopeHintH + commitStageButtonH
+	}
+	return commitScopeHintH + commitNotStagedHintH + commitStageButtonH
+}
+
 var areaOrder = []domain.Area{domain.AreaConflicts, domain.AreaStaged, domain.AreaUnstaged, domain.AreaUntracked}
 
 // areaTitle names the change-tree group a file belongs to.
@@ -265,15 +290,24 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	bar := splitTop(&content, w.changeListsBarHeight())
 	w.paintChangeListsBar(bar)
 
+	// Rebuild the rows here, before the hint layout reads the selection, and
+	// let paintChanges reuse this table instead of building it a second time.
+	w.buildRows()
+	pending := w.commitStagePaths()
+	hintH := commitHintHeight(len(pending), content.Width-20)
+	if w.readOnly() || w.cm.msgCollapsed {
+		hintH = 0
+	}
+
 	// Message section and buttons at the bottom.
 	v := &w.cm
 	// The changes tree keeps at least ~110px (a few rows) before the message
 	// area grows; a small window shrinks the message down to 60px first.
-	msgH := clampF(v.msgH, 60, max(60, content.Height-84-110))
+	msgH := clampF(v.msgH, 60, max(60, content.Height-84-hintH-110))
 	if v.msgCollapsed {
 		msgH = 0
 	}
-	bottomH := msgH + 40 + 44
+	bottomH := msgH + 40 + hintH + 44
 	if v.msgCollapsed {
 		// The message area and the commit buttons fold away with it, leaving
 		// just the Amend row and the two small buttons beside it.
@@ -288,7 +322,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 			func(d float32) { v.msgH = clampF(startH-d, 60, max(60, content.Height+msgH-110)) }, nil)
 	}
 	w.paintChanges(content)
-	w.paintCommitMessage(bottomR, msgH)
+	w.paintCommitMessage(bottomR, msgH, pending)
 }
 
 // paintOperationBanner shows a merge/rebase/cherry-pick in progress.
@@ -371,7 +405,6 @@ func (w *Window) paintOperationBanner(r ui.Rect) ui.Rect {
 func (w *Window) paintChanges(r ui.Rect) {
 	v := &w.cm
 	rs := w.repo()
-	w.buildRows()
 	w.list(idChangesList, scChangeRows, r, w.t(i18n.WorkspacePanelChanges))
 	content := float32(len(v.rows)) * rowH
 	v.scroll.clamp(content+8, r.Height)
@@ -855,6 +888,33 @@ func (w *Window) selectedEntries() []changeRow {
 	return out
 }
 
+// commitStagePaths returns the checked files Stage Selected may stage: rows in
+// the working tree that the index can take. Staged rows, conflicts and a
+// backend without an index are left out, so the action can never unstage or
+// resolve anything the user did not check.
+func (w *Window) commitStagePaths() []string {
+	if w.readOnly() || !w.ws.Caps.Index {
+		return nil
+	}
+	return stageSelectedPaths(w.selectedEntries())
+}
+
+func stageSelectedPaths(rows []changeRow) []string {
+	var paths []string
+	seen := map[string]bool{}
+	for _, row := range rows {
+		if row.area != domain.AreaUnstaged && row.area != domain.AreaUntracked {
+			continue
+		}
+		if row.entry.Ignored() || seen[row.entry.Path] {
+			continue
+		}
+		seen[row.entry.Path] = true
+		paths = append(paths, row.entry.Path)
+	}
+	return paths
+}
+
 func (w *Window) toggleStageSelection() {
 	if w.guardReadOnly() {
 		return
@@ -1107,7 +1167,46 @@ func (w *Window) setClipboardText(s string) error {
 
 // ---- message and commit buttons ------------------------------------------------
 
-func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
+// paintCommitScope states what Commit records and, when checked files are not
+// staged, offers to stage exactly those files. It does not change the commit
+// scope: Commit still takes every staged file, checked or not.
+func (w *Window) paintCommitScope(r ui.Rect, pending []string) {
+	hint := w.t(i18n.WorkspaceCommitScopeHint)
+	if !w.ws.Caps.Index {
+		hint = w.t(i18n.WorkspaceCommitScopeHintPaths)
+	}
+	const iconW = 20
+	w.p.iconIn(icons.Info, rect(r.X, r.Y+2, 14, 14))
+	w.p.text(w.p.truncateMiddle(hint, fontSmall, regular, max(0, r.Width-iconW)),
+		rect(r.X+iconW, r.Y, r.Width-iconW, commitScopeHintH), fontSmall, regular, w.pal.TextSecond)
+	if len(pending) == 0 {
+		return
+	}
+
+	msg := w.pluralT(len(pending), i18n.WorkspaceCountNotStagedOne, i18n.WorkspaceCountNotStagedMany)
+	label := w.t(i18n.WorkspaceButtonStageSelected)
+	bw := w.buttonWidth(label)
+	drawWarning := func(x, y, width, height float32) {
+		w.p.iconIn(icons.Warning, rect(x, y, 14, height))
+		w.p.text(w.p.truncateMiddle(msg, fontSmall, regular, max(0, width-iconW)),
+			rect(x+iconW, y, max(0, width-iconW), height), fontSmall, regular, w.pal.Warning)
+	}
+	paths := append([]string(nil), pending...)
+	rowY := r.Y + commitScopeHintH
+	if r.Width >= commitInlinePromptW {
+		drawWarning(r.X, rowY, max(0, r.Width-bw-8), commitStageButtonH)
+		if w.button(idCmStageSelected, rect(right(r)-bw, rowY, bw, commitStageButtonH), label, btnNormal, false) {
+			w.after(func() { w.ws.StagePaths(paths) })
+		}
+		return
+	}
+	drawWarning(r.X, rowY, r.Width, commitNotStagedHintH)
+	if w.button(idCmStageSelected, rect(r.X, rowY+commitNotStagedHintH, bw, commitStageButtonH), label, btnNormal, false) {
+		w.after(func() { w.ws.StagePaths(paths) })
+	}
+}
+
+func (w *Window) paintCommitMessage(r ui.Rect, msgH float32, pending []string) {
 	v := &w.cm
 	rs := w.repo()
 	if w.readOnly() {
@@ -1178,8 +1277,14 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 		return
 	}
 
+	// The commit scope and, when checked files are not staged, the action that
+	// stages exactly those files. It sits above the buttons so the reason a
+	// disabled Commit is visible without hovering its tooltip.
+	hintH := commitHintHeight(len(pending), r.Width-20)
+	w.paintCommitScope(rect(r.X+10, bottom(mr)+4, r.Width-20, hintH), pending)
+
 	// Buttons.
-	by := bottom(mr) + 10
+	by := bottom(mr) + hintH + 10
 	committable := w.ws.CommittableCount()
 	_, _, _, conflicts := rs.Status.Counts()
 	empty := strings.TrimSpace(value) == ""
@@ -1216,6 +1321,9 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32) {
 		pw := w.buttonWidth(pl)
 		if w.button(idCmCommitPush, rect(r.X+10+bw+10, by, pw, buttonH), pl, btnNormal, !can || len(rs.Remotes) == 0) {
 			w.after(func() { w.doCommit(true) })
+		}
+		if len(rs.Remotes) == 0 {
+			w.tip(idCmCommitPush, w.t(i18n.WorkspaceTipAddRemoteToPush))
 		}
 	}
 }

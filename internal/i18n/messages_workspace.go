@@ -93,6 +93,7 @@ const (
 	WorkspaceTipCommitOptions       = Key("workspace.tip.commitOptions")
 	WorkspaceTipCollapseMessage     = Key("workspace.tip.collapseMessage")
 	WorkspaceTipExpandMessage       = Key("workspace.tip.expandMessage")
+	WorkspaceTipAddRemoteToPush     = Key("workspace.tip.addRemoteToPush")
 	WorkspaceTipAIGenerate          = Key("workspace.tip.aiGenerate")
 	WorkspaceAIGenerating           = Key("workspace.ai.generating")
 	WorkspaceAIGenerateFailed       = Key("workspace.ai.generateFailed")
@@ -129,6 +130,12 @@ const (
 	WorkspaceAIConfirmAsk           = Key("workspace.ai.confirmAsk")
 	WorkspaceAIConfirmGenerate      = Key("workspace.ai.confirmGenerate")
 
+	// The commit scope above the buttons, and the prompt that offers to stage
+	// checked files that are not staged yet. The scope depends on the backend:
+	// Git commits the index, a backend without one commits the checked paths.
+	WorkspaceCommitScopeHint      = Key("workspace.commit.scopeHint")
+	WorkspaceCommitScopeHintPaths = Key("workspace.commit.scopeHintPaths")
+
 	WorkspaceHintPush          = Key("workspace.hint.push")
 	WorkspaceHintUpdateProject = Key("workspace.hint.updateProject")
 	WorkspaceHintBranches      = Key("workspace.hint.branches")
@@ -149,6 +156,7 @@ const (
 	WorkspaceButtonAmendCommit        = Key("workspace.button.amendCommit")
 	WorkspaceButtonCommitAndPush      = Key("workspace.button.commitAndPush")
 	WorkspaceButtonAmendCommitAndPush = Key("workspace.button.amendCommitAndPush")
+	WorkspaceButtonStageSelected      = Key("workspace.button.stageSelected")
 
 	WorkspaceButtonClose = Key("workspace.button.close")
 
@@ -202,6 +210,9 @@ const (
 
 	WorkspaceCountUnversionedOne  = Key("workspace.count.unversionedFiles.one")
 	WorkspaceCountUnversionedMany = Key("workspace.count.unversionedFiles.many")
+
+	WorkspaceCountNotStagedOne  = Key("workspace.count.notStaged.one")
+	WorkspaceCountNotStagedMany = Key("workspace.count.notStaged.many")
 )
 
 func init() {
@@ -284,6 +295,7 @@ func init() {
 		WorkspaceTipCommitOptions:       "Commit Options",
 		WorkspaceTipCollapseMessage:     "Collapse the commit message",
 		WorkspaceTipExpandMessage:       "Expand the commit message",
+		WorkspaceTipAddRemoteToPush:     "Add a remote to push",
 		WorkspaceTipAIGenerate:          "Write the message with AI",
 		WorkspaceAIGenerating:           "Writing the message…",
 		WorkspaceAIGenerateFailed:       "The AI could not write the message",
@@ -318,6 +330,9 @@ func init() {
 		WorkspaceAIConfirmAsk:           "Generate a commit message with AI?",
 		WorkspaceAIConfirmGenerate:      "Generate",
 
+		WorkspaceCommitScopeHint:      "Commit includes only staged files",
+		WorkspaceCommitScopeHintPaths: "Commit includes the checked files",
+
 		WorkspaceHintPush:          "Push",
 		WorkspaceHintUpdateProject: "Update Project",
 		WorkspaceHintBranches:      "Branches",
@@ -336,6 +351,7 @@ func init() {
 		WorkspaceButtonAmendCommit:        "Amend Commit",
 		WorkspaceButtonCommitAndPush:      "Commit and Push…",
 		WorkspaceButtonAmendCommitAndPush: "Amend Commit and Push…",
+		WorkspaceButtonStageSelected:      "Stage Selected",
 
 		WorkspaceButtonClose: "Close",
 
@@ -383,6 +399,9 @@ func init() {
 
 		WorkspaceCountUnversionedOne:  "%d unversioned file",
 		WorkspaceCountUnversionedMany: "%d unversioned files",
+
+		WorkspaceCountNotStagedOne:  "%d selected file is not staged",
+		WorkspaceCountNotStagedMany: "%d selected files are not staged",
 	})
 
 	register(ZHCN, map[Key]string{
@@ -464,6 +483,7 @@ func init() {
 		WorkspaceTipCommitOptions:       "提交选项",
 		WorkspaceTipCollapseMessage:     "折叠提交说明",
 		WorkspaceTipExpandMessage:       "展开提交说明",
+		WorkspaceTipAddRemoteToPush:     "添加远端后才能推送",
 		WorkspaceTipAIGenerate:          "用 AI 生成提交说明",
 		WorkspaceAIGenerating:           "正在生成提交说明…",
 		WorkspaceAIGenerateFailed:       "AI 没能生成提交说明",
@@ -498,6 +518,9 @@ func init() {
 		WorkspaceAIConfirmAsk:           "确认使用 AI 生成提交说明？",
 		WorkspaceAIConfirmGenerate:      "生成",
 
+		WorkspaceCommitScopeHint:      "提交只包含已暂存的文件",
+		WorkspaceCommitScopeHintPaths: "提交包含勾选的文件",
+
 		WorkspaceHintPush:          "推送",
 		WorkspaceHintUpdateProject: "更新项目",
 		WorkspaceHintBranches:      "分支",
@@ -516,6 +539,7 @@ func init() {
 		WorkspaceButtonAmendCommit:        "修正提交",
 		WorkspaceButtonCommitAndPush:      "提交并推送…",
 		WorkspaceButtonAmendCommitAndPush: "修正提交并推送…",
+		WorkspaceButtonStageSelected:      "暂存所选",
 
 		WorkspaceButtonClose: "关闭",
 
@@ -563,5 +587,8 @@ func init() {
 
 		WorkspaceCountUnversionedOne:  "%d 个未跟踪文件",
 		WorkspaceCountUnversionedMany: "%d 个未跟踪文件",
+
+		WorkspaceCountNotStagedOne:  "%d 个已勾选的文件尚未暂存",
+		WorkspaceCountNotStagedMany: "%d 个已勾选的文件尚未暂存",
 	})
 }

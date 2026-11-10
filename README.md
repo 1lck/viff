@@ -83,7 +83,9 @@ Settings → General → Language.**
 
 **ChangeLists group files; they do not create separate Git indexes.** A commit
 includes **all staged files**, even when a list filter is active. Filtered bulk
-staging only stages visible files.
+staging only stages visible files. Checking a file selects it for bulk actions;
+it does not stage it. When checked files are not staged, the Commit panel offers
+**Stage Selected** and stages only those files.
 
 **AI commit messages are optional and off by default.** When enabled, the changed
 files and their diffs are sent to the endpoint you configure, together with the

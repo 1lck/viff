@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/vivaui/viva/ui"
 
@@ -246,9 +248,19 @@ func TestChangeTreeContextMenuPreservesChecks(t *testing.T) {
 							t.Fatal("right click did not open a menu")
 						}
 						assertChangeTargets(t, f, want)
-						// Check the state actually handed to the painted checkboxes.
+						// Check the state actually handed to the painted
+						// checkboxes. Rows scrolled below the viewport have no
+						// painted hit; their checks are covered by the action
+						// targets asserted above.
 						for j, r := range v.rows {
-							if r.kind == rowFile && want[r.key] && !changeCheckHit(t, f, scChangeChecks.At(j)).Checked {
+							if r.kind != rowFile || !want[r.key] {
+								continue
+							}
+							hit, ok := lookupHit(f, scChangeChecks.At(j))
+							if !ok {
+								continue
+							}
+							if !hit.Checked {
 								t.Errorf("file checkbox lost its check: %s", r.key)
 							}
 						}
@@ -260,6 +272,15 @@ func TestChangeTreeContextMenuPreservesChecks(t *testing.T) {
 			}
 		}
 	}
+}
+
+func lookupHit(f *uiFixture, id ui.ID) (ui.Hit, bool) {
+	for _, hit := range f.s.Snapshot().Hits {
+		if hit.ID == id {
+			return hit, true
+		}
+	}
+	return ui.Hit{}, false
 }
 
 func changeCheckHit(t *testing.T, f *uiFixture, id ui.ID) ui.Hit {
@@ -358,4 +379,209 @@ func TestChangeTreeCollapsedSelectionTargets(t *testing.T) {
 			assertChangeTargets(t, f, tc.want)
 		})
 	}
+}
+
+// Checking files has never staged them, so a checked file must not make
+// Commit look ready on its own. The panel states the real scope and offers the
+// missing step next to the button; Commit stays disabled until the file is
+// actually in the index (issue #82).
+func TestCommitPanelStageSelectedFromCheckedFiles(t *testing.T) {
+	f := newUIFixture(t)
+	// Start with an empty index so the test can prove that a commit contains
+	// only what Stage Selected staged, not every checked file.
+	f.git("reset", "-q", "README.md")
+	// Commit and Push is disabled without a remote; the panel must say why.
+	f.git("remote", "remove", "origin")
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	if got := stagedNames(f); len(got) != 0 {
+		t.Fatalf("test needs an empty index, staged: %v", got)
+	}
+	f.win.buildRows()
+	idx := f.win.rowIndex(rowKey(domain.AreaUnstaged, "main.go"))
+	if idx < 0 {
+		t.Fatalf("main.go is not an unstaged row: %+v", f.win.cm.rows)
+	}
+	hit := changeCheckHit(t, f, scChangeChecks.At(idx))
+	if err := f.s.Click(hit.Bounds.X+8, hit.Bounds.Y+hit.Bounds.Height/2); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	if !f.win.cm.sel[rowKey(domain.AreaUnstaged, "main.go")] {
+		t.Fatalf("checkbox did not check main.go: %v", f.win.cm.sel)
+	}
+
+	f.click("Commit message")
+	if err := f.s.Type("Commit the checked file"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+
+	if got := f.ws.CommittableCount(); got != 0 {
+		t.Fatalf("CommittableCount = %d with an empty index", got)
+	}
+	if !commitControl(t, f, idCmCommit).Disabled {
+		t.Fatal("Commit is enabled while the checked file is not staged")
+	}
+	for _, want := range []string{
+		"Commit includes only staged files",
+		"1 selected file is not staged",
+		"Stage Selected",
+	} {
+		if !f.s.HasText(want) {
+			t.Fatalf("missing %q\ntexts: %s", want, strings.Join(f.s.Texts(), " | "))
+		}
+	}
+	if got := f.win.tips[idCmCommitPush]; got != "Add a remote to push" {
+		t.Fatalf("Commit and Push tooltip = %q, want the missing-remote hint", got)
+	}
+	if !commitControl(t, f, idCmCommitPush).Disabled {
+		t.Fatal("Commit and Push is enabled without a remote")
+	}
+	f.snap("82-before-stage-selected")
+
+	// The hint and the action must stay visible at the Commit panel's minimum
+	// width, where the change-list bar already needs a full row of its own.
+	f.ws.Settings.CommitPanelWidth = 240
+	f.win.Invalidate()
+	f.s.Settle(80*time.Millisecond, time.Second)
+	for _, want := range []string{"Commit includes only staged files", "Stage Selected"} {
+		if !f.s.HasText(want) {
+			t.Fatalf("missing %q at a 240px panel\ntexts: %s", want, strings.Join(f.s.Texts(), " | "))
+		}
+	}
+	f.snap("82-narrow-stage-selected")
+	f.ws.Settings.CommitPanelWidth = 340
+	f.win.Invalidate()
+	f.s.Settle(80*time.Millisecond, time.Second)
+
+	// Stage Selected is reachable with Tab and activates with Enter.
+	stage, ok := paintedHit(f, "Stage Selected")
+	if !ok {
+		t.Fatalf("Stage Selected has no hit\ntexts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	focused := false
+	for i := 0; i < 40; i++ {
+		if err := f.s.Keys("tab"); err != nil {
+			t.Fatal(err)
+		}
+		if f.s.Snapshot().Focused == stage.ID {
+			focused = true
+			break
+		}
+	}
+	if !focused {
+		t.Fatalf("Stage Selected never took keyboard focus; focus = %v", f.s.Snapshot().Focused)
+	}
+	if err := f.s.Keys("enter"); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+
+	staged := stagedNames(f)
+	if len(staged) != 1 || !staged["main.go"] {
+		t.Fatalf("Stage Selected staged %v, want only main.go", staged)
+	}
+	if got := f.ws.CommittableCount(); got != 1 {
+		t.Fatalf("CommittableCount = %d after staging main.go", got)
+	}
+	if commitControl(t, f, idCmCommit).Disabled {
+		t.Fatal("Commit stayed disabled after Stage Selected")
+	}
+	if f.s.HasText("Stage Selected") || f.s.HasText("is not staged") {
+		t.Fatalf("staging hint stayed visible after staging\ntexts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	f.snap("82-after-stage-selected")
+
+	f.click("Commit")
+	f.settle()
+	if subj := strings.TrimSpace(f.git("log", "-1", "--format=%s")); subj != "Commit the checked file" {
+		t.Fatalf("last commit = %q", subj)
+	}
+	committed := committedPaths(f)
+	if len(committed) != 1 || !committed["main.go"] {
+		t.Fatalf("commit contains %v, want only main.go", committed)
+	}
+}
+
+// Existing staged content is the real commit scope even while an unstaged file
+// is checked: pressing Commit must not silently stage the checked file, and
+// the warning must say that it is not part of the commit yet.
+func TestCommitScopeWithExistingStagedContent(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	// The fixture stages README.md and leaves main.go unstaged.
+	if got := stagedNames(f); !got["README.md"] || got["main.go"] {
+		t.Fatalf("fixture index = %v", got)
+	}
+	f.win.buildRows()
+	idx := f.win.rowIndex(rowKey(domain.AreaUnstaged, "main.go"))
+	if idx < 0 {
+		t.Fatalf("main.go is not an unstaged row: %+v", f.win.cm.rows)
+	}
+	f.win.toggleRowCheck(idx)
+	if err := f.s.ClickLabel("Commit message"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.Type("Commit the staged file"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+
+	if got := f.ws.CommittableCount(); got != 1 {
+		t.Fatalf("CommittableCount = %d, want the staged README", got)
+	}
+	if commitControl(t, f, idCmCommit).Disabled {
+		t.Fatal("Commit is disabled although README.md is staged and the message is set")
+	}
+	for _, want := range []string{
+		"Commit includes only staged files",
+		"1 selected file is not staged",
+		"Stage Selected",
+	} {
+		if !f.s.HasText(want) {
+			t.Fatalf("missing %q\ntexts: %s", want, strings.Join(f.s.Texts(), " | "))
+		}
+	}
+	f.snap("82-staged-scope-with-checked-unstaged")
+
+	// Commit without Stage Selected: the checked file is not added silently.
+	f.click("Commit")
+	f.settle()
+	committed := committedPaths(f)
+	if len(committed) != 1 || !committed["README.md"] {
+		t.Fatalf("commit contains %v, want only the staged README.md", committed)
+	}
+	if got := stagedNames(f); len(got) != 0 {
+		t.Fatalf("index not clean after commit: %v", got)
+	}
+}
+
+// commitControl returns the painted hit of a commit-panel control, disabled
+// ones included.
+func commitControl(t *testing.T, f *uiFixture, id ui.ID) ui.Hit {
+	t.Helper()
+	for _, hit := range f.s.Snapshot().Hits {
+		if hit.ID == id {
+			return hit
+		}
+	}
+	t.Fatalf("missing control %v\ntexts: %s", id, strings.Join(f.s.Texts(), " | "))
+	return ui.Hit{}
+}
+
+// committedPaths lists the files the newest commit touched.
+func committedPaths(f *uiFixture) map[string]bool {
+	out := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(f.git("show", "--name-only", "--format=", "HEAD")), "\n") {
+		if line != "" {
+			out[line] = true
+		}
+	}
+	return out
 }

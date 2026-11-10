@@ -72,6 +72,7 @@ var (
 	idCmRollback        = tree.ID(fCommit, "rollback")
 	idCmDiff            = tree.ID(fCommit, "show-diff")
 	idCmStage           = tree.ID(fCommit, "stage-all")
+	idCmStageSelected   = tree.ID(fCommit, "stage-selected")
 	idCmUnstage         = tree.ID(fCommit, "unstage-all")
 	idCmExpand          = tree.ID(fCommit, "expand")
 	idCmCollapse        = tree.ID(fCommit, "collapse")
