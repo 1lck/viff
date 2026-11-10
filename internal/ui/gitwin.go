@@ -477,7 +477,7 @@ func (w *Window) paintLogTable(r ui.Rect) {
 		refs := rs.RefsByHash[c.Hash]
 		refsW := float32(0)
 		if len(refs) > 0 {
-			refsW = w.paintRefLabels(refs, rect(sx, y, subjectW-graphW-12, logRowH), true)
+			refsW = w.paintRefLabels(id, refs, rect(sx, y, subjectW-graphW-12, logRowH), true)
 		}
 		w.p.text(c.Subject, rect(sx, y, subjectW-graphW-12-refsW, logRowH), fontUI, weight, fg)
 		w.p.text(c.Author, rect(r.X+subjectW, y, authorW-10, logRowH), fontUI, regular, w.pal.TextMuted)
@@ -557,7 +557,7 @@ func abs32(f float32) float32 {
 
 // paintRefLabels draws branch and tag labels right-aligned in r and returns
 // the width used.
-func (w *Window) paintRefLabels(refs []domain.Ref, r ui.Rect, rightAlign bool) float32 {
+func (w *Window) paintRefLabels(id ui.ID, refs []domain.Ref, r ui.Rect, rightAlign bool) float32 {
 	type lab struct {
 		text string
 		icon icons.Pair
@@ -601,6 +601,14 @@ func (w *Window) paintRefLabels(refs []domain.Ref, r ui.Rect, rightAlign bool) f
 	x := right(r) - used
 	if !rightAlign {
 		x = r.X
+	}
+	if w.hovered(id) {
+		w.tipArea = rect(x, r.Y, used, r.Height)
+		names := make([]string, len(labs))
+		for i, l := range labs {
+			names[i] = l.text
+		}
+		w.tip(id, strings.Join(names, "\n"))
 	}
 	for _, l := range labs[:shown] {
 		tw := min(w.p.width(l.text, fontSmall, regular), 140)
