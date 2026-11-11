@@ -36,6 +36,16 @@ func NormalizeTimeFormat(value string) string {
 	return TimeFormat24Hour
 }
 
+// The left dock's width. The default is the old Commit panel width, the wider
+// of the two widths older files stored, so upgrading never narrows that panel.
+// legacyProjectPanelWidth is the old Project default; migration compares it
+// with the stored keys to tell which page the user resized.
+const (
+	DefaultLeftPanelWidth   float32 = 340
+	MinLeftPanelWidth       float32 = 200
+	legacyProjectPanelWidth float32 = 300
+)
+
 // MaxRecentProjects caps the Recent projects list. It is a convenience list,
 // not the workspace: repositories the user added live in workspace.json and are
 // not truncated. The cap used to be 20, which with a hundred repositories cut
@@ -142,8 +152,14 @@ type Settings struct {
 	Window Window `json:"window"`
 
 	// Layout keeps panel proportions.
-	CommitPanelWidth   float32 `json:"commitPanelWidth"`
-	ProjectPanelWidth  float32 `json:"projectPanelWidth"`
+	//
+	// LeftPanelWidth is the width of the left dock, shared by the Project tree
+	// and the Commit panel: both pages show one tool window at a time, so two
+	// widths would move the splitter whenever the user switches pages. Older
+	// settings files have commitPanelWidth and projectPanelWidth instead; Load
+	// folds them into this field (see adoptLeftPanelWidth) and Save writes only
+	// this key.
+	LeftPanelWidth     float32 `json:"leftPanelWidth"`
 	GitPanelHeight     float32 `json:"gitPanelHeight"`
 	TerminalHeight     float32 `json:"terminalHeight,omitempty"`
 	BranchesWidth      float32 `json:"branchesWidth"`
@@ -200,7 +216,7 @@ func Defaults() *Settings {
 		AIConfirmGenerate: true,
 		SearchTool:        "auto",
 		Window:            Window{Width: 1440, Height: 900},
-		CommitPanelWidth:  340, ProjectPanelWidth: 300, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
+		LeftPanelWidth:    DefaultLeftPanelWidth, GitPanelHeight: 330, TerminalHeight: 300, BranchesWidth: 220, DetailsWidth: 360,
 		DiffSyncScroll: true, DiffHighlightWords: true, DiffMarks: true, DiffCollapse: true, CommitTree: false,
 	}
 }
@@ -247,10 +263,74 @@ func Load(path string) *Settings {
 	if err := json.Unmarshal(data, s); err != nil {
 		s.Warning = "Some settings could not be read: " + err.Error()
 	}
+	s.adoptLeftPanelWidth(data)
 	migrate(s, probe.Version)
 	s.path = path
 	s.sanitize()
 	return s
+}
+
+// leftPanelWidthKeys are the layout keys that decide the left dock's width in a
+// settings file. leftPanelWidth is the current key; the other two are the
+// per-page keys older versions wrote.
+type leftPanelWidthKeys struct {
+	LeftPanelWidth    *float32 `json:"leftPanelWidth"`
+	CommitPanelWidth  *float32 `json:"commitPanelWidth"`
+	ProjectPanelWidth *float32 `json:"projectPanelWidth"`
+}
+
+// adoptLeftPanelWidth folds the left-dock widths into the one shared width.
+// The keys are read from the raw file rather than kept as Settings fields so a
+// code path cannot read or write a per-page width again.
+func (s *Settings) adoptLeftPanelWidth(data []byte) {
+	var keys leftPanelWidthKeys
+	// The file already unmarshaled as a whole; an undecodable layout key just
+	// leaves its pointer nil and falls through to the next rule.
+	_ = json.Unmarshal(data, &keys)
+	s.LeftPanelWidth = pickLeftPanelWidth(keys)
+}
+
+// pickLeftPanelWidth chooses the shared width from the keys a settings file
+// has. The rule, in order:
+//
+//  1. leftPanelWidth when it is valid. A file this build wrote, or one from a
+//     newer build, is used exactly as written.
+//  2. When only one per-page key was resized, that width. Older versions wrote
+//     both keys on every save, so the key that differs from its old default is
+//     the page the user adjusted; taking it keeps the width the user chose
+//     instead of replacing it with the other page's default.
+//  3. commitPanelWidth when both keys are usable. It was the wider page (340 by
+//     default), so an ambiguous file never narrows the Commit panel.
+//  4. projectPanelWidth when it is the only usable key.
+//  5. the default.
+//
+// A missing or unusable key never replaces a usable one, so a corrupt value in
+// the current key still falls back to a width the user actually chose.
+func pickLeftPanelWidth(keys leftPanelWidthKeys) float32 {
+	if validPanelWidth(keys.LeftPanelWidth) {
+		return *keys.LeftPanelWidth
+	}
+	commitOK := validPanelWidth(keys.CommitPanelWidth)
+	projectOK := validPanelWidth(keys.ProjectPanelWidth)
+	switch {
+	case commitOK && projectOK:
+		commitTuned := *keys.CommitPanelWidth != DefaultLeftPanelWidth
+		projectTuned := *keys.ProjectPanelWidth != legacyProjectPanelWidth
+		if projectTuned && !commitTuned {
+			return *keys.ProjectPanelWidth
+		}
+		return *keys.CommitPanelWidth
+	case commitOK:
+		return *keys.CommitPanelWidth
+	case projectOK:
+		return *keys.ProjectPanelWidth
+	default:
+		return DefaultLeftPanelWidth
+	}
+}
+
+func validPanelWidth(p *float32) bool {
+	return p != nil && *p >= MinLeftPanelWidth
 }
 
 // migrate upgrades older formats step by step.
@@ -292,11 +372,8 @@ func (s *Settings) sanitize() {
 	if s.Window.Width < 800 || s.Window.Height < 500 {
 		s.Window = d.Window
 	}
-	if s.CommitPanelWidth < 200 {
-		s.CommitPanelWidth = d.CommitPanelWidth
-	}
-	if s.ProjectPanelWidth < 200 {
-		s.ProjectPanelWidth = d.ProjectPanelWidth
+	if s.LeftPanelWidth < MinLeftPanelWidth {
+		s.LeftPanelWidth = d.LeftPanelWidth
 	}
 	if s.GitPanelHeight < 120 {
 		s.GitPanelHeight = d.GitPanelHeight

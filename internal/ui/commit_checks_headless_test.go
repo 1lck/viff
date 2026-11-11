@@ -444,7 +444,7 @@ func TestCommitPanelStageSelectedFromCheckedFiles(t *testing.T) {
 
 	// The hint and the action must stay visible at the Commit panel's minimum
 	// width, where the change-list bar already needs a full row of its own.
-	f.ws.Settings.CommitPanelWidth = 240
+	f.ws.Settings.LeftPanelWidth = 240
 	f.win.Invalidate()
 	f.s.Settle(80*time.Millisecond, time.Second)
 	for _, want := range []string{"Commit staged files only", "Stage Selected"} {
@@ -453,7 +453,7 @@ func TestCommitPanelStageSelectedFromCheckedFiles(t *testing.T) {
 		}
 	}
 	f.snap("82-narrow-stage-selected")
-	f.ws.Settings.CommitPanelWidth = 340
+	f.ws.Settings.LeftPanelWidth = 340
 	f.win.Invalidate()
 	f.s.Settle(80*time.Millisecond, time.Second)
 

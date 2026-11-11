@@ -72,6 +72,94 @@ func TestSettingsFileWithoutGitFields(t *testing.T) {
 	}
 }
 
+// The left dock used to store one width per page. Load folds those keys into
+// the one shared width: a resized page keeps the width the user chose, and an
+// ambiguous file prefers the Commit width because it was the wider page, so
+// upgrading never narrows it.
+func TestLeftPanelWidthMigration(t *testing.T) {
+	cases := []struct {
+		name string
+		file string
+		want float32
+	}{
+		{"both old keys resized", `{"version":1,"commitPanelWidth":420,"projectPanelWidth":280}`, 420},
+		{"only the project page resized", `{"version":1,"commitPanelWidth":340,"projectPanelWidth":480}`, 480},
+		{"only the commit page resized", `{"version":1,"commitPanelWidth":400,"projectPanelWidth":300}`, 400},
+		{"both at their old defaults", `{"version":1,"commitPanelWidth":340,"projectPanelWidth":300}`, DefaultLeftPanelWidth},
+		{"only the commit key", `{"version":1,"commitPanelWidth":450}`, 450},
+		{"only the project key", `{"version":1,"projectPanelWidth":280}`, 280},
+		{"neither key", `{"version":1,"theme":"dark"}`, DefaultLeftPanelWidth},
+		{"illegal old values", `{"version":1,"commitPanelWidth":80,"projectPanelWidth":0}`, DefaultLeftPanelWidth},
+		{"current key wins", `{"version":1,"leftPanelWidth":410,"commitPanelWidth":450}`, 410},
+		{"illegal current key falls back to the old one", `{"version":1,"leftPanelWidth":12,"commitPanelWidth":450}`, 450},
+		{"illegal everywhere", `{"version":1,"leftPanelWidth":-1,"commitPanelWidth":10,"projectPanelWidth":19}`, DefaultLeftPanelWidth},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "settings.json")
+			if err := os.WriteFile(path, []byte(tc.file), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			s := Load(path)
+			if s.Warning != "" {
+				t.Fatalf("unexpected warning: %s", s.Warning)
+			}
+			if s.LeftPanelWidth != tc.want {
+				t.Fatalf("left panel width = %v, want %v", s.LeftPanelWidth, tc.want)
+			}
+		})
+	}
+}
+
+// A width below the persisted minimum falls back to the default instead of
+// handing the layout a panel it cannot draw.
+func TestLeftPanelWidthSanitized(t *testing.T) {
+	s := Defaults()
+	s.LeftPanelWidth = MinLeftPanelWidth - 1
+	s.sanitize()
+	if s.LeftPanelWidth != DefaultLeftPanelWidth {
+		t.Fatalf("below-minimum width = %v, want the default %v", s.LeftPanelWidth, DefaultLeftPanelWidth)
+	}
+	s.LeftPanelWidth = MinLeftPanelWidth
+	s.sanitize()
+	if s.LeftPanelWidth != MinLeftPanelWidth {
+		t.Fatalf("minimum width was reset to %v", s.LeftPanelWidth)
+	}
+}
+
+// Saving a migrated file writes only the shared width: both per-page keys are
+// migration input, not a second source of truth on disk.
+func TestLeftPanelWidthRoundTripWritesOnlyTheSharedKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"commitPanelWidth":420,"projectPanelWidth":300}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := Load(path)
+	s.LeftPanelWidth = 375 // a drag on either page writes this one field
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var probe map[string]any
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := probe["leftPanelWidth"].(float64); !ok || got != 375 {
+		t.Fatalf("saved leftPanelWidth = %v, want 375: %s", probe["leftPanelWidth"], raw)
+	}
+	for _, old := range []string{"commitPanelWidth", "projectPanelWidth"} {
+		if _, ok := probe[old]; ok {
+			t.Fatalf("%s was written back: %s", old, raw)
+		}
+	}
+	if back := Load(path); back.LeftPanelWidth != 375 {
+		t.Fatalf("round trip = %v, want 375", back.LeftPanelWidth)
+	}
+}
+
 func TestSignFormatSanitized(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte(`{"version":1,"signFormat":"gpg"}`), 0o600); err != nil {

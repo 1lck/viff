@@ -52,3 +52,4 @@
 | [0046](0046-multi-repository-projects.md) | 多仓库项目的 Project 面板聚合（Phase A） |
 | [0047](0047-lfs-on-demand-statistics.md) | 按需查询 LFS 文件统计 |
 | [0048](0048-lfs-attribute-discovery-cache.md) | 复用 Git 状态并缓存 LFS 属性文件发现 |
+| [0049](0049-left-dock-width.md) | 左侧工具窗共用一个宽度 |
