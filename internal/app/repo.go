@@ -80,6 +80,7 @@ type RepoState struct {
 	statusSeq   uint64 // increments for each status query
 	refreshing  bool
 	refreshMore bool
+	refreshMeta bool // OR of metadata requests in the pending refresh only
 	refsSeq     uint64
 	refsKey     string
 }
@@ -317,8 +318,9 @@ func (w *Workspace) refreshIfIdle(meta bool) bool {
 }
 
 // Refresh queries status and operation state again, and refs when meta is
-// set. Overlapping refreshes are coalesced: one runs, and one more follows if
-// requests arrived meanwhile, so an event storm costs two queries.
+// set. Overlapping requests share one pending refresh, whose metadata scope is
+// the OR of those requests, independent of the running refresh. Each pass
+// consumes that pending request before starting the next bounded merge.
 func (w *Workspace) Refresh(meta bool) {
 	rs := w.Repo
 	if rs == nil {
@@ -326,9 +328,7 @@ func (w *Workspace) Refresh(meta bool) {
 	}
 	if rs.refreshing {
 		rs.refreshMore = true
-		if meta {
-			rs.refsKey = "" // force refs reload on the follow-up
-		}
+		rs.refreshMeta = rs.refreshMeta || meta
 		return
 	}
 	rs.refreshing = true
@@ -482,8 +482,9 @@ func (w *Workspace) Refresh(meta bool) {
 				})
 			}
 			if rs.refreshMore {
-				rs.refreshMore = false
-				w.Refresh(true)
+				meta := rs.refreshMeta
+				rs.refreshMore, rs.refreshMeta = false, false
+				w.Refresh(meta)
 			}
 		})
 	}()

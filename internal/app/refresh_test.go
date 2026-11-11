@@ -162,13 +162,13 @@ func TestRefreshConsumesPendingBeforeFollowUp(t *testing.T) {
 	before := b.calls.Load()
 	f.w.Refresh(false)
 	waitRefreshStarted(t, first)
+	// Change metadata after the first pass started; its follow-up must query
+	// the new ref even when the first pass captured an older ref snapshot.
+	f.git("branch", "during-refresh")
 	f.w.Refresh(true)
 	first.unblock()
 	f.settle(func() bool { return b.calls.Load() == before+2 })
 	waitRefreshStarted(t, second)
-	// A real metadata change after the first result must be visible in the
-	// pending metadata pass, even if the earlier ref query already finished.
-	f.git("branch", "during-refresh")
 	for i := 0; i < 100; i++ {
 		f.w.Refresh(false)
 	}
@@ -179,7 +179,7 @@ func TestRefreshConsumesPendingBeforeFollowUp(t *testing.T) {
 	}
 	found := false
 	for _, ref := range f.w.Repo.RefsOf(domain.RefLocal) {
-		found = found || ref.Name == "during-refresh"
+		found = found || ref.Short == "during-refresh"
 	}
 	if !found || b.calls.Load()-before != 3 || b.max.Load() != 1 {
 		t.Fatalf("latest ref = %v, queries = %d, concurrent = %d", found, b.calls.Load()-before, b.max.Load())

@@ -51,6 +51,25 @@ go test -count=1 -tags "vivahead litheaudit" ./internal/ui
 
 ## Pre-publication acceptance / 发布前验收
 
+### Coalesced refresh scope / 合并刷新的范围
+
+`go test -count=1 -run '^TestRefresh' ./internal/app` covers fork issue #1.
+Channel-controlled status queries verify that overlapping ordinary requests
+produce one ordinary follow-up and reuse the freshly published LFS snapshot.
+Metadata requests are OR-ed into the pending scope; the active pass's scope
+does not carry forward. Each pass consumes the pending state before starting,
+so requests during that pass can form one further pending refresh. Failure,
+cancellation, repository removal, switching, and close/reopen scenarios check
+that pending requests and late results stay within their repository lifetime.
+The existing LFS attribute fingerprint and 30-second recheck rules still apply.
+
+`go test -count=1 -run '^TestRefresh' ./internal/app` 覆盖 fork issue #1。
+测试通过 channel 控制状态查询，确认重叠的普通请求只产生一次普通补刷，并复用刚发布的
+LFS 快照。待处理范围按元数据请求取 OR，不继承在途刷新的范围；每轮开始前消费待处理
+状态，该轮期间到达的新请求仍可合并为下一次补刷。失败、取消、仓库消失、切换及关闭后
+重开场景检查待处理请求和迟到结果始终属于原仓库生命周期。LFS 原有的属性指纹和
+30 秒重查规则继续生效。
+
 The November 4, 2026 acceptance used macOS development builds and native Windows
 test executables running on Windows Server 2022 Datacenter x64, Git
 2.56.0.windows.4, and Microsoft's Basic Display Adapter. The latest result for
