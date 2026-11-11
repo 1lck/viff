@@ -70,6 +70,44 @@ LFS 快照。待处理范围按元数据请求取 OR，不继承在途刷新的�
 重开场景检查待处理请求和迟到结果始终属于原仓库生命周期。LFS 原有的属性指纹和
 30 秒重查规则继续生效。
 
+The November 11, 2026 comparison used Windows 11 Pro x64, Go 1.27.3,
+Git 2.45.1.windows.1, and Git LFS 3.5.1. Both versions opened the same
+isolated fixture shape: 4,096 committed LFS pointers, a status result held for
+31 seconds, and ten ordinary requests delivered at 30 seconds. A temporary
+`go test -overlay` harness ran `TestRefreshSlowAcceptance` against `cc76616`
+and the fix. A Windows Job Object around each Git command accounted for its
+entire process tree, including git-lfs and its Git children; CPU time excludes
+the artificial wait. Each version was measured once.
+
+2026 年 11 月 11 日的对照环境为 Windows 11 Pro x64、Go 1.27.3、
+Git 2.45.1.windows.1、Git LFS 3.5.1。两版使用同样的隔离夹具结构：
+4,096 个已提交的 LFS 指针、延迟 31 秒返回的状态结果，以及第 30 秒到达的十个普通请求。
+临时 `go test -overlay` 夹具通过 `TestRefreshSlowAcceptance` 分别运行 `cc76616`
+和修复版。每条 Git 命令置于 Windows Job Object 内，统计完整进程树，含 git-lfs
+及其 Git 子进程；CPU 时间不含人为等待。每版各测一次。
+
+| Metric / 指标 | Before / 修复前 | After / 修复后 |
+| --- | --- | --- |
+| Refresh scopes / 刷新范围 | `true, true` | `true, false` |
+| Status queries / 状态查询 | 2 | 2 |
+| Git commands / Git 命令 | 20 | 17 |
+| LFS commands / LFS 命令 | 5 | 3 |
+| LFS listing attempts / LFS 枚举命令 | 4 | 2 |
+| Git process-tree CPU / Git 进程树 CPU | 16,375 ms | 10,453 ms |
+| LFS process-tree CPU (included above) / LFS 进程树 CPU（已含在上项） | 12,563 ms | 6,031 ms |
+| Follow-up duration / 补刷耗时 | 4,514 ms | 1,133 ms |
+
+The old version started a second metadata refresh about 32.1 seconds after
+the first; the fixed version completed one metadata pass followed by an
+ordinary pass. LFS 3.5.1 rejects `ls-files -z`, so each enumeration includes
+the existing newline-format fallback: two listing commands, not two scans.
+The fixture measures coalescing; actual checkout size, cache state, and disk
+load determine timings in a real repository.
+
+旧版在首轮开始约 32.1 秒后启动第二次元数据刷新；修复版完成一次元数据刷新后按普通
+范围补刷。LFS 3.5.1 拒绝 `ls-files -z`，每次枚举包含已有的换行格式回退，因此会有
+两条枚举命令。此夹具验证合并行为；实际仓库耗时取决于规模、缓存和磁盘负载。
+
 The November 4, 2026 acceptance used macOS development builds and native Windows
 test executables running on Windows Server 2022 Datacenter x64, Git
 2.56.0.windows.4, and Microsoft's Basic Display Adapter. The latest result for
