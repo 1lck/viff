@@ -107,6 +107,11 @@ func TestParseLFSFiles(t *testing.T) {
 	}
 }
 
+func detectTestLFS(tr *testRepo) LFSStatus {
+	st, _ := tr.r.LFS(ctx, tr.repo, nil, nil)
+	return st
+}
+
 func TestLFSDetectsRulesWhenGitLFSMissing(t *testing.T) {
 	tr := newTestRepo(t)
 	tr.write(".gitattributes", "# assets\n*.bin filter=lfs diff=lfs merge=lfs -text\n*.psd -filter\n")
@@ -116,7 +121,7 @@ func TestLFSDetectsRulesWhenGitLFSMissing(t *testing.T) {
 		probes++
 		return nil, errors.New("git: 'lfs' is not a git command")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
+	st := detectTestLFS(tr)
 	if st.Installed {
 		t.Fatalf("Installed = true without git-lfs; state = %+v", st)
 	}
@@ -138,7 +143,7 @@ func TestLFSDetectsRulesWhenGitLFSMissing(t *testing.T) {
 
 	// The capability probe is cached for the process; the rule scan still
 	// answers without it.
-	if second := tr.r.LFS(ctx, tr.repo); !second.Managed || probes != 1 {
+	if second := detectTestLFS(tr); !second.Managed || probes != 1 {
 		t.Fatalf("second detection = %+v, probes = %d", second, probes)
 	}
 }
@@ -158,7 +163,7 @@ func TestLFSDetectionDoesNotListFilesAndCachesProbe(t *testing.T) {
 		}
 		return nil, errors.New("unexpected git-lfs command")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
+	st := detectTestLFS(tr)
 	if !st.Installed || st.Version != "git-lfs/9.9.9 (fake build)" {
 		t.Fatalf("installed state = %+v", st)
 	}
@@ -168,7 +173,7 @@ func TestLFSDetectionDoesNotListFilesAndCachesProbe(t *testing.T) {
 	if st.Err != nil {
 		t.Fatalf("Err = %v", st.Err)
 	}
-	tr.r.LFS(ctx, tr.repo)
+	detectTestLFS(tr)
 	if probes != 1 || listings != 0 {
 		t.Fatalf("automatic probes = %d, listings = %d, want 1 and 0", probes, listings)
 	}
@@ -190,7 +195,7 @@ func TestLFSListFailureKeepsRulesAndDiagnostic(t *testing.T) {
 		}
 		return nil, errors.New("listing failed")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
+	st := detectTestLFS(tr)
 	if !st.Installed {
 		t.Fatal("Installed = false with a working probe")
 	}
@@ -207,7 +212,7 @@ func TestLFSRepositoryWithoutRulesIsNotManaged(t *testing.T) {
 	tr.r.LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 		return nil, errors.New("missing")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
+	st := detectTestLFS(tr)
 	if st.Managed || st.NeedsInstall() || len(st.Patterns) != 0 {
 		t.Fatalf("state = %+v, want a non-LFS repository", st)
 	}
@@ -217,7 +222,7 @@ func TestLFSReadsNestedAttributeFile(t *testing.T) {
 	tr := newTestRepo(t)
 	tr.write(".gitattributes", "*.bin filter=lfs\n")
 	tr.write("assets/.gitattributes", "*.psd filter=lfs\n")
-	st := tr.r.LFS(ctx, tr.repo)
+	st, _ := tr.r.LFS(ctx, tr.repo, []string{"assets/.gitattributes"}, nil)
 	if want := []string{"*.bin", "assets/*.psd"}; !reflect.DeepEqual(st.Patterns, want) {
 		t.Fatalf("Patterns = %v, want %v", st.Patterns, want)
 	}

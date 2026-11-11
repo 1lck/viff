@@ -8,6 +8,7 @@ import (
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/gitcli"
 	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
@@ -58,6 +59,9 @@ func (w *Window) lfsStatusTip(rs *vapp.RepoState) string {
 	}
 	if rs.LFS.Managed {
 		lines = append(lines, w.t(i18n.ChromeTipLFSRules, len(rs.LFS.Patterns)))
+	}
+	if rs.LFS.Err != nil {
+		lines = append(lines, w.t(i18n.ChromeTipLFSRulesFailed, gitcli.CodeOf(rs.LFS.Err)))
 	}
 	if state := w.lfsStatsState(rs); state != "" {
 		lines = append(lines, state)

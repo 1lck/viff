@@ -177,7 +177,7 @@ func (w *Window) paintProject(r ui.Rect) {
 			// gen 0 never matches a live repository, so the next paint asks
 			// again even after a failed listing whose status time is unchanged.
 			w.fm.gen = 0
-			w.ws.Refresh(true)
+			w.ws.RefreshManually()
 			w.Invalidate()
 		})
 	}
@@ -594,7 +594,7 @@ func (w *Window) filesMenu(row fileRow) []item {
 	}
 	if row.root {
 		return []item{
-			{title: w.t(i18n.WorkspaceActionRefresh), icon: icons.Refresh, run: func() { w.ws.Refresh(true) }},
+			{title: w.t(i18n.WorkspaceActionRefresh), icon: icons.Refresh, run: w.ws.RefreshManually},
 			{title: w.t(i18n.WorkspaceActionExpandAll), icon: icons.ExpandAll, run: w.fm.expandAll},
 			{title: w.t(i18n.WorkspaceActionCollapseAll), icon: icons.CollapseAll, run: w.fm.collapseAll},
 			sep(),

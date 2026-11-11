@@ -3,19 +3,18 @@ package app
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
-	"strconv"
+	"slices"
+	"strings"
 	"time"
 
 	"viff/internal/domain"
 	"viff/internal/gitcli"
 	"viff/internal/observability"
-	"viff/internal/sshpath"
 )
 
 type lfsReporter interface {
-	LFS(context.Context, domain.Repo) gitcli.LFSStatus
+	LFSTrackedAttributes(context.Context, domain.Repo, *gitcli.LFSIndexCache) (*gitcli.LFSIndexCache, []string, error)
+	LFS(context.Context, domain.Repo, []string, gitcli.LFSRuleCache) (gitcli.LFSStatus, gitcli.LFSRuleCache)
 	LFSInputs(context.Context, domain.Repo) (gitcli.LFSInputs, error)
 	LFSFiles(context.Context, domain.Repo) ([]string, error)
 }
@@ -40,12 +39,30 @@ type LFSStats struct {
 }
 
 type lfsState struct {
-	key           string
-	at            time.Time
-	detectCancel  context.CancelFunc
-	detectPending bool
-	pendingKey    string
-	epoch         uint64
+	rules lfsRulesState
+	epoch uint64
+}
+
+type lfsRulesState struct {
+	generation uint64
+	cancel     context.CancelFunc
+	pending    *lfsRuleInputs
+	index      *gitcli.LFSIndexCache
+	parsed     gitcli.LFSRuleCache
+	failed     *lfsRuleInputs
+	retryAt    time.Time
+}
+
+type lfsRuleInputs struct {
+	head, branch string
+	detached     bool
+	indexKey     [32]byte
+	untracked    []string
+}
+
+func (i lfsRuleInputs) equal(other lfsRuleInputs) bool {
+	return i.head == other.head && i.branch == other.branch && i.detached == other.detached &&
+		i.indexKey == other.indexKey && slices.Equal(i.untracked, other.untracked)
 }
 
 type lfsScan struct {
@@ -53,53 +70,97 @@ type lfsScan struct {
 	unconfirmed bool
 }
 
-const lfsRecheckInterval = 30 * time.Second
+const lfsRuleRetryDelay = 5 * time.Second
 
 // refreshLFS is called after publishing the working-copy snapshot. It
-// coalesces overlapping detection requests and never runs a file listing.
-func (w *Workspace) refreshLFS(rs *RepoState, key string, meta bool) {
+// extracts candidates without retaining the full status in a background task.
+func (w *Workspace) refreshLFS(rs *RepoState, status domain.Status) {
 	backend, ok := w.Git.(lfsReporter)
 	if !ok {
 		return
 	}
-	state := &rs.lfs
-	if state.detectCancel != nil {
-		if meta || key != state.key || state.detectPending {
-			state.detectPending, state.pendingKey = true, key
+	inputs := lfsRuleInputs{
+		head: status.Branch.Head, branch: status.Branch.Branch,
+		detached: status.Branch.Detached, indexKey: status.IndexKey,
+	}
+	for _, e := range status.Entries {
+		if e.Untracked() && strings.HasSuffix(e.Path, "/.gitattributes") {
+			inputs.untracked = append(inputs.untracked, e.Path)
 		}
+	}
+	slices.Sort(inputs.untracked)
+	w.detectLFSRules(rs, backend, inputs)
+}
+
+func (w *Workspace) detectLFSRules(rs *RepoState, backend lfsReporter, inputs lfsRuleInputs) {
+	state := &rs.lfs.rules
+	if state.cancel != nil {
+		state.pending = &inputs
 		return
 	}
-	if !meta && key == state.key && !state.at.IsZero() && w.now().Sub(state.at) < lfsRecheckInterval {
+	if state.failed != nil && state.failed.equal(inputs) && w.now().Before(state.retryAt) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	state.key, state.detectCancel = key, cancel
+	state.cancel = cancel
+	generation, index, parsed := state.generation, state.index, state.parsed
 	repo := rs.Repo
 	start := time.Now()
 	go func() {
 		defer cancel()
-		st := backend.LFS(ctx, repo)
+		nextIndex, tracked, err := backend.LFSTrackedAttributes(ctx, repo, index)
+		var st gitcli.LFSStatus
+		var next gitcli.LFSRuleCache
+		if err == nil {
+			paths := slices.Concat(tracked, inputs.untracked)
+			st, next = backend.LFS(ctx, repo, paths, parsed)
+			err = st.Err
+		}
+		if err == nil {
+			err = ctx.Err()
+		}
 		w.post(func() {
 			if w.Repo != rs {
 				return
 			}
-			state.detectCancel = nil
-			pending, next := state.detectPending, state.pendingKey
-			state.detectPending = false
-			// A result from before a known root rule change is obsolete.
-			if !pending || next == key {
-				rs.LFS, state.at = st, w.now()
-				w.record(observability.Event{
-					Event: observability.EventRepoLFS, Level: observability.LevelDebug,
-					Repo: repo.Root, Op: "rules", Dur: time.Since(start),
-					Fields: lfsEventFields(st, rs.LFSStats),
-				})
+			state.cancel = nil
+			pending := state.pending
+			state.pending = nil
+			if generation == state.generation {
+				if nextIndex != nil {
+					state.index = nextIndex
+				}
+				if pending == nil || pending.equal(inputs) {
+					if err == nil {
+						state.parsed, state.failed = next, nil
+						rs.LFS = st
+					} else {
+						state.failed, state.retryAt = &inputs, w.now().Add(lfsRuleRetryDelay)
+						rs.LFS.Err = err
+					}
+					w.record(observability.Event{
+						Event: observability.EventRepoLFS, Level: observability.LevelDebug,
+						Repo: repo.Root, Op: "rules", Dur: time.Since(start),
+						Fields: lfsEventFields(rs.LFS, rs.LFSStats),
+					})
+				}
 			}
-			if pending {
-				w.refreshLFS(rs, next, true)
+			if pending != nil {
+				w.detectLFSRules(rs, backend, *pending)
 			}
 		})
 	}()
+}
+
+// invalidateLFSRules requires a new complete status before detection can
+// publish again. It preserves the last result for display on failure.
+func invalidateLFSRules(rs *RepoState) {
+	state := &rs.lfs.rules
+	state.generation++
+	state.index, state.parsed, state.pending, state.failed = nil, nil, nil, nil
+	if state.cancel != nil {
+		state.cancel()
+	}
 }
 
 // SupportsLFSStats reports whether the active adapter provides a listing.
@@ -213,23 +274,8 @@ func (w *Workspace) invalidateLFSStats(rs *RepoState) {
 }
 
 func (w *Workspace) cancelLFS(rs *RepoState) {
-	if rs.lfs.detectCancel != nil {
-		rs.lfs.detectCancel()
-	}
+	invalidateLFSRules(rs)
 	w.invalidateLFSStats(rs)
-}
-
-// Root .gitattributes changes are checked cheaply on each refresh. Nested
-// rule discovery keeps the existing metadata/interval cadence.
-func lfsAttributesKey(root string) string {
-	if sshpath.Is(root) {
-		return "ssh"
-	}
-	st, err := os.Stat(filepath.Join(root, ".gitattributes"))
-	if err != nil {
-		return "missing"
-	}
-	return strconv.FormatInt(st.Size(), 10) + ":" + strconv.FormatInt(st.ModTime().UnixNano(), 10)
 }
 
 // Only flags, counts and stable codes are recorded, never paths or rules.

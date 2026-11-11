@@ -24,7 +24,7 @@ func TestLFSStateFollowsAttributes(t *testing.T) {
 	f.open()
 
 	rs := f.w.Repo
-	f.settle(func() bool { return !rs.lfs.at.IsZero() })
+	f.settle(func() bool { return rs.lfs.rules.cancel == nil })
 	if !rs.LFS.Managed || rs.LFS.Installed || !rs.LFS.NeedsInstall() {
 		t.Fatalf("LFS state = %+v, want managed rules without git-lfs", rs.LFS)
 	}
@@ -32,49 +32,12 @@ func TestLFSStateFollowsAttributes(t *testing.T) {
 		t.Fatalf("Patterns = %v", rs.LFS.Patterns)
 	}
 
-	// The root .gitattributes fingerprint changed, so the next refresh must
-	// re-run detection even though it is not a metadata refresh.
+	// An ordinary status refresh checks known files for changes.
 	f.write(".gitattributes", "*.bin text\n")
 	f.w.Refresh(false)
-	f.settle(func() bool { return f.idle() && !f.w.Repo.LFS.Managed })
+	f.settle(func() bool { return f.idle() && rs.lfs.rules.cancel == nil && !rs.LFS.Managed })
 	if got := f.w.Repo.LFS.Patterns; len(got) != 0 {
 		t.Fatalf("Patterns after removing the rules = %v", got)
-	}
-}
-
-// TestLFSDetectionIsThrottled pins the cache: an unchanged repository does not
-// probe or list LFS files on every file-system event, while a metadata refresh
-// (the refresh button, or the end of a write task) re-runs it.
-func TestLFSDetectionIsThrottled(t *testing.T) {
-	f := newFixture(t)
-	f.write(".gitattributes", "*.bin filter=lfs\n")
-	f.w.Git.(*gitcli.Runner).LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
-		return nil, errors.New("git: 'lfs' is not a git command")
-	}
-	f.open()
-
-	f.settle(func() bool { return !f.w.Repo.lfs.at.IsZero() })
-	first := f.w.Repo.lfs.at
-	if first.IsZero() {
-		t.Fatal("opening the repository did not run LFS detection")
-	}
-	seq := f.w.Repo.statusSeq
-	f.w.Refresh(false)
-	f.settle(func() bool {
-		rs := f.w.Repo
-		return rs.statusSeq > seq && !rs.refreshing && f.idle()
-	})
-	if got := f.w.Repo.lfs.at; !got.Equal(first) {
-		t.Fatalf("plain refresh re-ran LFS detection: %v -> %v", first, got)
-	}
-
-	f.w.Refresh(true)
-	f.settle(func() bool {
-		rs := f.w.Repo
-		return rs.statusSeq > seq+1 && !rs.refreshing && rs.lfs.at.After(first) && f.idle()
-	})
-	if got := f.w.Repo.lfs.at; !got.After(first) {
-		t.Fatalf("metadata refresh did not re-run LFS detection: %v -> %v", first, got)
 	}
 }
 
@@ -118,60 +81,6 @@ func TestLFSListingCommandLogOmitsRawFailures(t *testing.T) {
 	f.w.Drain()
 	if len(f.w.Console) != 1 || len(obs.eventsNamed(observability.EventGitFail)) != 1 {
 		t.Fatal("the filter suppressed failures outside file enumeration")
-	}
-}
-
-// The fingerprint distinguishes size and modification time changes and treats
-// a missing file as its own state; the app test above only exercises the first
-// two indirectly.
-func TestLFSAttributesKey(t *testing.T) {
-	dir := t.TempDir()
-	if got := lfsAttributesKey(dir); got != "missing" {
-		t.Fatalf("missing key = %q", got)
-	}
-	f := newFixture(t)
-	f.write(".gitattributes", "*.bin filter=lfs\n")
-	first := lfsAttributesKey(f.dir)
-	if first == "missing" {
-		t.Fatal("existing .gitattributes reported missing")
-	}
-	f.write(".gitattributes", "*.bin filter=lfs\n*.psd filter=lfs\n")
-	if second := lfsAttributesKey(f.dir); second == first {
-		t.Fatalf("key did not change with the file: %q", second)
-	}
-}
-
-// Both automatic paths, metadata and time-based rule checks, stay enumeration
-// free. Advance the clock so the test doesn't wait five real minutes.
-func TestLFSAutomaticRefreshNeverEnumerates(t *testing.T) {
-	f := newFixture(t)
-	f.write(".gitattributes", "*.bin filter=lfs\n")
-	var listings atomic.Int32
-	f.w.Git.(*gitcli.Runner).LFSCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
-		if args[0] == "version" {
-			return []byte("git-lfs/test"), nil
-		}
-		listings.Add(1)
-		return nil, nil
-	}
-	start := time.Now()
-	var elapsed atomic.Int64
-	f.w.Now = func() time.Time { return start.Add(time.Duration(elapsed.Load())) }
-	f.open()
-	rs := f.w.Repo
-	f.settle(func() bool { return rs.lfs.at.Equal(start) })
-	for _, step := range []struct {
-		offset time.Duration
-		meta   bool
-	}{
-		{time.Minute, false}, {2 * time.Minute, true}, {5 * time.Minute, false},
-	} {
-		elapsed.Store(int64(step.offset))
-		f.w.Refresh(step.meta)
-		f.settle(func() bool { return f.idle() && rs.lfs.at.Equal(start.Add(step.offset)) })
-	}
-	if got := listings.Load(); got != 0 || !rs.LFS.Managed || rs.LFSStats.Status != LFSStatsUnqueried {
-		t.Fatalf("automatic listings = %d, rules = %+v, stats = %+v", got, rs.LFS, rs.LFSStats)
 	}
 }
 

@@ -115,6 +115,24 @@ func testLFSStatusMarker(t *testing.T, theme string) {
 	if tip := f.win.lfsStatusTip(rs); !strings.Contains(tip, "Last counted:") || !strings.Contains(tip, "git.failed") {
 		t.Fatalf("failure hid the last successful zero or code: %q", tip)
 	}
+	f.write(".gitattributes", strings.Repeat("x", (1<<20)+1))
+	f.ws.RefreshManually()
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return rs.LFS.Err != nil && f.s.HasText("LFS 0 · Count failed")
+	}, 15*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if tip := f.win.lfsStatusTip(rs); !strings.Contains(tip, "Could not refresh LFS rules (git.failed)") ||
+		!strings.Contains(tip, "Git LFS: 1 rules") {
+		t.Fatalf("rule failure hid the last valid rules or error code: %q", tip)
+	}
+	f.write(".gitattributes", "*.psd filter=lfs\n")
+	f.ws.RefreshManually()
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return rs.LFS.Err == nil && len(rs.LFS.Patterns) == 1 && rs.LFS.Patterns[0] == "*.psd"
+	}, 15*time.Second); err != nil {
+		t.Fatal(err)
+	}
 	f.assertIdle()
 }
 

@@ -88,6 +88,7 @@ func newRefreshFixture(t *testing.T) (*fixture, *refreshBackend, *fakeObs) {
 	f.w.Git = b
 	f.w.Caps = CapabilitiesOf(b)
 	f.open()
+	settleLFSRules(f)
 	obs := &fakeObs{}
 	f.w.SetRecorder(obs, obs)
 	return f, b, obs
@@ -287,8 +288,10 @@ func TestRefreshPendingDoesNotCrossRepositoryLifetime(t *testing.T) {
 					}
 				})
 				f.settle(func() bool { return f.w.Repo != nil && f.idle() })
+				settleLFSRules(f)
 			case "reopen":
 				f.open()
+				settleLFSRules(f)
 			}
 			current := f.w.Repo
 			var currentSeq uint64

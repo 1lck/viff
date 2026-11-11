@@ -7,19 +7,20 @@ package i18n
 // command Viff runs.
 const (
 	// Status-bar marker and its tooltip.
-	ChromeStatusLFS     = Key("chrome.status.lfs")
-	ChromeTipLFSFiles   = Key("chrome.tip.lfsFiles")
-	ChromeTipLFSRules   = Key("chrome.tip.lfsRules")
-	ChromeTipLFSMissing = Key("chrome.tip.lfsMissing")
-	LFSRefreshStats     = Key("lfs.refreshStats")
-	LFSCopyFileList     = Key("lfs.copyFileList")
-	LFSStatsUnqueried   = Key("lfs.stats.unqueried")
-	LFSStatsLoading     = Key("lfs.stats.loading")
-	LFSStatsStale       = Key("lfs.stats.stale")
-	LFSStatsFailed      = Key("lfs.stats.failed")
-	LFSStatsUpdated     = Key("lfs.stats.updated")
-	LFSStatsErrorCode   = Key("lfs.stats.errorCode")
-	LFSStatsUnconfirmed = Key("lfs.stats.unconfirmed")
+	ChromeStatusLFS         = Key("chrome.status.lfs")
+	ChromeTipLFSFiles       = Key("chrome.tip.lfsFiles")
+	ChromeTipLFSRules       = Key("chrome.tip.lfsRules")
+	ChromeTipLFSRulesFailed = Key("chrome.tip.lfsRulesFailed")
+	ChromeTipLFSMissing     = Key("chrome.tip.lfsMissing")
+	LFSRefreshStats         = Key("lfs.refreshStats")
+	LFSCopyFileList         = Key("lfs.copyFileList")
+	LFSStatsUnqueried       = Key("lfs.stats.unqueried")
+	LFSStatsLoading         = Key("lfs.stats.loading")
+	LFSStatsStale           = Key("lfs.stats.stale")
+	LFSStatsFailed          = Key("lfs.stats.failed")
+	LFSStatsUpdated         = Key("lfs.stats.updated")
+	LFSStatsErrorCode       = Key("lfs.stats.errorCode")
+	LFSStatsUnconfirmed     = Key("lfs.stats.unconfirmed")
 	// The server's git-lfs is missing; the install command belongs to the
 	// server, not to the client this status bar is running on.
 	ChromeTipLFSMissingRemote = Key("chrome.tip.lfsMissingRemote")
@@ -39,6 +40,7 @@ func init() {
 		ChromeStatusLFS:           "LFS",
 		ChromeTipLFSFiles:         "Git LFS: %d managed files",
 		ChromeTipLFSRules:         "Git LFS: %d rules",
+		ChromeTipLFSRulesFailed:   "Could not refresh LFS rules (%s). Refresh the repository to retry.",
 		ChromeTipLFSMissing:       "git-lfs is not installed",
 		ChromeTipLFSMissingRemote: "git-lfs is not installed on the server",
 		LFSRefreshStats:           "Refresh LFS Statistics",
@@ -64,6 +66,7 @@ func init() {
 		ChromeStatusLFS:           "LFS",
 		ChromeTipLFSFiles:         "Git LFS：%d 个受管文件",
 		ChromeTipLFSRules:         "Git LFS：%d 条规则",
+		ChromeTipLFSRulesFailed:   "无法更新 LFS 规则（%s）。刷新仓库可重试。",
 		ChromeTipLFSMissing:       "未安装 git-lfs",
 		ChromeTipLFSMissingRemote: "服务器上未安装 git-lfs",
 		LFSRefreshStats:           "更新 LFS 统计",

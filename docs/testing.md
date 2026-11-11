@@ -51,6 +51,31 @@ go test -count=1 -tags "vivahead litheaudit" ./internal/ui
 
 ## Pre-publication acceptance / 发布前验收
 
+### LFS attribute discovery / LFS 属性文件发现
+
+Use the same disposable checkout for both builds. Add tracked and visible
+untracked nested `.gitattributes` files and a generated directory tree.
+Record the first discovery separately from idle refreshes; classify Git
+commands by subcommand and whether the pathspec is `:(glob)**/.gitattributes`.
+For those commands, record count, elapsed time and Git process-tree CPU.
+Count completed ordinary `status` calls separately. See [ADR 0048](decisions/0048-lfs-attribute-discovery-cache.md).
+
+两版使用同一隔离工作树，放入已跟踪和可见的未跟踪嵌套 `.gitattributes`，以及一棵生成目录树。
+首次发现和空闲刷新分开统计；按 Git 子命令及 `:(glob)**/.gitattributes` 路径规范识别发现命令，
+记录次数、墙钟耗时及 Git 进程树 CPU 时间；单独统计完成的普通 `status`。
+见 [ADR 0048](decisions/0048-lfs-attribute-discovery-cache.md)。
+
+The controlled test advances the clock through five minutes of ordinary and
+metadata refreshes. It expects one startup discovery and no further discovery
+or LFS file listing. Other isolated cases cover ignored paths, index replacement,
+hidden intent-to-add, equal-size edits, switching linked worktrees, failure
+and cancellation. The parse cache has independent entry, pattern and byte bounds.
+
+受控测试推进时钟覆盖五分钟的普通和元数据刷新，验证仅在首次启动时发现一次，
+后续不再发现属性文件或枚举 LFS 文件。其他隔离用例覆盖忽略、索引替换、
+隐藏的 intent-to-add、等长编辑、切换关联工作树、失败和取消。
+解析缓存分别限制条目、模式与文本字节数。
+
 ### On-demand LFS statistics / 按需 LFS 文件统计
 
 Fork issue [#2](https://github.com/muchenhen/viff/issues/2) separates background
@@ -156,7 +181,8 @@ callback cannot hide a newly started refresh behind an unscheduled goroutine.
 Queued metadata also invalidates the loaded log before the follow-up queries:
 local shallow-clone tests fetch with `--unshallow` and `--deepen=1`, keeping
 HEAD and refs unchanged, and check that the fetched parent appears in the log.
-The existing LFS attribute fingerprint and 30-second recheck rules still apply.
+At this stage the LFS attribute fingerprint and 30-second recheck rules still
+applied; the current discovery policy is documented in [ADR 0048](decisions/0048-lfs-attribute-discovery-cache.md).
 
 `go test -count=1 -run '^TestRefresh' ./internal/app` 覆盖 fork issue #1。
 测试通过 channel 控制状态查询，确认重叠的普通请求只产生一次普通补刷，并复用刚发布的
@@ -166,7 +192,7 @@ LFS 快照。待处理范围按元数据请求取 OR，不继承在途刷新的�
 同步维护的查询序号和刷新状态，避免新刷新的 goroutine 尚未调度而漏报。排队的元数据
 请求还会在补刷查询前使已加载日志失效：本地浅克隆测试分别执行 `--unshallow` 和
 `--deepen=1`，保持 HEAD、refs 不变，检查新取得的父提交出现在日志中。
-LFS 原有的属性指纹和 30 秒重查规则继续生效。
+该阶段仍使用 LFS 原有的属性指纹和 30 秒重查规则；当前策略见 [ADR 0048](decisions/0048-lfs-attribute-discovery-cache.md)。
 
 The November 11, 2026 comparison used Windows 11 Pro x64, Go 1.27.3,
 Git 2.45.1.windows.1, and Git LFS 3.5.1. Both versions opened the same

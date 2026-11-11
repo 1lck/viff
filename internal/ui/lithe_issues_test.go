@@ -324,7 +324,9 @@ func TestLitheIssuesRepeatedLogScroll(t *testing.T) {
 
 func TestLitheIssuesExternalGitAutoRefresh(t *testing.T) {
 	f := newUIFixture(t)
-	f.ws.Watch = func(repo domain.Repo, changed func(bool)) (vapp.Watcher, error) { return platform.Watch(repo, changed) }
+	f.ws.Watch = func(repo domain.Repo, changed func(bool, bool)) (vapp.Watcher, error) {
+		return platform.Watch(repo, changed)
+	}
 	f.start(1280, 800)
 	f.win.openRepo(f.dir)
 	f.settle()

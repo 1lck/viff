@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"viff/internal/domain"
@@ -54,18 +55,6 @@ const (
 	lfsAttributesMaxSize = 1 << 20 // 1 MiB per .gitattributes file
 	lfsPatternLimit      = 512
 )
-
-// LFS detects rules and tool availability without enumerating managed files.
-func (r *Runner) LFS(ctx context.Context, repo domain.Repo) LFSStatus {
-	var st LFSStatus
-	version, installed := r.lfsCapability(ctx, repo)
-	st.Installed, st.Version = installed, version
-	patterns, err := r.lfsPatterns(ctx, repo)
-	st.Patterns = patterns
-	st.Err = err
-	st.Managed = len(st.Patterns) > 0
-	return st
-}
 
 // LFSInputs identifies the HEAD and staged changes that a file listing reads.
 // The index key hashes the delta from HEAD, avoiding a full tracked-file list.
@@ -235,47 +224,77 @@ func parseLFSFiles(out []byte) []string {
 	return files
 }
 
-// lfsPatterns finds filter=lfs rules without asking git-lfs. The root
-// .gitattributes is always read directly, so detection still works when the
-// listing fails; other .gitattributes files join through `git ls-files` so
-// nested `git lfs track` rules and not-yet-committed attribute files count.
-func (r *Runner) lfsPatterns(ctx context.Context, repo domain.Repo) ([]string, error) {
-	paths := []string{".gitattributes"}
-	var err error
-	out, listErr := r.Run(ctx, repo.Root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ":(glob)**/.gitattributes")
-	if listErr != nil {
-		err = fmt.Errorf("list .gitattributes files: %w", listErr)
-		if ctx.Err() != nil {
-			return nil, err
-		}
-	} else {
-		for _, rec := range bytes.Split(out, []byte{0}) {
-			if p := string(rec); p != "" && p != ".gitattributes" {
-				paths = append(paths, p)
-			}
-		}
-	}
-	sort.Strings(paths)
-	var patterns []string
-	seen := map[string]bool{}
+// LFSRuleCache contains immutable parse results for one working tree. Only
+// current candidates are retained, and the total number of cached patterns
+// (including duplicates) is bounded by the display limit.
+type LFSRuleCache map[string]lfsAttributeRules
+
+type lfsAttributeRules struct {
+	digest   [sha256.Size]byte
+	patterns []string
+}
+
+const (
+	lfsRuleCacheEntries = 512
+	lfsRuleCacheBytes   = 4 << 20
+)
+
+// LFS detects rules and tool availability using the supplied attribute paths.
+// A failed read returns no replacement snapshot. The caller owns its cache.
+func (r *Runner) LFS(ctx context.Context, repo domain.Repo, paths []string, previous LFSRuleCache) (LFSStatus, LFSRuleCache) {
+	version, installed := r.lfsCapability(ctx, repo)
+	st := LFSStatus{Installed: installed, Version: version}
+	paths = append([]string{".gitattributes"}, paths...)
+	slices.Sort(paths)
+	paths = slices.Compact(paths)
+	next := make(LFSRuleCache)
+	seen := make(map[string]bool)
+	budget := lfsPatternLimit
+	byteBudget := lfsRuleCacheBytes
 	for _, rel := range paths {
-		data, readErr := r.readLFSAttributes(ctx, repo, rel)
-		if readErr != nil {
-			err = errors.Join(err, readErr)
-			continue
+		if err := ctx.Err(); err != nil {
+			st.Err = err
+			return st, nil
 		}
-		for _, p := range parseLFSAttributes(data, lfsAttributeDir(rel)) {
+		data, err := r.readLFSAttributes(ctx, repo, rel)
+		if err != nil {
+			st.Err = err
+			return st, nil
+		}
+		digest := sha256.Sum256(data)
+		rules, ok := previous[rel]
+		if !ok || rules.digest != digest {
+			rules = lfsAttributeRules{digest, parseLFSAttributes(data, lfsAttributeDir(rel))}
+		}
+		for _, p := range rules.patterns {
 			if seen[p] {
 				continue
 			}
 			seen[p] = true
-			patterns = append(patterns, p)
-			if len(patterns) >= lfsPatternLimit {
-				return patterns, err
+			st.Patterns = append(st.Patterns, p)
+			if len(st.Patterns) == lfsPatternLimit {
+				break
 			}
 		}
+		size := len(rel)
+		for _, pattern := range rules.patterns {
+			size += len(pattern)
+		}
+		if len(next) < lfsRuleCacheEntries && len(rules.patterns) <= budget && size <= byteBudget {
+			next[rel] = rules
+			budget -= len(rules.patterns)
+			byteBudget -= size
+		}
+		if len(st.Patterns) == lfsPatternLimit {
+			break
+		}
 	}
-	return patterns, err
+	if err := ctx.Err(); err != nil {
+		st.Err = err
+		return st, nil
+	}
+	st.Managed = len(st.Patterns) > 0
+	return st, next
 }
 
 // readLFSAttributes reads one .gitattributes relative to the repository root.
@@ -288,7 +307,7 @@ func (r *Runner) readLFSAttributes(ctx context.Context, repo domain.Repo, rel st
 		if err != nil {
 			return nil, fmt.Errorf("read .gitattributes: %w", err)
 		}
-		if !c.Exists {
+		if !c.Exists || c.Symlink || c.Submodule {
 			return nil, nil
 		}
 		if c.Size > lfsAttributesMaxSize || len(c.Data) > lfsAttributesMaxSize {
@@ -297,19 +316,33 @@ func (r *Runner) readLFSAttributes(ctx context.Context, repo domain.Repo, rel st
 		return c.Data, nil
 	}
 	p := filepath.Join(repo.Root, filepath.FromSlash(rel))
-	info, err := os.Stat(p)
+	info, err := os.Lstat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("read .gitattributes: %w", err)
 	}
+	if !info.Mode().IsRegular() {
+		return nil, nil
+	}
 	if info.Size() > lfsAttributesMaxSize {
 		return nil, fmt.Errorf("read .gitattributes: file is larger than %d bytes", lfsAttributesMaxSize)
 	}
-	data, err := os.ReadFile(p)
+	f, err := os.Open(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read .gitattributes: %w", err)
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, lfsAttributesMaxSize+1))
 	if err != nil {
 		return nil, fmt.Errorf("read .gitattributes: %w", err)
+	}
+	if len(data) > lfsAttributesMaxSize {
+		return nil, fmt.Errorf("read .gitattributes: file is larger than %d bytes", lfsAttributesMaxSize)
 	}
 	return data, nil
 }

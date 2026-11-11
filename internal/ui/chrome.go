@@ -422,12 +422,12 @@ func (w *Window) paintStatus(r ui.Rect) {
 	}
 
 	x += 20
-	if rs.LFS.Managed || rs.LFSStats.Status != vapp.LFSStatsUnqueried {
+	if rs.LFS.Managed || rs.LFS.Err != nil || rs.LFSStats.Status != vapp.LFSStatsUnqueried {
 		label := w.lfsStatusLabel(rs)
 		lw := w.p.width(label, fontUI, regular)
 		lr := rect(x, r.Y, lw+8, r.Height)
 		color := w.pal.Link
-		if rs.LFS.NeedsInstall() {
+		if rs.LFS.NeedsInstall() || rs.LFS.Err != nil {
 			color = w.pal.Warning
 		}
 		if w.ws.CanRefreshLFSStats() {

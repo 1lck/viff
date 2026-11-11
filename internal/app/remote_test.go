@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -49,6 +50,17 @@ func (l *appLocalSSH) ReadFile(_ context.Context, _ domain.Repo, rel string) (gi
 
 func (l *appLocalSSH) Operation(context.Context, domain.Repo) (domain.Operation, error) {
 	return domain.Operation{}, nil
+}
+
+func (l *appLocalSSH) IndexRevision(_ context.Context, _ domain.Repo, _ string) (string, error) {
+	st, err := os.Stat(filepath.Join(l.dir, ".git", "index"))
+	if os.IsNotExist(err) {
+		return "missing", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(st.ModTime().UnixNano(), 10), nil
 }
 
 func remoteIdentity(t *testing.T, dir string) string {

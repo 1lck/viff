@@ -40,7 +40,7 @@ func TestWatchReportsChangesOnce(t *testing.T) {
 	}
 	repo := domain.Repo{Root: dir, MetaDir: filepath.Join(dir, ".git"), CommonDir: filepath.Join(dir, ".git")}
 	var worktree, meta atomic.Int32
-	w, err := Watch(repo, func(m bool) {
+	w, err := Watch(repo, func(m, _ bool) {
 		if m {
 			meta.Add(1)
 		} else {

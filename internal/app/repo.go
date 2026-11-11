@@ -214,10 +214,14 @@ func (w *Workspace) startWatcher(repo domain.Repo) {
 		return
 	}
 	state := w.Repo
-	watcher, err := w.Watch(repo, func(meta bool) {
+	watcher, err := w.Watch(repo, func(meta, overflow bool) {
 		w.post(func() {
 			if w.Repo == state {
-				w.Refresh(meta)
+				if overflow {
+					w.RefreshManually()
+				} else {
+					w.Refresh(meta)
+				}
 			}
 		})
 	})
@@ -227,7 +231,9 @@ func (w *Workspace) startWatcher(repo domain.Repo) {
 			Repo: repo.Root, Op: "watch",
 			Fields: map[string]any{"status": "error", "backend": "", "error": truncateBytes(err.Error(), 512)},
 		})
-		return
+		if watcher == nil {
+			return
+		}
 	}
 	w.watcher = watcher
 	w.record(observability.Event{
@@ -315,6 +321,15 @@ func (w *Workspace) refreshIfIdle(meta bool) bool {
 	return true
 }
 
+// RefreshManually revalidates attribute discovery even if the status keys
+// match. Watchers also use this recovery path when events were dropped.
+func (w *Workspace) RefreshManually() {
+	if rs := w.Repo; rs != nil {
+		invalidateLFSRules(rs)
+		w.Refresh(true)
+	}
+}
+
 // Refresh queries status and operation state again, and refs when meta is
 // set. Overlapping requests share one pending refresh, whose metadata scope is
 // the OR of those requests, independent of the running refresh. Each pass
@@ -334,6 +349,7 @@ func (w *Workspace) Refresh(meta bool) {
 	rs.statusSeq++
 	seq := rs.statusSeq
 	repo := rs.Repo
+	generation := rs.lfs.rules.generation
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -341,7 +357,6 @@ func (w *Workspace) Refresh(meta bool) {
 		// groups are independent, so they run concurrently instead of paying
 		// one subprocess spawn after another (which dominates first paint on
 		// Windows). Overlapping refreshes stay coalesced by rs.refreshing.
-		key := lfsAttributesKey(repo.Root)
 		var (
 			st           domain.Status
 			err          error
@@ -467,7 +482,14 @@ func (w *Workspace) Refresh(meta bool) {
 					},
 				})
 			}
-			w.refreshLFS(rs, key, meta)
+			if generation == rs.lfs.rules.generation {
+				if err == nil {
+					w.refreshLFS(rs, st)
+				} else if _, ok := w.Git.(lfsReporter); ok {
+					invalidateLFSRules(rs)
+					rs.LFS.Err = err
+				}
+			}
 			if rs.refreshMore {
 				meta := rs.refreshMeta
 				rs.refreshMore, rs.refreshMeta = false, false
