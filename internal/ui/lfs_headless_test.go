@@ -14,6 +14,7 @@ import (
 
 	vapp "viff/internal/app"
 	"viff/internal/gitcli"
+	"viff/internal/storage"
 )
 
 func TestLFSStatusMarkerCountsOnKeyboardRequest(t *testing.T) {
@@ -84,6 +85,12 @@ func testLFSStatusMarker(t *testing.T, theme string) {
 	}
 	if tip := f.win.lfsStatusTip(rs); !strings.Contains(tip, "Last counted:") || !strings.Contains(tip, "2 managed files") {
 		t.Fatalf("result tooltip = %q", tip)
+	}
+	// The timestamp follows the Time format setting like every other clock.
+	f.ws.Settings.TimeFormat = storage.TimeFormat12Hour
+	rs.LFSStats.UpdatedAt = time.Date(2026, 11, 11, 15, 4, 5, 0, time.Local)
+	if tip := f.win.lfsStatusTip(rs); !strings.Contains(tip, "2026-11-11 3:04 PM") {
+		t.Fatalf("12-hour tooltip = %q", tip)
 	}
 	copied := copySeam(f)
 	for _, item := range f.win.gitMenu() {

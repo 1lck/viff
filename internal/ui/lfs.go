@@ -68,7 +68,7 @@ func (w *Window) lfsStatusTip(rs *vapp.RepoState) string {
 	}
 	if !rs.LFSStats.UpdatedAt.IsZero() {
 		lines = append(lines, w.t(i18n.ChromeTipLFSFiles, len(rs.LFSStats.Files)),
-			w.t(i18n.LFSStatsUpdated, rs.LFSStats.UpdatedAt.Local().Format("2006-01-02 15:04:05")))
+			w.t(i18n.LFSStatsUpdated, rs.LFSStats.UpdatedAt.Local().Format("2006-01-02 "+w.clockLayout())))
 	} else if rs.LFSStats.Status == vapp.LFSStatsUnqueried {
 		lines = append(lines, w.t(i18n.LFSStatsUnqueried))
 	}
