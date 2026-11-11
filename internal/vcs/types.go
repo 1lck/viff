@@ -80,9 +80,14 @@ type CommitOptions struct {
 	Amend    bool
 	SignOff  bool
 	NoVerify bool
-	// Paths, when set, commits only these paths. For Git this is
-	// `git commit --only`; for Subversion it is the natural way to commit
-	// because there is no index, so the same field serves both.
+	// Paths, when set, is the commit's scope: exactly these paths, using
+	// their current working-copy content. For Git this is
+	// `git commit --only`, which leaves staged changes to paths outside the
+	// set staged and out of the commit; an untracked path is recorded as
+	// intent-to-add for the duration of the commit. For Subversion it is the
+	// natural way to commit because there is no index, so the same field
+	// serves both. Empty means the backend's default scope: the index for
+	// Git, every scheduled change for Subversion.
 	Paths []string
 }
 

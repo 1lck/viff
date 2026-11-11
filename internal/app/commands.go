@@ -280,28 +280,45 @@ type CommitRequest struct {
 	Amend    bool
 	SignOff  bool
 	NoVerify bool
-	// Paths is the target set of this commit. A backend without an index
-	// (Subversion) has no other way to commit a subset: the paths the user
-	// checked are what gets committed. Empty means every scheduled change.
-	// A backend with an index ignores it and commits what is staged.
+	// Paths is the checked commit scope. For a backend with an index (Git)
+	// the commit records exactly these paths' current working-tree content
+	// (`git commit --only`), so staged changes to other paths stay staged and
+	// out of this commit; an empty list keeps the default "commit the index"
+	// scope. A backend without an index (Subversion) commits these paths
+	// directly; empty means every scheduled change.
 	Paths []string
 	// Push pushes after a successful commit.
 	Push bool
 }
 
-// Commit records the staged changes. Hooks run with the user's environment;
-// a failing hook fails the commit and its output is shown.
+// errCommitScopeBlocked reports that an operation in progress records the
+// whole index, so checked files cannot be committed on their own. Git refuses
+// a partial commit while a merge or cherry-pick is in progress.
+var errCommitScopeBlocked = errors.New("a merge or cherry-pick in progress commits the whole index, not the checked files")
+
+// Commit records the index, or the checked paths' working-tree content. Hooks
+// run with the user's environment; a failing hook fails the commit and its
+// output is shown. after runs only on success, which is what keeps a failed
+// "commit and push" from pushing.
 func (w *Workspace) Commit(req CommitRequest, after func()) {
-	staged, _, _, _ := w.Repo.Status.Counts()
+	rs := w.Repo
+	if rs == nil {
+		return
+	}
+	staged, _, _, _ := rs.Status.Counts()
 	// What the notice counts is what was committed. Without an index the
 	// staged count is always zero, so the notice would claim "0 files
 	// committed" for every Subversion commit.
 	committed := staged
-	if !w.Caps.Index {
+	switch {
+	case len(req.Paths) > 0 && w.Caps.Index:
+		// A rename's two sides are one checked file; count the status entries
+		// the path set covers, not the paths themselves.
+		committed = commitScopeCount(rs.Status, req.Paths)
+	case len(req.Paths) > 0:
+		committed = len(req.Paths)
+	case !w.Caps.Index:
 		committed = w.CommittableCount()
-		if len(req.Paths) > 0 {
-			committed = len(req.Paths)
-		}
 	}
 	subject := strings.SplitN(strings.TrimSpace(req.Message), "\n", 2)[0]
 	body := w.trPlural(committed, i18n.AppNoticeCommittedBody, i18n.AppNoticeCommittedBodyMany, committed, subject)
@@ -313,9 +330,92 @@ func (w *Workspace) Commit(req CommitRequest, after func()) {
 		spec.kind = undoAmend
 	}
 	w.run("Commit", spec, func(ctx context.Context, repo domain.Repo, _ func(string)) error {
+		if len(req.Paths) > 0 && w.Caps.Index {
+			// The selection came from the view; requery before writing so a
+			// file committed, reverted or staged elsewhere is never committed
+			// from a stale row.
+			if err := w.checkCommitScope(ctx, repo, req.Paths); err != nil {
+				return err
+			}
+		}
 		_, err := w.Git.Commit(ctx, repo, gitcli.CommitOptions{Message: req.Message, Amend: req.Amend, SignOff: req.SignOff, NoVerify: req.NoVerify, Paths: req.Paths})
 		return err
-	}, RunOptions{Success: w.tr(i18n.AppNoticeCommitted), SuccessBody: body, After: after})
+	}, RunOptions{Success: w.tr(i18n.AppNoticeCommitted), SuccessBody: body, After: after, OnError: func(err error) bool {
+		switch {
+		case errors.Is(err, errCommitScopeBlocked):
+			w.Notify(NoticeWarning, w.tr(i18n.AppNoticeCommitScopeBlocked), w.tr(i18n.AppNoticeCommitScopeBlockedBody))
+			return true
+		case errors.Is(err, ErrStale):
+			w.Notify(NoticeWarning, w.tr(i18n.AppNoticeCommitScopeChanged), w.tr(i18n.AppNoticeCommitScopeChangedBody))
+			return true
+		}
+		return false
+	}})
+}
+
+// checkCommitScope requeries the paths a scoped commit is about to record. A
+// path that is no longer changed, a new conflict, or a merge/cherry-pick that
+// started since the view was built makes the selection stale; the caller
+// refreshes and asks the user to choose again instead of committing a
+// different range.
+func (w *Workspace) checkCommitScope(ctx context.Context, repo domain.Repo, paths []string) error {
+	switch w.Git.Operation(ctx, repo).Kind {
+	case domain.OpMerge, domain.OpCherryPick:
+		return errCommitScopeBlocked
+	}
+	status, err := w.Git.Status(ctx, repo)
+	if err != nil {
+		return err
+	}
+	if _, _, _, conflicts := status.Counts(); conflicts > 0 {
+		return ErrStale
+	}
+	wanted := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		wanted[p] = true
+	}
+	changed := make(map[string]bool, len(paths))
+	for _, e := range status.Entries {
+		if e.Conflicted() || e.Ignored() {
+			continue
+		}
+		if wanted[e.Path] {
+			changed[e.Path] = true
+		}
+		// A staged rename is one status entry with two paths; checking the row
+		// commits both sides, so both count as changed.
+		if e.OrigPath != "" && wanted[e.OrigPath] {
+			changed[e.OrigPath] = true
+		}
+	}
+	for _, p := range paths {
+		if !changed[p] {
+			return ErrStale
+		}
+	}
+	return nil
+}
+
+// commitScopeCount counts the status entries a path set covers. It is only
+// used for the success notice; the commit itself is driven by Git.
+func commitScopeCount(status domain.Status, paths []string) int {
+	if len(paths) == 0 {
+		return 0
+	}
+	wanted := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		wanted[p] = true
+	}
+	count := 0
+	for _, e := range status.Entries {
+		if e.Ignored() {
+			continue
+		}
+		if wanted[e.Path] || (e.OrigPath != "" && wanted[e.OrigPath]) {
+			count++
+		}
+	}
+	return count
 }
 
 // LastMessage loads HEAD's message for amend.

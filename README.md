@@ -59,7 +59,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Work                  | What Viff provides                                                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Review changes        | Side-by-side diffs with resizable panes and collapsible unchanged stretches, unified diffs, syntax and word highlighting, search, synchronized scrolling, tabs, picture previews, change marks on the right edge   |
-| Build a commit        | Check files, folders, or groups; stage files, hunks, or lines; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
+| Build a commit        | Check files, folders, or groups to commit exactly those files from the working tree, or stage files, hunks, or lines and commit the index; roll back, amend, sign off, and commit/push; fold the editor or write the message with a model |
 | Organize work         | Multiple repositories with per-repository commit drafts, a Project panel that groups the workspace and switches the active repository, directory grouping, named ChangeLists, and discovery of repositories below a parent folder |
 | Read history          | Commit graph, branch/author/path filters, multi-commit changed-file views, blame, reflog, and revision tree browsing                                          |
 | Browse and edit files | Project tool window with folders, status colours, Quick Open, read-only viewing with an optional code map, blame, file history, and editing of working-tree UTF-8 text files (up to 1 MiB, saved text included) |
@@ -81,11 +81,18 @@ Use ↑/↓ and Enter to apply a filter, or Esc to cancel.
 **The interface is English by default; switch it to Simplified Chinese in
 Settings → General → Language.**
 
-**ChangeLists group files; they do not create separate Git indexes.** A commit
-includes **all staged files**, even when a list filter is active. Filtered bulk
-staging only stages visible files. Checking a file selects it for bulk actions;
-it does not stage it. When checked files are not staged, the Commit panel offers
-**Stage Selected** and stages only those files.
+**ChangeLists group files; they do not create separate Git indexes.** Checking
+files makes them the commit scope: **Commit** and **Commit and Push…** record
+exactly the checked files from the working tree — modifications, new or
+untracked files, and deletions — without staging them first. Unchecked staged
+files stay staged and out of that commit. With nothing checked the old default
+is unchanged: the commit includes **all staged files**, even when a list filter
+is active, and filtered bulk staging only stages visible files. Checking never
+stages; **Stage Selected** remains for fine-grained staging. When a checked file
+has both staged and unstaged changes the panel says that the working-tree
+version will be committed and asks first; a merge or cherry-pick in progress
+can only commit the whole index, so it asks you to uncheck the files or finish
+the operation.
 
 **AI commit messages are optional and off by default.** When enabled, the changed
 files and their diffs are sent to the endpoint you configure, together with the

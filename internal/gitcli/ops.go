@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"viff/internal/domain"
 	"viff/internal/vcs"
@@ -94,8 +96,26 @@ func (r *Runner) writePaths(ctx context.Context, repo domain.Repo, args []string
 	return err
 }
 
-// Commit records the index (or Paths) with the message.
+// Commit records the index, or only Paths' working-tree content.
+//
+// With Paths set, `git commit --only` builds the commit from HEAD's tree plus
+// the working-tree version of exactly those paths: staged changes to other
+// paths stay staged and out of the commit. Git rejects a pathspec it cannot
+// resolve, so an untracked checked path is first recorded as intent-to-add.
+// A failed or cancelled commit removes those entries again, leaving the file
+// untracked; the index then looks exactly as it did before the attempt.
 func (r *Runner) Commit(ctx context.Context, repo domain.Repo, o CommitOptions) (Output, error) {
+	args := commitArgs(o)
+	paths := uniquePaths(o.Paths)
+	if len(paths) == 0 {
+		out, err := r.RunInput(ctx, repo.Root, []byte(o.Message), args...)
+		return Output{Stdout: string(out)}, err
+	}
+	return r.commitPaths(ctx, repo, o, paths, args)
+}
+
+// commitArgs is the option set both commit paths share.
+func commitArgs(o CommitOptions) []string {
 	args := []string{"commit", "--file=-", "--cleanup=strip"}
 	if o.Amend {
 		args = append(args, "--amend")
@@ -106,8 +126,98 @@ func (r *Runner) Commit(ctx context.Context, repo domain.Repo, o CommitOptions) 
 	if o.NoVerify {
 		args = append(args, "--no-verify")
 	}
-	out, err := r.RunInput(ctx, repo.Root, []byte(o.Message), args...)
+	return args
+}
+
+// commitPaths runs the partial commit. The commit message keeps stdin (it can
+// be long and must not appear in argv), so the pathspec goes through a NUL
+// file instead; that keeps any number of paths with spaces, quotes or leading
+// dashes literal.
+func (r *Runner) commitPaths(ctx context.Context, repo domain.Repo, o CommitOptions, paths, args []string) (Output, error) {
+	wanted := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		wanted[p] = true
+	}
+	status, err := r.Status(ctx, repo)
+	if err != nil {
+		return Output{}, err
+	}
+	var added []string
+	for _, e := range status.Entries {
+		if e.Untracked() && wanted[e.Path] {
+			added = append(added, e.Path)
+		}
+	}
+	if len(added) > 0 {
+		if err := r.writePaths(ctx, repo, []string{"add", "--intent-to-add"}, added); err != nil {
+			// A path can disappear between the status query and the add. Remove
+			// whatever the add did record before the path list is committed.
+			if cleanupErr := r.dropIntentToAdd(ctx, repo, added); cleanupErr != nil {
+				err = errors.Join(err, fmt.Errorf("restore intent-to-add paths: %w", cleanupErr))
+			}
+			return Output{}, err
+		}
+	}
+	spec, err := os.CreateTemp("", "viff-commit-paths-")
+	if err != nil {
+		err = fmt.Errorf("create pathspec file: %w", err)
+		if cleanupErr := r.dropIntentToAdd(ctx, repo, added); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("restore intent-to-add paths: %w", cleanupErr))
+		}
+		return Output{}, err
+	}
+	name := spec.Name()
+	defer os.Remove(name)
+	_, writeErr := spec.WriteString(strings.Join(paths, "\x00"))
+	if closeErr := spec.Close(); writeErr == nil {
+		writeErr = closeErr
+	}
+	if writeErr != nil {
+		writeErr = fmt.Errorf("write pathspec file: %w", writeErr)
+		if cleanupErr := r.dropIntentToAdd(ctx, repo, added); cleanupErr != nil {
+			writeErr = errors.Join(writeErr, fmt.Errorf("restore intent-to-add paths: %w", cleanupErr))
+		}
+		return Output{}, writeErr
+	}
+	full := append([]string{"--literal-pathspecs"}, args...)
+	full = append(full, "--only", "--pathspec-from-file="+name, "--pathspec-file-nul")
+	out, err := r.RunInput(ctx, repo.Root, []byte(o.Message), full...)
+	if err != nil {
+		// Replace the entries the failed commit needed with the untracked
+		// state the user saw. A cancelled commit still runs the cleanup on a
+		// detached context: cancelling a write is not a rollback.
+		if cleanupErr := r.dropIntentToAdd(ctx, repo, added); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("restore intent-to-add paths: %w", cleanupErr))
+		}
+	}
 	return Output{Stdout: string(out)}, err
+}
+
+// dropIntentToAdd removes the index entries commitPaths added for untracked
+// paths, so they are untracked again. It uses a context detached from a
+// cancelled commit; the timeout bounds a repository that stopped answering.
+func (r *Runner) dropIntentToAdd(ctx context.Context, repo domain.Repo, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	return r.writePaths(cleanup, repo, []string{"rm", "--cached", "-q", "--ignore-unmatch"}, paths)
+}
+
+// uniquePaths removes empty and repeated paths while keeping the caller's
+// order, so one file checked through two rows is committed once.
+func uniquePaths(paths []string) []string {
+	seen := make(map[string]bool, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 // LastCommitMessage returns HEAD's full message, for amend.
