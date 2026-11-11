@@ -88,6 +88,9 @@ harness asserts two stash and two worktree queries in each run. A Windows Job
 Object around each Git command in the measured open/refresh workload accounted
 for its entire process tree, including git-lfs and its Git children; CPU time
 excludes fixture setup and the artificial wait. Each version was measured once.
+The fixture leaves `Workspace.Watch` unset and injects one burst of requests;
+it stops after the two refresh passes settle. Its pointer files share one blob,
+and it contains no untracked-file workload.
 
 2026 年 11 月 11 日的对照环境为 Windows 11 Pro x64、Go 1.27.3、
 Git 2.45.1.windows.1、Git LFS 3.5.1。两版使用同样的隔离夹具结构：
@@ -96,7 +99,8 @@ Git 2.45.1.windows.1、Git LFS 3.5.1。两版使用同样的隔离夹具结构�
 和修复版。必备接口和可选能力共用一个计量 Runner，夹具断言每版各包含两条 stash、
 两条 worktree 查询。被测打开与刷新流程的每条 Git 命令置于 Windows Job Object 内，
 统计完整进程树，含 git-lfs 及其 Git 子进程；CPU 时间不含夹具搭建和人为等待。
-每版各测一次。
+每版各测一次。夹具未设置 `Workspace.Watch`，只注入一批请求，并在两轮刷新完成后
+结束。所有指针文件共用一个 blob，未构造未跟踪文件负载。
 
 | Metric / 指标 | Before / 修复前 | After / 修复后 |
 | --- | --- | --- |
@@ -107,8 +111,8 @@ Git 2.45.1.windows.1、Git LFS 3.5.1。两版使用同样的隔离夹具结构�
 | Worktree queries / worktree 查询 | 2 | 2 |
 | LFS commands / LFS 命令 | 5 | 3 |
 | LFS listing attempts / LFS 枚举命令 | 4 | 2 |
-| Git process-tree CPU / Git 进程树 CPU | 18,734 ms | 11,203 ms |
-| LFS process-tree CPU (included above) / LFS 进程树 CPU（已含在上项） | 14,484 ms | 6,938 ms |
+| Git process-tree CPU time / Git 进程树 CPU 时间 | 18,734 ms | 11,203 ms |
+| LFS process-tree CPU time (included above) / LFS 进程树 CPU 时间（已含在上项） | 14,484 ms | 6,938 ms |
 | Follow-up duration / 补刷耗时 | 15,580 ms | 2,778 ms |
 
 The old version started a second metadata refresh about 34.0 seconds after
@@ -121,6 +125,23 @@ load determine timings in a real repository.
 旧版在首轮开始约 34.0 秒后启动第二次元数据刷新；修复版完成一次元数据刷新后按普通
 范围补刷。LFS 3.5.1 拒绝 `ls-files -z`，每次枚举包含已有的换行格式回退，因此会有
 两条枚举命令。此夹具验证合并行为；实际仓库耗时取决于规模、缓存和磁盘负载。
+
+Using the unrounded counters, `(before - after) / before` gives a 40.20%
+reduction in accumulated Git process-tree CPU time and 52.10% for the included
+LFS trees over these two passes. These percentages describe the synthetic
+workload's CPU time; Viff's own CPU use and whole-machine utilization need
+separate measurements. The unchanged 30-second LFS expiry and metadata-triggered
+enumeration still add background work. To report a change in sustained desktop
+CPU utilization, measure both versions over the same fixed observation period
+with the real watcher enabled, separate startup from steady state, repeat the
+comparison, and record utilization, CPU time, scan counts, and scan-free gaps.
+
+按未舍入的计数器用 `(改前 - 改后) / 改前` 计算，这两轮查询的 Git 进程树累计 CPU
+时间下降 40.20%，其中 LFS 进程树下降 52.10%。百分比描述的是这组合成负载的 CPU
+时间；Viff 本体与整机 CPU 使用率需要另行测量。现有的 30 秒 LFS 过期重查与元数据
+触发枚举仍会产生后台负载。报告桌面持续 CPU 使用率变化时，应在两版启用真实监听器、
+使用相同的固定观察时长，将启动阶段与稳定运行阶段分开，重复对照，并记录使用率、
+CPU 时间、扫描次数和无扫描间隔。
 
 The November 4, 2026 acceptance used macOS development builds and native Windows
 test executables running on Windows Server 2022 Datacenter x64, Git
