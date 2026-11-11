@@ -30,9 +30,15 @@ import (
 // repository is served by the distro's git, whose configuration, credentials,
 // signing and hooks live on the Linux side (ADR 0038).
 func (r *Runner) wslCommand(ctx context.Context, dir string, args []string) (*exec.Cmd, error) {
+	return r.wslProgram(ctx, dir, append([]string{"git"}, append(append([]string{}, baseArgs...), args...)...))
+}
+
+// wslProgram also serves the fixed, EOF-guarded LFS read wrapper. Values remain
+// separate argv entries even when the program itself is a static shell script.
+func (r *Runner) wslProgram(ctx context.Context, dir string, program []string) (*exec.Cmd, error) {
 	distro, linuxDir, ok := wslpath.Split(dir)
 	if !ok {
-		return nil, &Error{Kind: ErrNoWSL, Args: args, Err: fmt.Errorf("%s is not a WSL path", dir)}
+		return nil, &Error{Kind: ErrNoWSL, Err: fmt.Errorf("%s is not a WSL path", dir)}
 	}
 	if err := r.probeWSL(ctx, distro); err != nil {
 		return nil, err
@@ -41,10 +47,9 @@ func (r *Runner) wslCommand(ctx context.Context, dir string, args []string) (*ex
 	if err != nil {
 		return nil, err
 	}
-	full := make([]string, 0, len(args)+len(baseArgs)+16)
-	full = append(full, "-d", distro, "--cd", linuxDir, "--exec", "git")
-	full = append(full, baseArgs...)
-	full = append(full, args...)
+	full := make([]string, 0, len(program)+16)
+	full = append(full, "-d", distro, "--cd", linuxDir, "--exec")
+	full = append(full, program...)
 	cmd := exec.CommandContext(ctx, wsl, full...)
 	// A GUI build has no console; without this every Git command would open
 	// and flash its own console window on Windows.

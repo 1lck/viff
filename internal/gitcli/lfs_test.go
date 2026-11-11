@@ -107,6 +107,11 @@ func TestParseLFSFiles(t *testing.T) {
 	}
 }
 
+func detectTestLFS(tr *testRepo) LFSStatus {
+	st, _ := tr.r.LFS(ctx, tr.repo, nil, nil)
+	return st
+}
+
 func TestLFSDetectsRulesWhenGitLFSMissing(t *testing.T) {
 	tr := newTestRepo(t)
 	tr.write(".gitattributes", "# assets\n*.bin filter=lfs diff=lfs merge=lfs -text\n*.psd -filter\n")
@@ -116,7 +121,7 @@ func TestLFSDetectsRulesWhenGitLFSMissing(t *testing.T) {
 		probes++
 		return nil, errors.New("git: 'lfs' is not a git command")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
+	st := detectTestLFS(tr)
 	if st.Installed {
 		t.Fatalf("Installed = true without git-lfs; state = %+v", st)
 	}
@@ -132,21 +137,18 @@ func TestLFSDetectsRulesWhenGitLFSMissing(t *testing.T) {
 	if want := []string{"*.bin"}; !reflect.DeepEqual(st.Patterns, want) {
 		t.Fatalf("Patterns = %v, want %v", st.Patterns, want)
 	}
-	if len(st.Files) != 0 {
-		t.Fatalf("Files = %v, want none without git-lfs", st.Files)
-	}
 	if st.Err != nil {
 		t.Fatalf("missing git-lfs is not an error: %v", st.Err)
 	}
 
 	// The capability probe is cached for the process; the rule scan still
 	// answers without it.
-	if second := tr.r.LFS(ctx, tr.repo); !second.Managed || probes != 1 {
+	if second := detectTestLFS(tr); !second.Managed || probes != 1 {
 		t.Fatalf("second detection = %+v, probes = %d", second, probes)
 	}
 }
 
-func TestLFSInstalledListsFilesAndCachesProbe(t *testing.T) {
+func TestLFSDetectionDoesNotListFilesAndCachesProbe(t *testing.T) {
 	tr := newTestRepo(t)
 	tr.write(".gitattributes", "assets/*.bin filter=lfs\n")
 	probes, listings := 0, 0
@@ -161,27 +163,26 @@ func TestLFSInstalledListsFilesAndCachesProbe(t *testing.T) {
 		}
 		return nil, errors.New("unexpected git-lfs command")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
+	st := detectTestLFS(tr)
 	if !st.Installed || st.Version != "git-lfs/9.9.9 (fake build)" {
 		t.Fatalf("installed state = %+v", st)
 	}
 	if !st.Managed || st.NeedsInstall() {
 		t.Fatalf("managed state = %+v", st)
 	}
-	if want := []string{"assets/a.bin", "assets/b.bin"}; !reflect.DeepEqual(st.Files, want) {
-		t.Fatalf("Files = %v, want %v", st.Files, want)
-	}
 	if st.Err != nil {
 		t.Fatalf("Err = %v", st.Err)
 	}
-	if second := tr.r.LFS(ctx, tr.repo); len(second.Files) != 2 {
-		t.Fatalf("second Files = %v", second.Files)
+	detectTestLFS(tr)
+	if probes != 1 || listings != 0 {
+		t.Fatalf("automatic probes = %d, listings = %d, want 1 and 0", probes, listings)
 	}
-	if probes != 1 {
-		t.Fatalf("git lfs version probed %d times, want 1", probes)
+	files, err := tr.r.LFSFiles(ctx, tr.repo)
+	if want := []string{"assets/a.bin", "assets/b.bin"}; err != nil || !reflect.DeepEqual(files, want) {
+		t.Fatalf("explicit listing = %v, %v, want %v", files, err, want)
 	}
-	if listings != 2 {
-		t.Fatalf("managed files listed %d times, want 2", listings)
+	if listings != 1 {
+		t.Fatalf("managed files listed %d times, want 1", listings)
 	}
 }
 
@@ -194,18 +195,15 @@ func TestLFSListFailureKeepsRulesAndDiagnostic(t *testing.T) {
 		}
 		return nil, errors.New("listing failed")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
+	st := detectTestLFS(tr)
 	if !st.Installed {
 		t.Fatal("Installed = false with a working probe")
 	}
-	if !st.Managed || len(st.Files) != 0 {
-		t.Fatalf("state = %+v, want rules kept and no files", st)
+	if !st.Managed || st.Err != nil {
+		t.Fatalf("state = %+v, want rules and no detection error", st)
 	}
-	if st.Err == nil {
-		t.Fatal("Err = nil after a failed file listing")
-	}
-	if got := CodeOf(st.Err); got != "git.failed" {
-		t.Fatalf("CodeOf(Err) = %q, want git.failed", got)
+	if _, err := tr.r.LFSFiles(ctx, tr.repo); err == nil || CodeOf(err) != "git.failed" {
+		t.Fatalf("list error = %v, want git.failed", err)
 	}
 }
 
@@ -214,7 +212,7 @@ func TestLFSRepositoryWithoutRulesIsNotManaged(t *testing.T) {
 	tr.r.LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 		return nil, errors.New("missing")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
+	st := detectTestLFS(tr)
 	if st.Managed || st.NeedsInstall() || len(st.Patterns) != 0 {
 		t.Fatalf("state = %+v, want a non-LFS repository", st)
 	}
@@ -224,13 +222,13 @@ func TestLFSReadsNestedAttributeFile(t *testing.T) {
 	tr := newTestRepo(t)
 	tr.write(".gitattributes", "*.bin filter=lfs\n")
 	tr.write("assets/.gitattributes", "*.psd filter=lfs\n")
-	st := tr.r.LFS(ctx, tr.repo)
+	st, _ := tr.r.LFS(ctx, tr.repo, []string{"assets/.gitattributes"}, nil)
 	if want := []string{"*.bin", "assets/*.psd"}; !reflect.DeepEqual(st.Patterns, want) {
 		t.Fatalf("Patterns = %v, want %v", st.Patterns, want)
 	}
 }
 
-func TestLFSFallsBackToNewlineListing(t *testing.T) {
+func TestLFSFallsBackToJSONListing(t *testing.T) {
 	tr := newTestRepo(t)
 	tr.write(".gitattributes", "*.bin filter=lfs\n")
 	tr.r.LFSCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
@@ -243,15 +241,45 @@ func TestLFSFallsBackToNewlineListing(t *testing.T) {
 					return nil, errors.New("unknown flag -z")
 				}
 			}
-			return []byte("assets/a.bin\r\nassets/b.bin\n"), nil
+			return []byte(`{"files":[{"name":"assets/a.bin"},{"name":"assets/a\nb.bin"}]}`), nil
 		}
 		return nil, errors.New("unexpected command")
 	}
-	st := tr.r.LFS(ctx, tr.repo)
-	if want := []string{"assets/a.bin", "assets/b.bin"}; !reflect.DeepEqual(st.Files, want) {
-		t.Fatalf("Files = %v, want %v (Err = %v)", st.Files, want, st.Err)
+	files, err := tr.r.LFSFiles(ctx, tr.repo)
+	if want := []string{"assets/a.bin", "assets/a\nb.bin"}; err != nil || !reflect.DeepEqual(files, want) {
+		t.Fatalf("Files = %v, want %v (err = %v)", files, want, err)
 	}
-	if st.Err != nil {
-		t.Fatalf("Err = %v, want nil after the fallback succeeded", st.Err)
+}
+
+func TestLFSInputsSupportsUnbornAndStagedBlobChanges(t *testing.T) {
+	tr := newTestRepo(t)
+	first, err := tr.r.LFSInputs(ctx, tr.repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr.write("staged.txt", "one\n")
+	tr.git("add", "staged.txt")
+	second, err := tr.r.LFSInputs(ctx, tr.repo)
+	if err != nil || first == second {
+		t.Fatalf("unborn index change not detected: %v", err)
+	}
+	tr.write("staged.txt", "two\n")
+	tr.git("add", "staged.txt")
+	third, err := tr.r.LFSInputs(ctx, tr.repo)
+	if err != nil || second == third {
+		t.Fatalf("restaged blob change not detected: %v", err)
+	}
+}
+
+func TestLFSJSONRejectsIncompleteOutput(t *testing.T) {
+	for _, raw := range []string{`{}`, `null`, `{"files":[{}]}`, `{"files":[`} {
+		if _, err := parseLFSJSON([]byte(raw)); err == nil {
+			t.Fatalf("accepted an incomplete JSON file list: %q", raw)
+		}
+	}
+	for _, raw := range []string{`{"files":[]}`, `{"files":null}`} {
+		if files, err := parseLFSJSON([]byte(raw)); err != nil || len(files) != 0 {
+			t.Fatalf("empty files array = %v, %v", files, err)
+		}
 	}
 }

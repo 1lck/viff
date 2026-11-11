@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,17 @@ func (l *uiLocalSSH) ReadFile(_ context.Context, _ domain.Repo, rel string) (git
 
 func (l *uiLocalSSH) Operation(context.Context, domain.Repo) (domain.Operation, error) {
 	return domain.Operation{}, nil
+}
+
+func (l *uiLocalSSH) IndexRevision(_ context.Context, _ domain.Repo, _ string) (string, error) {
+	st, err := os.Stat(filepath.Join(l.dir, ".git", "index"))
+	if os.IsNotExist(err) {
+		return "missing", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(st.ModTime().UnixNano(), 10), nil
 }
 
 // TestRemoteRepositoryReadOnly opens a repository through the SSH path with
