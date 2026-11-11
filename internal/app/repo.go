@@ -504,6 +504,23 @@ func (w *Workspace) Refresh(meta bool) {
 	}()
 }
 
+// lfsEventFields is the log-safe part of an LFS snapshot: flags and counts
+// only, never a pattern, path or file name. The error is the classified code,
+// matching how git.fail reports failures.
+func lfsEventFields(st gitcli.LFSStatus, stats LFSStats) map[string]any {
+	fields := map[string]any{
+		"installed": st.Installed,
+		"managed":   st.Managed,
+		"patterns":  len(st.Patterns),
+		"files":     len(stats.Files),
+		"status":    stats.Status,
+	}
+	if st.Err != nil {
+		fields["error"] = gitcli.CodeOf(st.Err)
+	}
+	return fields
+}
+
 func refsFingerprint(refs []domain.Ref, branch domain.BranchStatus) string {
 	var b strings.Builder
 	b.WriteString(branch.Head)

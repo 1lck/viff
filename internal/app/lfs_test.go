@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -95,7 +96,7 @@ func TestLFSRuleDetectionDoesNotDelayStatus(t *testing.T) {
 	}
 	defer f.w.Close()
 	f.open()
-	awaitLFS(t, started, "rule probe")
+	awaitQuery(t, started, "rule probe")
 	if _, _, untracked, _ := f.w.Repo.Status.Counts(); untracked != 1 {
 		t.Fatalf("status did not show changes during rule detection: %+v", f.w.Repo.Status)
 	}
@@ -170,7 +171,7 @@ func newLFSStatsFixture(t *testing.T) (*fixture, *lfsTestBackend) {
 	return f, b
 }
 
-func awaitLFS(t *testing.T, ch <-chan struct{}, what string) {
+func awaitQuery(t *testing.T, ch <-chan struct{}, what string) {
 	t.Helper()
 	select {
 	case <-ch:
@@ -187,7 +188,7 @@ func TestLFSStatsIndependentAndKeepsLastSuccess(t *testing.T) {
 	}
 	q := backend.next(nil, nil)
 	f.w.RefreshLFSStats()
-	awaitLFS(t, q.started, "listing")
+	awaitQuery(t, q.started, "listing")
 	for range 4 {
 		f.w.RefreshLFSStats()
 	}
@@ -226,7 +227,7 @@ func TestLFSStatsRejectsRestagingWithSameStatusLetter(t *testing.T) {
 	f.settle(f.idle)
 	q := backend.next(nil, nil)
 	f.w.RefreshLFSStats()
-	awaitLFS(t, q.started, "listing")
+	awaitQuery(t, q.started, "listing")
 	f.write("model.bin", "second staged content\n")
 	f.git("add", "model.bin")
 	// No status refresh before the scan returns: its own before/after guard
@@ -250,68 +251,53 @@ func TestLFSStatsRejectsRestagingWithSameStatusLetter(t *testing.T) {
 	}
 }
 
-func TestLFSStatsCancelsOnSwitchAndReservesWorktreeUntilExit(t *testing.T) {
-	f, backend := newLFSStatsFixture(t)
-	other := t.TempDir()
-	f.git("worktree", "add", "-b", "other", other)
-	reap := make(chan struct{})
-	released := false
-	defer func() {
-		if !released {
-			close(reap)
-		}
-	}()
-	q := backend.next(nil, reap)
-	f.w.RefreshLFSStats()
-	awaitLFS(t, q.started, "listing")
-	old := f.w.Repo
-	f.w.Open(other, nil)
-	f.settle(func() bool { return f.w.Repo != old && f.w.CanRefreshLFSStats() })
-	awaitLFS(t, q.canceled, "cancellation on switch")
-	f.open()
-	reopened := f.w.Repo
-	f.settle(func() bool { return reopened.LFS.Installed })
-	f.w.RefreshLFSStats()
-	if reopened == old || reopened.LFSStats.Status != LFSStatsUnqueried || backend.calls.Load() != 1 {
-		t.Fatalf("a reopened worktree reused or started a scan before exit: %+v", reopened.LFSStats)
-	}
-	// Let the canceled scan finish; a new query is allowed without applying
-	// the old result to the new repository generation.
-	close(reap)
-	released = true
-	awaitLFS(t, q.finished, "canceled listing to finish")
-	f.settle(f.w.CanRefreshLFSStats)
-	if reopened.LFSStats.Status != LFSStatsUnqueried {
-		t.Fatalf("late result overwrote reopened stats: %+v", reopened.LFSStats)
-	}
-}
-
-func TestLFSStatsCloseReopenAndHEADChange(t *testing.T) {
-	f, backend := newLFSStatsFixture(t)
-	q := backend.next(nil, nil)
-	f.w.RefreshLFSStats()
-	awaitLFS(t, q.started, "listing")
-	old := f.w.Repo
-	f.w.Close()
-	awaitLFS(t, q.canceled, "close cancellation")
-	awaitLFS(t, q.finished, "listing exit")
-	f.open()
-	rs := f.w.Repo
-	f.settle(f.w.CanRefreshLFSStats)
-	if rs == old || rs.Gen == old.Gen || rs.LFSStats.Status != LFSStatsUnqueried {
-		t.Fatalf("reopened state = %+v", rs.LFSStats)
-	}
-	q = backend.next(nil, nil)
-	f.w.RefreshLFSStats()
-	awaitLFS(t, q.started, "second listing")
-	f.git("commit", "--allow-empty", "-m", "external HEAD change")
-	f.w.Refresh(true)
-	f.settle(f.idle)
-	awaitLFS(t, q.canceled, "HEAD invalidation")
-	awaitLFS(t, q.finished, "invalidated listing exit")
-	f.settle(f.w.CanRefreshLFSStats)
-	if s := rs.LFSStats; s.Status != LFSStatsStale || !s.UpdatedAt.IsZero() || backend.calls.Load() != 2 {
-		t.Fatalf("invalidated result = %+v, calls = %d", s, backend.calls.Load())
+func TestLFSStatsCancellationReservesWorktreeUntilExit(t *testing.T) {
+	for _, action := range []string{"switch", "close"} {
+		t.Run(action, func(t *testing.T) {
+			f, backend := newLFSStatsFixture(t)
+			reap := make(chan struct{})
+			release := sync.OnceFunc(func() { close(reap) })
+			defer release()
+			q := backend.next(nil, reap)
+			f.w.RefreshLFSStats()
+			awaitQuery(t, q.started, "listing")
+			old := f.w.Repo
+			if action == "switch" {
+				other := t.TempDir()
+				f.git("worktree", "add", "-b", "other", other)
+				f.w.Open(other, nil)
+				f.settle(func() bool { return f.w.Repo != old && f.w.CanRefreshLFSStats() })
+			} else {
+				f.w.Close()
+			}
+			awaitQuery(t, q.canceled, "listing cancellation")
+			f.open()
+			rs := f.w.Repo
+			f.settle(func() bool { return rs.LFS.Installed })
+			f.w.RefreshLFSStats()
+			if rs == old || rs.Gen == old.Gen || rs.LFSStats.Status != LFSStatsUnqueried || backend.calls.Load() != 1 {
+				t.Fatalf("reopened worktree reused or started a scan before exit: %+v", rs.LFSStats)
+			}
+			// Reaping releases the reservation without applying the old result.
+			release()
+			awaitQuery(t, q.finished, "canceled listing exit")
+			f.settle(f.w.CanRefreshLFSStats)
+			if rs.LFSStats.Status != LFSStatsUnqueried {
+				t.Fatalf("late result overwrote reopened stats: %+v", rs.LFSStats)
+			}
+			q = backend.next(nil, nil)
+			f.w.RefreshLFSStats()
+			awaitQuery(t, q.started, "second listing")
+			f.git("commit", "--allow-empty", "-m", "external HEAD change")
+			f.w.Refresh(true)
+			f.settle(f.idle)
+			awaitQuery(t, q.canceled, "HEAD invalidation")
+			awaitQuery(t, q.finished, "invalidated listing exit")
+			f.settle(f.w.CanRefreshLFSStats)
+			if s := rs.LFSStats; s.Status != LFSStatsStale || !s.UpdatedAt.IsZero() || backend.calls.Load() != 2 {
+				t.Fatalf("invalidated result = %+v, calls = %d", s, backend.calls.Load())
+			}
+		})
 	}
 }
 
@@ -333,7 +319,7 @@ func TestLFSStatsUnconfirmedTransportExitKeepsReservation(t *testing.T) {
 			f, backend := newLFSStatsFixture(t)
 			q := backend.next(gitcli.ErrLFSReapUnconfirmed, nil)
 			f.w.RefreshLFSStats()
-			awaitLFS(t, q.started, "listing")
+			awaitQuery(t, q.started, "listing")
 			switch cause {
 			case "transport_failure":
 				q.result <- nil
@@ -341,7 +327,7 @@ func TestLFSStatsUnconfirmedTransportExitKeepsReservation(t *testing.T) {
 				f.w.invalidateLFSStats(f.w.Repo)
 			case "close_reopen":
 				f.w.Close()
-				awaitLFS(t, q.finished, "unconfirmed transport exit")
+				awaitQuery(t, q.finished, "unconfirmed transport exit")
 				f.w.Drain()
 				f.open()
 			}

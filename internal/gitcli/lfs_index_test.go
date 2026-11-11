@@ -12,6 +12,7 @@ import (
 
 func TestLFSTrackedAttributesRejectsReplacedIndex(t *testing.T) {
 	tr := newTestRepo(t)
+	tr.r.LFSCommand = func(_ context.Context, _ string, _ ...string) ([]byte, error) { return []byte("git-lfs/test"), nil }
 	const rel = "中文 space/.gitattributes"
 	tr.write(rel, "*.psd filter=lfs\n")
 	tr.commitAll("nested attributes")
@@ -24,17 +25,17 @@ func TestLFSTrackedAttributesRejectsReplacedIndex(t *testing.T) {
 			tr.git("rm", "--cached", "-q", "--", rel)
 		}
 	})
-	if cache, paths, err := tr.r.LFSTrackedAttributes(ctx, tr.repo, nil); err == nil || cache != nil || paths != nil {
-		t.Fatalf("discovery across index replacement = %v, %v, %v", cache, paths, err)
+	if st, cache := tr.r.LFS(ctx, tr.repo, nil, nil); st.Err == nil || cache != nil || !st.Installed {
+		t.Fatalf("discovery across index replacement = %+v, cache %v", st, cache)
 	}
 	tr.git("reset", "-q", "HEAD", "--", rel)
-	cache, paths, err := tr.r.LFSTrackedAttributes(ctx, tr.repo, nil)
-	if err != nil || !slices.Equal(paths, []string{rel}) {
-		t.Fatalf("discovery after restoring index = %v, %v", paths, err)
+	cache, err := tr.r.lfsTrackedAttributes(ctx, tr.repo, nil)
+	if err != nil || !slices.Equal(cache.paths, []string{rel}) {
+		t.Fatalf("discovery after restoring index = %v, %v", cache, err)
 	}
-	again, paths, err := tr.r.LFSTrackedAttributes(ctx, tr.repo, cache)
-	if err != nil || again != cache || !slices.Equal(paths, []string{rel}) {
-		t.Fatalf("reusing stable index = %v, %v, %v", again == cache, paths, err)
+	again, err := tr.r.lfsTrackedAttributes(ctx, tr.repo, cache)
+	if err != nil || again != cache {
+		t.Fatalf("reusing stable index = %v, %v", again == cache, err)
 	}
 }
 
@@ -45,9 +46,9 @@ func TestLFSTrackedAttributesUsesActualIndexPath(t *testing.T) {
 	tr.r.Env = append(tr.r.Env, "GIT_INDEX_FILE="+filepath.Join(tr.dir, "alternate index"))
 	tr.write("alternate/.gitattributes", "*.psd filter=lfs\n")
 	tr.git("add", "--", "alternate/.gitattributes")
-	_, paths, err := tr.r.LFSTrackedAttributes(ctx, tr.repo, nil)
-	if err != nil || !slices.Equal(paths, []string{"alternate/.gitattributes"}) {
-		t.Fatalf("alternate index discovery = %v, %v", paths, err)
+	cache, err := tr.r.lfsTrackedAttributes(ctx, tr.repo, nil)
+	if err != nil || !slices.Equal(cache.paths, []string{"alternate/.gitattributes"}) {
+		t.Fatalf("alternate index discovery = %v, %v", cache, err)
 	}
 }
 
@@ -60,8 +61,8 @@ func TestLFSParseCacheBounds(t *testing.T) {
 	}
 	// Missing tracked paths are cheap to probe but still take a map entry.
 	st, cache := tr.r.LFS(ctx, tr.repo, paths, nil)
-	if st.Err != nil || len(cache) > lfsRuleCacheEntries {
-		t.Fatalf("cache with missing paths = %d entries, %v", len(cache), st.Err)
+	if st.Err != nil || len(cache.rules) > lfsRuleCacheEntries {
+		t.Fatalf("cache with missing paths = %+v, %v", cache, st.Err)
 	}
 	paths = paths[:8]
 	for _, rel := range paths {
@@ -69,7 +70,7 @@ func TestLFSParseCacheBounds(t *testing.T) {
 	}
 	st, cache = tr.r.LFS(ctx, tr.repo, paths, nil)
 	var bytes int
-	for path, rules := range cache {
+	for path, rules := range cache.rules {
 		bytes += len(path)
 		for _, pattern := range rules.patterns {
 			bytes += len(pattern)
@@ -77,5 +78,9 @@ func TestLFSParseCacheBounds(t *testing.T) {
 	}
 	if st.Err != nil || len(st.Patterns) != len(paths) || bytes > lfsRuleCacheBytes {
 		t.Fatalf("cache = %d bytes; rules = %d, %v", bytes, len(st.Patterns), st.Err)
+	}
+	st, cache = tr.r.LFS(ctx, tr.repo, nil, cache)
+	if st.Err != nil || len(cache.rules) != 1 {
+		t.Fatalf("removed candidates were retained: %+v, %v", cache, st.Err)
 	}
 }

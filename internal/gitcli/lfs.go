@@ -224,10 +224,14 @@ func parseLFSFiles(out []byte) []string {
 	return files
 }
 
-// LFSRuleCache contains immutable parse results for one working tree. Only
-// current candidates are retained, and the total number of cached patterns
-// (including duplicates) is bounded by the display limit.
-type LFSRuleCache map[string]lfsAttributeRules
+// LFSCache holds immutable discovery and parse results for one working tree.
+// A nil cache forces rediscovery; parsed rules retain only current candidates.
+type LFSCache struct {
+	indexPath string
+	revision  lfsIndexRevision
+	paths     []string
+	rules     map[string]lfsAttributeRules
+}
 
 type lfsAttributeRules struct {
 	digest   [sha256.Size]byte
@@ -239,30 +243,37 @@ const (
 	lfsRuleCacheBytes   = 4 << 20
 )
 
-// LFS detects rules and tool availability using the supplied attribute paths.
-// A failed read returns no replacement snapshot. The caller owns its cache.
-func (r *Runner) LFS(ctx context.Context, repo domain.Repo, paths []string, previous LFSRuleCache) (LFSStatus, LFSRuleCache) {
+// LFS detects tool availability and rules, reusing visible untracked attribute
+// paths from status. On failure, callers keep their last successful rules;
+// capability and successfully checked index discovery can still be retained.
+func (r *Runner) LFS(ctx context.Context, repo domain.Repo, untracked []string, previous *LFSCache) (LFSStatus, *LFSCache) {
 	version, installed := r.lfsCapability(ctx, repo)
 	st := LFSStatus{Installed: installed, Version: version}
-	paths = append([]string{".gitattributes"}, paths...)
+	cache, err := r.lfsTrackedAttributes(ctx, repo, previous)
+	if err != nil {
+		st.Err = err
+		return st, previous
+	}
+	paths := slices.Concat([]string{".gitattributes"}, cache.paths, untracked)
 	slices.Sort(paths)
 	paths = slices.Compact(paths)
-	next := make(LFSRuleCache)
+	next := *cache
+	next.rules = make(map[string]lfsAttributeRules)
 	seen := make(map[string]bool)
 	budget := lfsPatternLimit
 	byteBudget := lfsRuleCacheBytes
 	for _, rel := range paths {
 		if err := ctx.Err(); err != nil {
 			st.Err = err
-			return st, nil
+			return st, cache
 		}
 		data, err := r.readLFSAttributes(ctx, repo, rel)
 		if err != nil {
 			st.Err = err
-			return st, nil
+			return st, cache
 		}
 		digest := sha256.Sum256(data)
-		rules, ok := previous[rel]
+		rules, ok := cache.rules[rel]
 		if !ok || rules.digest != digest {
 			rules = lfsAttributeRules{digest, parseLFSAttributes(data, lfsAttributeDir(rel))}
 		}
@@ -280,8 +291,8 @@ func (r *Runner) LFS(ctx context.Context, repo domain.Repo, paths []string, prev
 		for _, pattern := range rules.patterns {
 			size += len(pattern)
 		}
-		if len(next) < lfsRuleCacheEntries && len(rules.patterns) <= budget && size <= byteBudget {
-			next[rel] = rules
+		if len(next.rules) < lfsRuleCacheEntries && len(rules.patterns) <= budget && size <= byteBudget {
+			next.rules[rel] = rules
 			budget -= len(rules.patterns)
 			byteBudget -= size
 		}
@@ -291,10 +302,10 @@ func (r *Runner) LFS(ctx context.Context, repo domain.Repo, paths []string, prev
 	}
 	if err := ctx.Err(); err != nil {
 		st.Err = err
-		return st, nil
+		return st, cache
 	}
 	st.Managed = len(st.Patterns) > 0
-	return st, next
+	return st, &next
 }
 
 // readLFSAttributes reads one .gitattributes relative to the repository root.

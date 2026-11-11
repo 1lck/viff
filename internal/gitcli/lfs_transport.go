@@ -93,38 +93,40 @@ func (b *lfsProofBuffer) Write(p []byte) (int, error) {
 
 func (b *lfsProofBuffer) confirmed() bool { return bytes.HasSuffix(b.tail, []byte(b.proof)) }
 
-// Freeze each process before discovering its children, so it cannot fork
-// after the snapshot. Reap leaves before their parent. A platform without the
-// required ps/awk fails before a scan starts rather than leaking a worker.
-const lfsLeaseScript = `proof=$1
+// Bash supports noninteractive job control where the system sh may not.
+// Other shells must establish a process group before the worker can start.
+var lfsLeaseScript = `shell=sh
+if command -v bash >/dev/null 2>&1; then shell=bash; fi
+exec "$shell" -c ` + shellQuote(lfsLeaseBody) + ` sh "$@"`
+
+// A process group retains orphaned descendants after the Git parent exits.
+// Only confirm cleanup once no live member remains; zombies await their OS
+// reaper and no longer execute. Inspection failures keep the reservation.
+const lfsLeaseBody = `proof=$1
 shift
 finish() { printf '\n%s\n' "$proof" >&2; exit "$1"; }
 command -v awk >/dev/null || finish 126
-ps -eo pid=,ppid= >/dev/null || finish 126
-stop_tree() {
-	kill -STOP "$1" 2>/dev/null || return 0
-	snapshot=$(ps -eo pid=,ppid=) || { kill -CONT "$1" 2>/dev/null; return 1; }
-	children=$(printf '%s\n' "$snapshot" | awk -v parent="$1" '$2 == parent {print $1}') || { kill -CONT "$1" 2>/dev/null; return 1; }
-	for child in $children; do
-		stop_tree "$child" || { kill -CONT "$1" 2>/dev/null; return 1; }
-	done
-	kill -KILL "$1" 2>/dev/null || :
-}
+ps -eo pgid=,stat= >/dev/null || finish 126
 exec 3<&0
-"$@" </dev/null 3<&- &
+set -m
+sh -c 'kill -0 "-$$" 2>/dev/null || exit 126; exec "$@"' sh "$@" </dev/null 3<&- &
 scan=$!
+set +m
 (
 	IFS= read -r ignored <&3 || :
-	stop_tree "$scan"
+	kill -KILL "-$scan" 2>/dev/null || :
 ) <&3 &
 guard=$!
 wait "$scan"
 result=$?
 kill "$guard" 2>/dev/null || :
-wait "$guard" 2>/dev/null
-guard_result=$?
-# 143 is the guard we stopped after normal scanner completion. A guard that
-# failed while inspecting a subtree must never produce an exit proof.
-case "$guard_result" in 0|143) ;; *) exit 1 ;; esac
-finish "$result"
+wait "$guard" 2>/dev/null || :
+kill -KILL "-$scan" 2>/dev/null || :
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+	snapshot=$(ps -eo pgid=,stat=) || exit 1
+	live=$(printf '%s\n' "$snapshot" | awk -v group="$scan" '$1 == group && $2 !~ /^Z/ { print $1 }') || exit 1
+	[ -z "$live" ] && finish "$result"
+	sleep 0.01
+done
+exit 1
 `

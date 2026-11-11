@@ -94,15 +94,6 @@ func newRefreshFixture(t *testing.T) (*fixture, *refreshBackend, *fakeObs) {
 	return f, b, obs
 }
 
-func waitRefreshStarted(t *testing.T, q *refreshBlock) {
-	t.Helper()
-	select {
-	case <-q.started:
-	case <-time.After(15 * time.Second):
-		t.Fatal("status query did not start")
-	}
-}
-
 func refreshScopes(obs *fakeObs) []bool {
 	var scopes []bool
 	for _, e := range obs.eventsNamed(observability.EventRepoRefresh) {
@@ -130,7 +121,7 @@ func TestRefreshCoalescesScope(t *testing.T) {
 			q := b.block(t, nil)
 			before := b.calls.Load()
 			f.w.Refresh(tt.initial)
-			waitRefreshStarted(t, q)
+			awaitQuery(t, q.started, "status query")
 			for _, meta := range tt.pending {
 				f.w.Refresh(meta)
 			}
@@ -154,14 +145,14 @@ func TestRefreshConsumesPendingBeforeFollowUp(t *testing.T) {
 	first, second := b.block(t, nil), b.block(t, nil)
 	before := b.calls.Load()
 	f.w.Refresh(false)
-	waitRefreshStarted(t, first)
+	awaitQuery(t, first.started, "status query")
 	// Change metadata after the first pass started; its follow-up must query
 	// the new ref even when the first pass captured an older ref snapshot.
 	f.git("branch", "during-refresh")
 	f.w.Refresh(true)
 	first.unblock()
 	f.settle(func() bool { return b.calls.Load() == before+2 })
-	waitRefreshStarted(t, second)
+	awaitQuery(t, second.started, "status query")
 	for i := 0; i < 100; i++ {
 		f.w.Refresh(false)
 	}
@@ -216,7 +207,7 @@ func TestRefreshPendingMetadataReloadsShallowHistory(t *testing.T) {
 			}
 			q := b.block(t, nil)
 			f.w.Refresh(false)
-			waitRefreshStarted(t, q)
+			awaitQuery(t, q.started, "status query")
 			refs := f.git("show-ref")
 			f.git("fetch", "-q", tt.fetch)
 			if got := strings.TrimSpace(f.git("rev-list", "--count", "HEAD")); got != fmt.Sprint(tt.count) || f.git("show-ref") != refs {
@@ -243,7 +234,7 @@ func TestRefreshPendingAfterFailure(t *testing.T) {
 			q := b.block(t, failure)
 			before, lists := b.calls.Load(), b.lists.Load()
 			f.w.Refresh(false)
-			waitRefreshStarted(t, q)
+			awaitQuery(t, q.started, "status query")
 			f.w.Refresh(false)
 			q.unblock()
 			f.settle(f.idle)
@@ -273,7 +264,7 @@ func TestRefreshPendingDoesNotCrossRepositoryLifetime(t *testing.T) {
 			}
 			q := b.block(t, failure)
 			f.w.Refresh(false)
-			waitRefreshStarted(t, q)
+			awaitQuery(t, q.started, "status query")
 			f.w.Refresh(true)
 			if action != "gone" {
 				f.w.Close()

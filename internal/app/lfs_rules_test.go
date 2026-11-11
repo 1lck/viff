@@ -21,14 +21,14 @@ type lfsRuleTestBackend struct {
 	discover                                      func(context.Context) error
 }
 
-func (b *lfsRuleTestBackend) LFSTrackedAttributes(ctx context.Context, repo domain.Repo, previous *gitcli.LFSIndexCache) (*gitcli.LFSIndexCache, []string, error) {
+func (b *lfsRuleTestBackend) LFS(ctx context.Context, repo domain.Repo, untracked []string, previous *gitcli.LFSCache) (gitcli.LFSStatus, *gitcli.LFSCache) {
 	b.checks.Add(1)
 	if b.discover != nil {
 		if err := b.discover(ctx); err != nil {
-			return nil, nil, err
+			return gitcli.LFSStatus{Installed: true, Version: "git-lfs/test", Err: err}, previous
 		}
 	}
-	return b.Runner.LFSTrackedAttributes(ctx, repo, previous)
+	return b.Runner.LFS(ctx, repo, untracked, previous)
 }
 
 func newLFSRuleFixture(t *testing.T) (*fixture, *lfsRuleTestBackend) {
@@ -91,6 +91,22 @@ func TestLFSAutomaticRefreshNeverEnumerates(t *testing.T) {
 	}
 }
 
+func TestLFSRuleReadFailureKeepsCapability(t *testing.T) {
+	f, b := newLFSRuleFixture(t)
+	f.write(".gitattributes", strings.Repeat("# comment\n", 120000))
+	f.open()
+	settleLFSRules(f)
+	st := f.w.Repo.LFS
+	if st.Err == nil || !st.Installed || st.Version != "git-lfs/test" || !f.w.CanRefreshLFSStats() {
+		t.Fatalf("rule failure discarded tool capability: %+v", st)
+	}
+	f.w.RefreshLFSStats()
+	f.settle(func() bool { return f.w.Repo.LFSStats.Status == LFSStatsCurrent })
+	if b.lists.Load() != 1 {
+		t.Fatalf("explicit listings = %d, want 1", b.lists.Load())
+	}
+}
+
 func TestLFSRuleCandidatesFollowStatus(t *testing.T) {
 	f, b := newLFSRuleFixture(t)
 	const dir = "资产 space"
@@ -141,9 +157,6 @@ func TestLFSRuleCandidatesFollowStatus(t *testing.T) {
 	f.git("commit", "-qm", "add nested rules")
 	f.git("mv", "--", attr, "renamed-attributes")
 	refresh("*.bin")
-	if _, kept := f.w.Repo.lfs.rules.parsed[attr]; kept {
-		t.Fatal("cache retained a path removed from the candidate set")
-	}
 	f.git("mv", "--", "renamed-attributes", attr)
 	refresh("*.bin", dir+"/*.jpg")
 	if err := os.Remove(p); err != nil {
@@ -196,7 +209,7 @@ func TestLFSRulesFailAndRevalidate(t *testing.T) {
 	incomplete := errors.New("incomplete status")
 	q := b.block(t, incomplete)
 	f.w.Refresh(false)
-	waitRefreshStarted(t, q)
+	awaitQuery(t, q.started, "status query")
 	q.unblock()
 	settleLFSRules(f)
 	if st := f.w.Repo.LFS; !errors.Is(st.Err, incomplete) || !slices.Equal(st.Patterns, []string{"*.psd"}) {
@@ -233,12 +246,12 @@ func TestLFSRulesAreIsolatedByWorktree(t *testing.T) {
 		})
 		f.settle(func() bool { return f.w.Repo != old && f.w.Repo.StatusLoaded })
 		assertLFSRules(f, "assets/*.two")
-		if old.lfs.rules.index != nil || old.lfs.rules.parsed != nil {
+		if old.lfs.rules.cache != nil {
 			t.Fatal("switch retained the inactive worktree cache")
 		}
 		old = f.w.Repo
 		f.w.Close()
-		if old.lfs.rules.index != nil || old.lfs.rules.parsed != nil {
+		if old.lfs.rules.cache != nil {
 			t.Fatal("close retained the worktree cache")
 		}
 		f.open()
@@ -260,10 +273,10 @@ func TestLFSManualRefreshDropsInFlightDiscovery(t *testing.T) {
 	}
 	f.write(".gitattributes", "*.bin filter=lfs\n")
 	f.open()
-	awaitLFS(t, started, "tracked attribute discovery")
+	awaitQuery(t, started, "tracked attribute discovery")
 	f.write(".gitattributes", "*.psd filter=lfs\n")
 	f.w.RefreshManually()
-	awaitLFS(t, canceled, "discovery cancellation")
+	awaitQuery(t, canceled, "discovery cancellation")
 	assertLFSRules(f, "*.psd")
 	if got := b.checks.Load(); got != 2 {
 		t.Fatalf("discovery count = %d, want canceled pass and one recovery", got)

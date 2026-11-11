@@ -24,6 +24,13 @@ type remoteHeadReader interface {
 	RemoteHeads(ctx context.Context, repo domain.Repo) (map[string]string, error)
 }
 
+// lfsReporter detects Git LFS usage in the working copy.
+type lfsReporter interface {
+	LFS(context.Context, domain.Repo, []string, *gitcli.LFSCache) (gitcli.LFSStatus, *gitcli.LFSCache)
+	LFSInputs(context.Context, domain.Repo) (gitcli.LFSInputs, error)
+	LFSFiles(context.Context, domain.Repo) ([]string, error)
+}
+
 // HEAD is the commit and branch the undo history records before and after a
 // write. A backend without a local HEAD (Subversion) reports ErrUnsupported,
 // which is how undo stays off there.

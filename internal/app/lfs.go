@@ -12,13 +12,6 @@ import (
 	"viff/internal/observability"
 )
 
-type lfsReporter interface {
-	LFSTrackedAttributes(context.Context, domain.Repo, *gitcli.LFSIndexCache) (*gitcli.LFSIndexCache, []string, error)
-	LFS(context.Context, domain.Repo, []string, gitcli.LFSRuleCache) (gitcli.LFSStatus, gitcli.LFSRuleCache)
-	LFSInputs(context.Context, domain.Repo) (gitcli.LFSInputs, error)
-	LFSFiles(context.Context, domain.Repo) ([]string, error)
-}
-
 type LFSStatsStatus string
 
 const (
@@ -47,8 +40,7 @@ type lfsRulesState struct {
 	generation uint64
 	cancel     context.CancelFunc
 	pending    *lfsRuleInputs
-	index      *gitcli.LFSIndexCache
-	parsed     gitcli.LFSRuleCache
+	cache      *gitcli.LFSCache
 	failed     *lfsRuleInputs
 	retryAt    time.Time
 }
@@ -103,22 +95,16 @@ func (w *Workspace) detectLFSRules(rs *RepoState, backend lfsReporter, inputs lf
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	state.cancel = cancel
-	generation, index, parsed := state.generation, state.index, state.parsed
+	generation, cache := state.generation, state.cache
 	repo := rs.Repo
 	start := time.Now()
 	go func() {
 		defer cancel()
-		nextIndex, tracked, err := backend.LFSTrackedAttributes(ctx, repo, index)
-		var st gitcli.LFSStatus
-		var next gitcli.LFSRuleCache
-		if err == nil {
-			paths := slices.Concat(tracked, inputs.untracked)
-			st, next = backend.LFS(ctx, repo, paths, parsed)
-			err = st.Err
+		st, next := backend.LFS(ctx, repo, inputs.untracked, cache)
+		if st.Err == nil {
+			st.Err = ctx.Err()
 		}
-		if err == nil {
-			err = ctx.Err()
-		}
+		capabilityChecked := ctx.Err() == nil
 		w.post(func() {
 			if w.Repo != rs {
 				return
@@ -127,16 +113,17 @@ func (w *Workspace) detectLFSRules(rs *RepoState, backend lfsReporter, inputs lf
 			pending := state.pending
 			state.pending = nil
 			if generation == state.generation {
-				if nextIndex != nil {
-					state.index = nextIndex
-				}
+				state.cache = next
 				if pending == nil || pending.equal(inputs) {
-					if err == nil {
-						state.parsed, state.failed = next, nil
+					if capabilityChecked {
+						rs.LFS.Installed, rs.LFS.Version = st.Installed, st.Version
+					}
+					if st.Err == nil {
+						state.failed = nil
 						rs.LFS = st
 					} else {
 						state.failed, state.retryAt = &inputs, w.now().Add(lfsRuleRetryDelay)
-						rs.LFS.Err = err
+						rs.LFS.Err = st.Err
 					}
 					w.record(observability.Event{
 						Event: observability.EventRepoLFS, Level: observability.LevelDebug,
@@ -157,7 +144,7 @@ func (w *Workspace) detectLFSRules(rs *RepoState, backend lfsReporter, inputs lf
 func invalidateLFSRules(rs *RepoState) {
 	state := &rs.lfs.rules
 	state.generation++
-	state.index, state.parsed, state.pending, state.failed = nil, nil, nil, nil
+	state.cache, state.pending, state.failed = nil, nil, nil
 	if state.cancel != nil {
 		state.cancel()
 	}
@@ -276,19 +263,4 @@ func (w *Workspace) invalidateLFSStats(rs *RepoState) {
 func (w *Workspace) cancelLFS(rs *RepoState) {
 	invalidateLFSRules(rs)
 	w.invalidateLFSStats(rs)
-}
-
-// Only flags, counts and stable codes are recorded, never paths or rules.
-func lfsEventFields(st gitcli.LFSStatus, stats LFSStats) map[string]any {
-	fields := map[string]any{
-		"installed": st.Installed,
-		"managed":   st.Managed,
-		"patterns":  len(st.Patterns),
-		"files":     len(stats.Files),
-		"status":    stats.Status,
-	}
-	if st.Err != nil {
-		fields["error"] = gitcli.CodeOf(st.Err)
-	}
-	return fields
 }
