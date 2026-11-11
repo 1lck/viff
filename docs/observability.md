@@ -104,6 +104,7 @@ flowchart LR
 | `repo.open` | info | 打开/切换仓库 | `dur_ms`、`status`、`worktree`、`bare`、`op_state`、`error_code` |
 | `repo.close` | info | 关闭仓库 | 原因 |
 | `repo.refresh` | debug/info | 刷新完成 | `gen`、`dur_ms`、`trigger`（watch/manual/auto）、`staged`/`unstaged`/`untracked`/`conflicted` 计数、`op_state` |
+| `repo.lfs` | debug/info | 后台规则检测、主动统计完成 | `op`（rules/stats）、状态、计数、`dur_ms`、失败时的稳定错误码；文件枚举的原始输出不进入日志或 Console |
 | `repo.watch` | info/warn | 监听器启停/异常 | `backend`（fsevents/poll）、`status`、`overflow`、`error` |
 | `task.start` | info | 开始写操作或长任务 | `title_key`、`write` |
 | `task.cancel` | info | 用户取消 | `task`、`elapsed_ms` |
@@ -208,6 +209,8 @@ LogLevel string `json:"logLevel,omitempty"` // "", "info", "debug"
 | ErrNoWSLGit | `wsl.git_missing` |
 | ErrCancelled | `git.cancelled` |
 | ErrOther | `git.failed` |
+
+LFS 统计的 `lfs.cleanup_unconfirmed` 表示 SSH/WSL 传输未返回扫描退出确认；本次会话内保留该工作树的查询名额，避免重开后重复扫描。只记录代码，不记录远端进程信息或原始输出。
 
 错误通知正文末尾追加 `Code: push.rejected · Help`（Help 打开 `docs/troubleshooting.md` 对应锚点）。日志/导出里 `code` 与 `kind` 同时出现，便于按 code 聚合统计。Git 原始输出仍然完整保留在通知详情里，不遮挡原文。
 

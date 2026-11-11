@@ -243,6 +243,17 @@ func (w *Window) gitMenu() []item {
 	if w.ws.Caps.Submodules != nil {
 		items = append(items, item{title: w.t(i18n.SubmoduleMenu), icon: icons.Folder, run: w.openSubmodules})
 	}
+	// Keep the action available even when no rules were discovered, since
+	// committed pointers can outlive the attribute rules that created them.
+	if w.ws.SupportsLFSStats() && (rs.LFS.Installed || rs.LFS.Managed) {
+		items = append(items, item{title: w.t(i18n.LFSRefreshStats), icon: icons.Refresh,
+			disabled: !w.ws.CanRefreshLFSStats(), run: w.ws.RefreshLFSStats})
+		if !rs.LFSStats.UpdatedAt.IsZero() {
+			items = append(items, item{title: w.t(i18n.LFSCopyFileList), icon: icons.Copy,
+				disabled: rs.LFSStats.Status != vapp.LFSStatsCurrent || len(rs.LFSStats.Files) == 0,
+				run:      w.copyLFSFileList})
+		}
+	}
 	if w.readOnly() {
 		return items
 	}

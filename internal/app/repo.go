@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -54,16 +53,10 @@ type RepoState struct {
 	// to fetch the missing history while it is set.
 	Shallow bool
 
-	// LFS is the Git LFS snapshot of this repository. Viff detects LFS but
-	// does not manage it (ADR 0031); the UI shows the marker and warns when
-	// git-lfs is missing.
-	LFS gitcli.LFSStatus
-	// lfsKey and lfsAt throttle LFS detection: the refresh reuses the snapshot
-	// while the root .gitattributes is unchanged and the last check is recent,
-	// because probing git-lfs and listing managed files on every status
-	// refresh would cost a process per file-system event.
-	lfsKey string
-	lfsAt  time.Time
+	// LFS is background rule detection; LFSStats is an explicit file listing.
+	LFS      gitcli.LFSStatus
+	LFSStats LFSStats
+	lfs      lfsState
 
 	Log LogState
 
@@ -187,6 +180,7 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 		oldRoot = w.Repo.Repo.Root
 		w.Repo.Log.close()
 		w.Repo.cancelDetail()
+		w.cancelLFS(w.Repo)
 	}
 	w.closeWatcher(oldRoot)
 	// A content search belongs to the repository that started it.
@@ -196,6 +190,9 @@ func (w *Workspace) setRepo(repo domain.Repo) {
 	w.clearUndo()
 	w.nextGen++
 	w.Repo = &RepoState{Repo: repo, Gen: w.nextGen, rootKey: root}
+	if scan := w.lfsScans[root]; scan != nil && scan.unconfirmed {
+		w.Repo.LFSStats.Status, w.Repo.LFSStats.Code = LFSStatsFailed, gitcli.CodeOf(gitcli.ErrLFSReapUnconfirmed)
+	}
 	if w.Settings != nil {
 		w.Settings.AddRecent(repo.Root)
 		w.Settings.Save()
@@ -278,6 +275,7 @@ func (w *Workspace) Close() {
 		})
 		w.Repo.Log.close()
 		w.Repo.cancelDetail()
+		w.cancelLFS(w.Repo)
 	}
 	w.closeWatcher(root)
 	w.clearUndo()
@@ -336,7 +334,6 @@ func (w *Workspace) Refresh(meta bool) {
 	rs.statusSeq++
 	seq := rs.statusSeq
 	repo := rs.Repo
-	lfsKey, lfsAt, cachedLFS := rs.lfsKey, rs.lfsAt, rs.LFS
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -360,8 +357,6 @@ func (w *Workspace) Refresh(meta bool) {
 			shallowErr   error
 			remoteHeads  map[string]string
 			headsErr     error
-			lfs          = cachedLFS
-			lfsRefreshed = false
 		)
 		var wg sync.WaitGroup
 		wg.Add(3)
@@ -393,14 +388,6 @@ func (w *Workspace) Refresh(meta bool) {
 			// read with the other refs so a comparison never guesses while it
 			// is known.
 			remoteHeads, headsErr = w.remoteHeads(ctx, repo)
-			// LFS detection runs a probe and a file listing, so it is neither
-			// part of every status refresh nor on the UI thread. A metadata
-			// refresh is the user's refresh button or the end of a write
-			// task, which is exactly when the managed file list can change.
-			if meta || lfsAt.IsZero() || key != lfsKey || time.Since(lfsAt) >= lfsRecheckInterval {
-				lfs = w.lfsStatus(ctx, repo)
-				lfsRefreshed = true
-			}
 		}()
 		wg.Wait()
 		w.post(func() {
@@ -408,10 +395,6 @@ func (w *Workspace) Refresh(meta bool) {
 				return
 			}
 			rs.refreshing = false
-			if lfsRefreshed {
-				rs.LFS = lfs
-				rs.lfsKey, rs.lfsAt = key, w.now()
-			}
 			staged, unstaged, untracked, conflicted := 0, 0, 0, 0
 			if err != nil {
 				w.markRepositoryError(rs.rootKey, err)
@@ -428,6 +411,9 @@ func (w *Workspace) Refresh(meta bool) {
 				}
 				w.NotifyError(w.tr(i18n.AppNoticeCannotReadStatus), err)
 			} else {
+				if rs.StatusLoaded && lfsStatusInputsChanged(rs.Status, st) {
+					w.invalidateLFSStats(rs)
+				}
 				rs.Status = st
 				rs.StatusLoaded = true
 				rs.StatusTime = w.Now()
@@ -477,10 +463,11 @@ func (w *Workspace) Refresh(meta bool) {
 						"untracked":  untracked,
 						"conflicted": conflicted,
 						"op_state":   operationStateName(op),
-						"lfs":        lfsEventFields(rs.LFS),
+						"lfs":        lfsEventFields(rs.LFS, rs.LFSStats),
 					},
 				})
 			}
+			w.refreshLFS(rs, key, meta)
 			if rs.refreshMore {
 				meta := rs.refreshMeta
 				rs.refreshMore, rs.refreshMeta = false, false
@@ -493,46 +480,6 @@ func (w *Workspace) Refresh(meta bool) {
 			}
 		})
 	}()
-}
-
-// lfsRecheckInterval bounds how often a plain working-tree refresh re-runs LFS
-// detection. Attribute changes, metadata events and the refresh button still
-// re-run it immediately; the interval only collapses file-system event storms
-// into one probe.
-const lfsRecheckInterval = 30 * time.Second
-
-// lfsAttributesKey is the cheap change detector for LFS rules: the size and
-// modification time of the repository-root .gitattributes, the file `git lfs
-// track` writes. Nested attribute files are not part of the key; a metadata
-// refresh or the interval picks their changes up.
-func lfsAttributesKey(root string) string {
-	if sshpath.Is(root) {
-		// There is no local .gitattributes to stat; the key only exists to
-		// collapse local event storms, so a remote refresh re-runs LFS
-		// detection on every metadata refresh instead.
-		return "ssh"
-	}
-	st, err := os.Stat(filepath.Join(root, ".gitattributes"))
-	if err != nil {
-		return "missing"
-	}
-	return strconv.FormatInt(st.Size(), 10) + ":" + strconv.FormatInt(st.ModTime().UnixNano(), 10)
-}
-
-// lfsEventFields is the log-safe part of an LFS snapshot: flags and counts
-// only, never a pattern, path or file name. The error is the classified code,
-// matching how git.fail reports failures.
-func lfsEventFields(st gitcli.LFSStatus) map[string]any {
-	fields := map[string]any{
-		"installed": st.Installed,
-		"managed":   st.Managed,
-		"patterns":  len(st.Patterns),
-		"files":     len(st.Files),
-	}
-	if st.Err != nil {
-		fields["error"] = gitcli.CodeOf(st.Err)
-	}
-	return fields
 }
 
 func refsFingerprint(refs []domain.Ref, branch domain.BranchStatus) string {

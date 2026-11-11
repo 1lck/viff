@@ -3,6 +3,7 @@ package gitcli
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -117,6 +118,15 @@ func exitCodeOf(err error) int {
 // passed back to Git exactly.
 func ParseStatus(out []byte) domain.Status {
 	var st domain.Status
+	index := sha256.New()
+	staged := func(path string, identity ...string) {
+		index.Write([]byte(path))
+		index.Write([]byte{0})
+		for _, value := range identity {
+			index.Write([]byte(value))
+			index.Write([]byte{0})
+		}
+	}
 	fields := bytes.Split(out, []byte{0})
 	for i := 0; i < len(fields); i++ {
 		f := string(fields[i])
@@ -131,6 +141,9 @@ func ParseStatus(out []byte) domain.Status {
 			p := strings.SplitN(f, " ", 9)
 			if len(p) < 9 {
 				continue
+			}
+			if p[1][0] != '.' {
+				staged(p[8], p[1][:1], p[4], p[7])
 			}
 			st.Entries = append(st.Entries, domain.StatusEntry{
 				Path: p[8], Index: p[1][0], Worktree: p[1][1], Submodule: p[2],
@@ -150,6 +163,9 @@ func ParseStatus(out []byte) domain.Status {
 				i++
 				e.OrigPath = string(fields[i])
 			}
+			if p[1][0] != '.' {
+				staged(e.Path, p[1][:1], p[4], p[7], e.OrigPath)
+			}
 			st.Entries = append(st.Entries, e)
 		case 'u':
 			// u XY sub m1 m2 m3 mW h1 h2 h3 path
@@ -157,6 +173,7 @@ func ParseStatus(out []byte) domain.Status {
 			if len(p) < 11 {
 				continue
 			}
+			staged(p[10], p[1], p[3], p[4], p[5], p[7], p[8], p[9])
 			st.Entries = append(st.Entries, domain.StatusEntry{
 				Path: p[10], Index: p[1][0], Worktree: p[1][1], Submodule: p[2], ModeWork: p[6],
 			})
@@ -170,6 +187,7 @@ func ParseStatus(out []byte) domain.Status {
 			}
 		}
 	}
+	index.Sum(st.IndexKey[:0])
 	return st
 }
 

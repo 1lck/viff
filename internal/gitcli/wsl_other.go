@@ -23,6 +23,10 @@ func (r *Runner) wslCommand(ctx context.Context, dir string, args []string) (*ex
 	return nil, &Error{Kind: ErrNoWSL, Args: args, Err: errors.New("WSL repositories can only be opened from Windows (distro " + distro + ")")}
 }
 
+func (r *Runner) wslProgram(ctx context.Context, dir string, _ []string) (*exec.Cmd, error) {
+	return r.wslCommand(ctx, dir, nil)
+}
+
 // probeWSL reports that no distro can serve a repository here. ExecutableIn
 // reaches it when a caller asks which git a WSL path would run on a platform
 // without WSL.

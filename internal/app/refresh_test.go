@@ -111,8 +111,7 @@ func refreshScopes(obs *fakeObs) []bool {
 }
 
 // Fork issue #1: only requests received while a refresh is running determine
-// its follow-up scope. Ordinary polling must reuse the newly published LFS
-// snapshot, and metadata demand must survive later ordinary requests.
+// its follow-up scope. Metadata demand must survive later ordinary requests.
 func TestRefreshCoalescesScope(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
@@ -128,7 +127,7 @@ func TestRefreshCoalescesScope(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f, b, obs := newRefreshFixture(t)
 			q := b.block(t, nil)
-			before, lists := b.calls.Load(), b.lists.Load()
+			before := b.calls.Load()
 			f.w.Refresh(tt.initial)
 			waitRefreshStarted(t, q)
 			for _, meta := range tt.pending {
@@ -139,18 +138,8 @@ func TestRefreshCoalescesScope(t *testing.T) {
 			if got := refreshScopes(obs); !reflect.DeepEqual(got, []bool{tt.initial, tt.meta}) {
 				t.Errorf("refresh scopes = %v, want [%v %v]", got, tt.initial, tt.meta)
 			}
-			wantLists := lists
-			if tt.initial {
-				wantLists++
-			}
-			if tt.meta {
-				wantLists++
-			}
-			if got := b.lists.Load(); got != wantLists {
-				t.Errorf("LFS listings = %d, want %d", got, wantLists)
-			}
-			if got := f.w.Repo.LFS.Files; !reflect.DeepEqual(got, []string{fmt.Sprintf("asset-%d.bin", wantLists)}) {
-				t.Errorf("LFS snapshot = %v, want latest listing %d", got, wantLists)
+			if got := b.lists.Load(); got != 0 {
+				t.Errorf("automatic LFS listings = %d, want zero", got)
 			}
 			if got := b.calls.Load() - before; got != 2 || b.max.Load() != 1 {
 				t.Errorf("status queries = %d, max concurrent = %d, want 2 and 1", got, b.max.Load())

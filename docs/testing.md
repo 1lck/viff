@@ -51,6 +51,96 @@ go test -count=1 -tags "vivahead litheaudit" ./internal/ui
 
 ## Pre-publication acceptance / 发布前验收
 
+### On-demand LFS statistics / 按需 LFS 文件统计
+
+Fork issue [#2](https://github.com/muchenhen/viff/issues/2) separates background
+rule detection from explicit file statistics ([ADR 0047](decisions/0047-lfs-on-demand-statistics.md)).
+The regression suite uses isolated temporary repositories and channel-controlled
+listings. It covers automatic refreshes through five simulated minutes, status
+publication during a blocked query, duplicate requests, successful zero,
+preserved results on failure, restaging the same path with another blob,
+HEAD changes, switch/close/reopen, and adapters without LFS. Dark/light headless
+tests use Tab/Enter to request statistics and verify count, time, failure,
+missing-dependency and clipboard behavior.
+
+Fork 的 [#2](https://github.com/muchenhen/viff/issues/2) 把后台规则检测与主动文件统计分开
+（[ADR 0047](decisions/0047-lfs-on-demand-statistics.md)）。回归使用隔离临时仓库和
+channel 控制的枚举，覆盖模拟五分钟内的自动刷新、阻塞查询期间的状态发布、重复请求、
+成功零值、失败保留结果、同一路径重新暂存不同 blob、HEAD 变化、切换/关闭/重开与
+不支持 LFS 的适配器。明暗主题无头测试用 Tab/Enter 主动统计，并验证数量、时间、
+失败、缺依赖和剪贴板行为。
+
+Cancellation tests check native Windows descendants and the transport-side
+POSIX wrapper independently. The Linux test binary was cross-compiled and
+executed three times in the existing Docker Desktop WSL kernel, without Git
+or a network: three process levels, normal completion, missing exit proof,
+process-inspection failure, and five completion/cancellation races per run.
+The wrapper requires a valid exit proof before releasing a worktree reservation.
+
+取消测试分别检查原生 Windows 后代进程和传输另一侧的 POSIX wrapper。交叉编译的
+Linux 测试程序在现有 Docker Desktop WSL 内核运行三轮，不需要 Git 或网络：
+覆盖三级进程、正常完成、缺少退出确认、进程检查失败及每轮五次完成/取消竞态。
+收到有效退出确认后才释放工作树查询名额。
+
+Measurements on Windows 11 Pro 10.0.26200 x64, 16 logical processors,
+Go 1.27.3, Viva 0.2.4, Git 2.45.1.windows.1 and Git LFS 3.5.1 compared
+the prior #1 binary from `f9ce062` with the reviewed #2 source. Both binaries
+used separate Viff settings/log directories and the same Job Object Git meter.
+Refresh timings use the repo.refresh duration after discovery. CPU totals cover complete Git process trees for commands that finished inside
+the observation window, excluding fixture creation and Viff itself. Each
+comparison below was run once; ordinary file changes and the existing polling
+watcher remained enabled in the authorized real UE checkout.
+
+测量平台为 Windows 11 Pro 10.0.26200 x64、16 个逻辑核心、Go 1.27.3、
+Viva 0.2.4、Git 2.45.1.windows.1、Git LFS 3.5.1。对照 #1 的 `f9ce062`
+构建与经审查的 #2 源码构建。两版使用独立 Viff 设置/日志目录和同一 Job Object
+Git 计量程序。刷新耗时取发现仓库后的 repo.refresh 时长。CPU 为观察窗口内已完成命令的完整 Git 进程树累计，排除夹具创建和
+Viff 本体。以下每版各测一次；授权的真实 UE 工作树保留普通文件变化与既有轮询监听。
+
+| Real checkout, first 300 seconds / 真实工作树前 300 秒 | Before / 改前 | After / 改后 |
+| --- | ---: | ---: |
+| First refresh duration / 首轮刷新耗时 | 100.731 s | 7.394 s |
+| Automatic `lfs ls-files` commands, including format attempts / 自动枚举命令，含格式探测 | 6 (3 queries / 次统计) | 0 |
+| Completed Git commands / 完成的 Git 命令 | 53 | 76 |
+| Git process-tree CPU / Git 进程树 CPU | 315.734 s | 178.625 s |
+| LFS process-tree CPU, including version probe / LFS 进程树 CPU，含版本探测 | 217.375 s | 0.391 s |
+
+The completed-command CPU total decreased by 43.43%. The new Viff process used
+6.219 CPU seconds over 300.065 seconds, or approximately 0.130% of total
+16-core capacity. Status refreshes continue more often after removing the
+long enumeration; attribute discovery and polling remain the next performance
+items (#3/#4).
+
+已完成命令的累计 CPU 时间下降 43.43%。新版 Viff 本体在 300.065 秒内使用
+6.219 秒 CPU，折合 16 核整机容量约 0.130%。移除长时间枚举后，状态能更频繁地
+完成刷新；属性发现与轮询继续由 #3/#4 优化。
+
+The reproducible synthetic checkout contains 4,096 committed LFS pointers
+sharing one blob and 8,192 ordinary tracked files. Both versions open this
+same checkout and remain idle for 30 seconds, with the normal watcher enabled.
+
+可复现的合成工作树包含 4,096 个已提交 LFS 指针（共用一个 blob）和 8,192 个
+普通跟踪文件。两版打开同一个工作树，启用正常监听并空闲观察 30 秒。
+
+| Synthetic checkout / 合成工作树 | Before / 改前 | After / 改后 |
+| --- | ---: | ---: |
+| First refresh duration / 首轮刷新耗时 | 7.961 s | 1.363 s |
+| Automatic `lfs ls-files` commands / 自动枚举命令 | 2 | 0 |
+| Git process-tree CPU / Git 进程树 CPU | 8.797 s | 1.453 s |
+| LFS process-tree CPU / LFS 进程树 CPU | 7.734 s | 0.375 s |
+
+An application-layer query against the same real checkout returned 21,366
+files in 95.828 seconds; a regular status refresh completed after 7.804 seconds
+while the listing was still running. Five requests (one plus four duplicates)
+produced one enumeration: two LFS commands for the rejected `-z` attempt and
+the successful JSON fallback. The full LFS listing process tree used 92.078 CPU
+seconds. Its files were counted locally and only aggregate results were saved.
+
+同一真实工作树的应用层主动查询在 95.828 秒内返回 21,366 个文件；枚举仍在运行时，
+普通状态在 7.804 秒完成刷新。一个请求和四次重复请求只产生一次枚举：拒绝 `-z`
+的尝试和成功的 JSON 回退共两条 LFS 命令，完整枚举进程树使用 92.078 秒 CPU。
+文件在本地计数，验证记录只保存聚合结果。
+
 ### Coalesced refresh scope / 合并刷新的范围
 
 `go test -count=1 -run '^TestRefresh' ./internal/app` covers fork issue #1.
