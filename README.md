@@ -65,7 +65,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Browse and edit files | Project tool window with folders, status colours, Quick Open, read-only viewing with an optional code map, blame, file history, and editing of working-tree UTF-8 text files (up to 1 MiB, saved text included) |
 | Manage branches       | Checkout, merge, rebase, cherry-pick, revert, reset, and stash-assisted checkout                                                                              |
 | Undo mistakes         | Command-Z reverses the last local commit, merge, rebase, checkout, or branch change from this session                                                         |
-| Resolve conflicts     | Ours / Result / Theirs views, per-block Ours/Theirs/Both actions, explicit mark-as-resolved, and a copyable context for an external AI tool                  |
+| Resolve conflicts     | Ours / Result / Theirs views with an editable Result pane, per-block Ours/Theirs/Both applied to that buffer, stale-checked Save, explicit mark-as-resolved, and a copyable context for an external AI tool |
 | Work across checkouts | Create worktrees from new or existing branches; manage submodules with dirty-work protection                                                                  |
 | Track large files     | Detect Git LFS rules and missing git-lfs; count and list managed files on demand from the LFS marker or Git tool window menu                               |
 | Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                                                                        |
@@ -99,6 +99,12 @@ files and their diffs are sent to the endpoint you configure, together with the
 commit message rules you wrote or the built-in ones; see the
 [privacy guide](docs/privacy.md).
 
+**The conflict viewer edits the merged result in place.** The middle Result pane
+takes typing and per-block Ours/Theirs/Both choices; `Save Merge Result` (⌘S)
+re-reads the file and refuses an external change, and `Mark as Resolved` stays an
+explicit step. Binary, oversized, submodule, symlink, unreliable-marker and
+Subversion/remote conflicts stay read-only.
+
 **Copy for AI puts the conflict context on your clipboard.** It is for whatever
 external tool you choose; Viff calls no model and sends nothing.
 
@@ -130,7 +136,7 @@ the reasoning is recorded in [0025](docs/decisions/0025-svn-support.md).
 | History                                                          | Yes (commit graph)        | Yes (linear, backed by a local cache)      |
 | update / commit / revert / add / delete                           | Yes                       | Yes (partial commits via a target set)     |
 | Branch switching, creation, deletion                              | Yes                       | Yes (directories plus `switch`)            |
-| Conflict display (read-only)                                      | Yes                       | Yes                                        |
+| Conflict display and in-app result editing                        | Yes                       | Display only                               |
 | Property editing (`svn:ignore`, `svn:eol-style`)                  | Not applicable            | Not implemented yet                        |
 | lock / unlock                                                     | Not applicable            | Not implemented yet                        |
 | rebase, cherry-pick, reset, interactive rebase                    | Yes                       | Not applicable                             |

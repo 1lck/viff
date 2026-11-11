@@ -53,7 +53,7 @@ type (
 // line endings and the final-newline state are preserved.
 //
 // The conflict viewer applies a block to its editor buffer and saves through
-// the normal file-save path instead (docs/decisions/0047-editable-conflict-result.md),
+// the normal file-save path instead (docs/decisions/0051-editable-conflict-result.md),
 // so this remains a backend capability without a caller in the UI.
 //
 // The file is read again immediately before the write. A save that landed

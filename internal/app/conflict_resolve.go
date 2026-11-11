@@ -17,7 +17,7 @@ import (
 //
 // The conflict viewer no longer calls this: its Result pane applies a block to
 // the editor buffer and writes through SaveFile, so unsaved manual edits and
-// undo survive (see docs/decisions/0047-editable-conflict-result.md). The
+// undo survive (see docs/decisions/0051-editable-conflict-result.md). The
 // method stays as the ConflictResolver backend capability; removing it is a
 // separate decision.
 //
