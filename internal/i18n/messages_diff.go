@@ -59,20 +59,28 @@ const (
 	DiffSearchNext        = Key("diff.search.nextOccurrence")
 	DiffSearchClose       = Key("diff.search.close")
 
-	ConflictLabelResult   = Key("conflict.label.result")
-	ConflictTitleMerge    = Key("conflict.title.merge")
-	ConflictSubResolve    = Key("conflict.sub.resolve")
-	ConflictTitleResolved = Key("conflict.title.resolved")
-	ConflictSubResolved   = Key("conflict.sub.resolved")
-	ConflictSubFoundOne   = Key("conflict.sub.foundOne")
-	ConflictSubFoundMany  = Key("conflict.sub.foundMany")
-	ConflictSubAcceptOne  = Key("conflict.sub.acceptOne")
-	ConflictSubAcceptMany = Key("conflict.sub.acceptMany")
-	ConflictSubUnreliable = Key("conflict.sub.unreliable")
-	ConflictSubNoText     = Key("conflict.sub.noText")
+	ConflictLabelResult    = Key("conflict.label.result")
+	ConflictLabelEditable  = Key("conflict.label.editable")
+	ConflictTitleMerge     = Key("conflict.title.merge")
+	ConflictSubResolve     = Key("conflict.sub.resolve")
+	ConflictTitleResolved  = Key("conflict.title.resolved")
+	ConflictSubResolved    = Key("conflict.sub.resolved")
+	ConflictSubFoundOne    = Key("conflict.sub.foundOne")
+	ConflictSubFoundMany   = Key("conflict.sub.foundMany")
+	ConflictSubAcceptOne   = Key("conflict.sub.acceptOne")
+	ConflictSubAcceptMany  = Key("conflict.sub.acceptMany")
+	ConflictSubUnreliable  = Key("conflict.sub.unreliable")
+	ConflictSubNoText      = Key("conflict.sub.noText")
+	ConflictSubResultClean = Key("conflict.sub.resultClean")
 
 	ConflictActionMarkAsResolved = Key("conflict.action.markAsResolved")
 	ConflictTipMarkAsResolved    = Key("conflict.tip.markAsResolved")
+	ConflictTipSaveFirst         = Key("conflict.tip.saveFirst")
+	ConflictActionSave           = Key("conflict.action.save")
+	ConflictTipSave              = Key("conflict.tip.save")
+	ConflictActionRevert         = Key("conflict.action.revert")
+	ConflictTipRevert            = Key("conflict.tip.revert")
+	ConflictEditLabel            = Key("conflict.label.editor")
 	ConflictActionOpenEditor     = Key("conflict.action.openEditor")
 	ConflictActionCopyPath       = Key("conflict.action.copyPath")
 	ConflictActionPrevious       = Key("conflict.action.previousConflict")
@@ -91,6 +99,8 @@ const (
 	ConflictTipCopyNothing       = Key("conflict.tip.copyNothing")
 	ConflictNoticeCopied         = Key("conflict.notice.copied")
 	ConflictNoticeCopiedBody     = Key("conflict.notice.copiedBody")
+	ConflictNoticeSaved          = Key("conflict.notice.saved")
+	ConflictNoticeSavedBody      = Key("conflict.notice.savedBody")
 
 	PictureNoNewVersion   = Key("picture.notice.noNewVersion")
 	PictureNoOldVersion   = Key("picture.notice.noPreviousVersion")
@@ -171,18 +181,26 @@ func init() {
 		DiffSearchClose:       "Close\t⎋",
 
 		ConflictLabelResult:          "Result (working tree)",
+		ConflictLabelEditable:        "editable",
 		ConflictTitleMerge:           "Merge conflict: %s",
 		ConflictSubResolve:           "Resolve it in your editor; Viff shows both sides and the file on disk as it changes.",
 		ConflictTitleResolved:        "No conflict markers left in the file on disk",
 		ConflictSubResolved:          "Review the result, then mark the file as resolved to stage it.",
 		ConflictSubFoundOne:          "%d conflict in the file on disk. Edit it in your editor; this view updates when it is saved.",
 		ConflictSubFoundMany:         "%d conflicts in the file on disk. Edit it in your editor; this view updates when it is saved.",
-		ConflictSubAcceptOne:         "%d conflict in the file on disk. Accept a side below, or edit it in your editor.",
-		ConflictSubAcceptMany:        "%d conflicts in the file on disk. Accept a side below, or edit it in your editor.",
-		ConflictSubUnreliable:        "The conflict markers look unusual; check the file in your editor.",
+		ConflictSubAcceptOne:         "%d conflict in the file on disk. Accept a side below, or edit the result directly.",
+		ConflictSubAcceptMany:        "%d conflicts in the file on disk. Accept a side below, or edit the result directly.",
+		ConflictSubUnreliable:        "The conflict markers look unusual; check the result before continuing.",
 		ConflictSubNoText:            "There is no text to merge. Keep or delete the file on disk, then mark it as resolved.",
+		ConflictSubResultClean:       "No conflict markers left in the result pane. Save it, then mark the file as resolved.",
 		ConflictActionMarkAsResolved: "Mark as Resolved",
 		ConflictTipMarkAsResolved:    "Remove all conflict markers first",
+		ConflictTipSaveFirst:         "Save the merge result first",
+		ConflictActionSave:           "Save Merge Result",
+		ConflictTipSave:              "Write the merged result to the working tree (⌘S)",
+		ConflictActionRevert:         "Revert",
+		ConflictTipRevert:            "Discard the edits in the result pane",
+		ConflictEditLabel:            "Merge result editor",
 		ConflictActionOpenEditor:     "Open in Editor",
 		ConflictActionCopyPath:       "Copy Path",
 		ConflictActionPrevious:       "Previous Conflict",
@@ -201,6 +219,8 @@ func init() {
 		ConflictTipCopyNothing:       "Available while the file has conflict markers",
 		ConflictNoticeCopied:         "Conflict context copied",
 		ConflictNoticeCopiedBody:     "Copied. Viff refreshes the file automatically after it is edited.",
+		ConflictNoticeSaved:          "Merge result saved",
+		ConflictNoticeSavedBody:      "The working-tree file was updated and the view reloaded.",
 
 		PictureNoNewVersion:   "No new version",
 		PictureNoOldVersion:   "No previous version",
@@ -280,18 +300,26 @@ func init() {
 		DiffSearchClose:       "关闭\t⎋",
 
 		ConflictLabelResult:          "结果（工作区）",
+		ConflictLabelEditable:        "可编辑",
 		ConflictTitleMerge:           "合并冲突：%s",
 		ConflictSubResolve:           "在编辑器中解决冲突；Viff 会显示两侧内容，磁盘上的文件也会随编辑更新。",
 		ConflictTitleResolved:        "磁盘上的文件中已无冲突标记",
 		ConflictSubResolved:          "检查结果，然后把文件标记为已解决以便暂存。",
 		ConflictSubFoundOne:          "磁盘上的文件中有 %d 处冲突。请在编辑器中修改；保存后此视图会更新。",
 		ConflictSubFoundMany:         "磁盘上的文件中有 %d 处冲突。请在编辑器中修改；保存后此视图会更新。",
-		ConflictSubAcceptOne:         "磁盘上的文件中有 %d 处冲突。可在下方接受某一侧，或在编辑器中修改。",
-		ConflictSubAcceptMany:        "磁盘上的文件中有 %d 处冲突。可在下方接受某一侧，或在编辑器中修改。",
-		ConflictSubUnreliable:        "这些冲突标记看起来不常见，请在编辑器中检查该文件。",
+		ConflictSubAcceptOne:         "磁盘上的文件中有 %d 处冲突。可在下方接受某一侧，或直接编辑中间的结果。",
+		ConflictSubAcceptMany:        "磁盘上的文件中有 %d 处冲突。可在下方接受某一侧，或直接编辑中间的结果。",
+		ConflictSubUnreliable:        "这些冲突标记看起来不常见，请检查结果后再继续。",
 		ConflictSubNoText:            "没有可合并的文本。保留或删除磁盘上的文件，然后将其标记为已解决。",
+		ConflictSubResultClean:       "结果栏中已无冲突标记。请先保存，再把文件标记为已解决。",
 		ConflictActionMarkAsResolved: "标记为已解决",
 		ConflictTipMarkAsResolved:    "请先移除所有冲突标记",
+		ConflictTipSaveFirst:         "请先保存合并结果",
+		ConflictActionSave:           "保存合并结果",
+		ConflictTipSave:              "将合并结果写入工作区文件（⌘S）",
+		ConflictActionRevert:         "还原",
+		ConflictTipRevert:            "放弃结果栏中的修改",
+		ConflictEditLabel:            "合并结果编辑器",
 		ConflictActionOpenEditor:     "在编辑器中打开",
 		ConflictActionCopyPath:       "复制路径",
 		ConflictActionPrevious:       "上一处冲突",
@@ -310,6 +338,8 @@ func init() {
 		ConflictTipCopyNothing:       "文件中有冲突标记时可用",
 		ConflictNoticeCopied:         "冲突上下文已复制",
 		ConflictNoticeCopiedBody:     "已复制，外部修改后 Viff 会自动刷新",
+		ConflictNoticeSaved:          "合并结果已保存",
+		ConflictNoticeSavedBody:      "工作区文件已更新，视图已重新加载。",
 
 		PictureNoNewVersion:   "没有新版本",
 		PictureNoOldVersion:   "没有旧版本",

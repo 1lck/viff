@@ -15,6 +15,12 @@ import (
 // by hand: only the bytes of that block change; the file keeps its line
 // endings, its final newline and every other block.
 //
+// The conflict viewer no longer calls this: its Result pane applies a block to
+// the editor buffer and writes through SaveFile, so unsaved manual edits and
+// undo survive (see docs/decisions/0051-editable-conflict-result.md). The
+// method stays as the ConflictResolver backend capability; removing it is a
+// separate decision.
+//
 // The operation reads the file from disk before writing and refuses a file
 // that no longer matches the view d was built from (ErrStale), so an external
 // editor's save that landed before the last check is not overwritten. The

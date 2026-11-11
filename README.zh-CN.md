@@ -60,7 +60,7 @@ Git 仍是核心。围绕它，Viff 提供项目浏览与 Quick Open、工作树
 | 浏览与编辑 | Project 面板（目录折叠、状态着色）、Quick Open、只读查看（可选代码缩略图）、Blame、文件历史，以及工作树 UTF-8 文本编辑（不超过 1 MiB，保存后也需在上限内） |
 | 操作分支   | Checkout、Merge、Rebase、Cherry-pick、Revert、Reset、借助 Stash 切换分支                                                          |
 | 撤销操作   | ⌘Z 撤销本会话内上一次本地提交、合并、rebase、检出或分支改动                                                                       |
-| 解决冲突   | Ours / Result / Theirs 三栏，逐块接受 Ours / Theirs / Both，显式标记解决，可复制冲突上下文给外部 AI                               |
+| 解决冲突   | Ours / Result / Theirs 三栏，中间 Result 栏可直接编辑，逐块接受 Ours / Theirs / Both 应用到结果缓冲区，带陈旧检测的保存，显式标记解决，可复制冲突上下文给外部 AI |
 | 多工作目录 | 从新分支或已有分支创建 Worktree，管理子模块，保护未提交改动                                                                       |
 | 大文件     | 检测 Git LFS 规则与缺失依赖；可从 LFS 标记或 Git 工具窗口菜单按需统计受管文件并复制清单                                            |
 | 同步协作   | Fetch、Pull、Push、force-with-lease、远端、补丁、签名与凭据设置                                                                   |
@@ -85,6 +85,10 @@ Git 仍是核心。围绕它，Viff 提供项目浏览与 Quick Open、工作树
 
 **AI 生成提交说明是可选的，默认关闭。** 启用后会把变更文件、diff 以及你写的提交信息规则
 （没有自定义时为内置规则）发送到你自己配置的端点，边界见[隐私说明](docs/privacy.md)。
+
+**冲突查看器可直接编辑合并结果。** 中间 Result 栏支持输入与逐块 Ours / Theirs / Both 选择；
+`Save Merge Result`（⌘S）会重读文件并拒绝覆盖外部修改，`Mark as Resolved` 仍是显式步骤。
+二进制、过大、子模块、符号链接、标记不可解析以及 Subversion/远端冲突仍只读。
 
 **Copy for AI 只把冲突上下文复制到剪贴板**，交给外部工具；Viff 不调用模型、不发送任何内容。
 
@@ -113,7 +117,7 @@ Viff 在同一个窗口里同时服务 Git 与 Subversion 仓库。后端不支�
 | 历史                                              | 有（提交图）         | 有（线性，需要本地缓存）       |
 | update / commit / revert / add / delete           | 有                   | 有（部分提交用目标集表达）     |
 | 分支切换、创建、删除                              | 有                   | 有（目录 + `switch`）          |
-| 冲突只读展示                                      | 有                   | 有                             |
+| 冲突展示与应用内结果编辑                          | 有                   | 仅展示                         |
 | 属性编辑（`svn:ignore`、`svn:eol-style`）         | 不适用               | 尚未实现                       |
 | lock / unlock                                     | 不适用               | 尚未实现                       |
 | rebase、cherry-pick、reset、交互式 rebase         | 有                   | 不适用                         |

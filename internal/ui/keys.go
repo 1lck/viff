@@ -110,10 +110,17 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		}
 	case ch == "s":
 		t := w.ed.cur()
-		if t == nil || t.edit == nil {
+		if t == nil {
 			return false
 		}
-		w.after(func() { w.saveEdit(t) })
+		switch {
+		case t.edit != nil:
+			w.after(func() { w.saveEdit(t) })
+		case t.cedit != nil:
+			w.after(func() { w.saveConflict(t) })
+		default:
+			return false
+		}
 	case ch == "e":
 		t := w.ed.cur()
 		if t == nil {
@@ -122,6 +129,10 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 		switch {
 		case t.edit != nil:
 			w.after(func() { w.requestExitEdit(t) })
+		case t.res != nil && t.res.Conflict != nil && t.cedit != nil:
+			// The Result pane is always editable; ⌘E is the keyboard way to
+			// put the caret back in it after a button took the focus.
+			w.after(func() { w.focusNext = idConflictText; w.Invalidate() })
 		case w.canEdit(t):
 			w.after(func() { w.enterEdit(t) })
 		default:

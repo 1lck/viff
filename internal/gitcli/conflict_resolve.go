@@ -52,6 +52,10 @@ type (
 // oversized, symlink and submodule entries. Lines outside the block, the CRLF
 // line endings and the final-newline state are preserved.
 //
+// The conflict viewer applies a block to its editor buffer and saves through
+// the normal file-save path instead (docs/decisions/0051-editable-conflict-result.md),
+// so this remains a backend capability without a caller in the UI.
+//
 // The file is read again immediately before the write. A save that landed
 // before that last check is refused as ErrResolveStale and left in place; a
 // save that races the final atomic rename cannot be detected, but the window

@@ -17,10 +17,11 @@ type conflictPane struct {
 	mark  []uint8 // per line: 0 plain, 1 changed vs base, 2 conflict body, 3 marker line
 }
 
-// The per-block resolve controls and the copy actions for an external AI tool
-// have an identity scope of their own, made in init so the shared tree (ids.go)
-// already has its features, and declared in this file rather than in ids.go:
-// the conflict viewer's read-only identities stay unchanged.
+// The per-block resolve controls, the Result editor and the copy actions for an
+// external AI tool have an identity scope of their own, made in init so the
+// shared tree (ids.go) already has its features, and declared in this file
+// rather than in ids.go: the conflict viewer's read-only identities stay
+// unchanged.
 var (
 	scConflictResolve   ui.Scope
 	idResolveOurs       ui.ID
@@ -28,6 +29,9 @@ var (
 	idResolveBoth       ui.ID
 	idConflictCopyAI    ui.ID
 	idConflictCopyBlock ui.ID
+	idConflictText      ui.ID
+	idConflictSave      ui.ID
+	idConflictRevert    ui.ID
 )
 
 func init() {
@@ -37,6 +41,9 @@ func init() {
 	idResolveBoth = scConflictResolve.ID(tree.Name("both"))
 	idConflictCopyAI = scConflictResolve.ID(tree.Name("copy-ai"))
 	idConflictCopyBlock = scConflictResolve.ID(tree.Name("copy-block"))
+	idConflictText = scConflictResolve.ID(tree.Name("result"))
+	idConflictSave = scConflictResolve.ID(tree.Name("save"))
+	idConflictRevert = scConflictResolve.ID(tree.Name("revert"))
 }
 
 func (w *Window) conflictPanes(t *diffTab) []conflictPane {
@@ -44,7 +51,7 @@ func (w *Window) conflictPanes(t *diffTab) []conflictPane {
 	mk := func(title string, s []string, base []string) conflictPane {
 		p := conflictPane{title: title, disp: expandAll(s)}
 		p.syn = highlight(t.src.Path, p.disp)
-		p.mark = make([]uint8, len(s))
+		p.mark = make([]uint8, len(p.disp))
 		if base != nil {
 			for _, b := range domain.DiffLines(base, s, domain.WhitespaceExact, 0) {
 				for k := b.NewStart; k < min(b.NewEnd, len(s)); k++ {
@@ -60,46 +67,80 @@ func (w *Window) conflictPanes(t *diffTab) []conflictPane {
 	}
 	ours := mk(cv.OursLabel, cv.Ours.Lines, base)
 	theirs := mk(cv.TheirsLabel, cv.Theirs.Lines, base)
-	cur := mk(w.t(i18n.ConflictLabelResult), cv.Current.Lines, nil)
-	for _, b := range cv.Markers.Blocks {
-		for k := b.Begin; k <= min(b.Finish, len(cur.mark)-1); k++ {
-			cur.mark[k] = 2
-		}
-		for _, k := range []int{b.Begin, b.OursEnd, b.Finish} {
-			if k >= 0 && k < len(cur.mark) {
-				cur.mark[k] = 3
-			}
-		}
-		if b.BaseStart >= 0 && b.BaseStart-1 < len(cur.mark) && b.BaseStart > 0 {
-			cur.mark[b.BaseStart-1] = 3
-		}
+	var cur conflictPane
+	if e := t.cedit; e != nil {
+		// While the Result pane edits, its buffer is the truth: markers,
+		// highlighting and line numbers move with what the user typed.
+		e.refresh()
+		cur = conflictPane{title: w.t(i18n.ConflictLabelResult), disp: expandAll(e.lines)}
+		cur.syn = highlight(t.src.Path, cur.disp)
+		cur.mark = conflictMarks(len(cur.disp), e.markers)
+	} else {
+		cur = mk(w.t(i18n.ConflictLabelResult), cv.Current.Lines, nil)
+		cur.mark = conflictMarks(len(cur.disp), cv.Markers)
 	}
 	return []conflictPane{ours, cur, theirs}
 }
 
+// conflictMarks shades conflict bodies and marker lines. The same function
+// serves the loaded view and the edited buffer so a block looks identical
+// before and after an accept.
+func conflictMarks(n int, markers domain.MarkerParse) []uint8 {
+	mark := make([]uint8, n)
+	for _, b := range markers.Blocks {
+		for k := b.Begin; k <= min(b.Finish, n-1); k++ {
+			mark[k] = 2
+		}
+		for _, k := range []int{b.Begin, b.OursEnd, b.Finish} {
+			if k >= 0 && k < n {
+				mark[k] = 3
+			}
+		}
+		if b.BaseStart >= 0 && b.BaseStart-1 < n && b.BaseStart > 0 {
+			mark[b.BaseStart-1] = 3
+		}
+	}
+	return mark
+}
+
 func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	cv := t.res.Conflict
+	if t.cedit != nil {
+		// The banner and the accept row read the dirty flag and the block list;
+		// sync them before either is painted.
+		t.cedit.refresh()
+	}
 	// In-app resolution needs a readable working-tree text whose markers form
 	// complete blocks. Anything else stays read-only here: a binary file, a
-	// symlink or a submodule has no sides to accept as text, and markers the
-	// parser cannot trust would make "block 2" mean the wrong lines.
-	// Rewriting a conflict block in place is a capability, not a given: a
-	// Subversion working copy has no in-app resolution at all (its conflict
-	// view stays read-only, and "Mark as Resolved" runs svn resolve instead).
-	// Offering the accept buttons there would draw controls that do nothing.
-	canResolve := w.ws.Caps.Conflicts != nil
-	resolvable := canResolve && cv.Conflict.Kind.Textual() && cv.Current.Content.Exists && cv.Current.Text &&
-		!cv.Current.Content.Binary && !cv.Current.Content.TooLarge &&
-		!cv.Current.Content.Submodule && !cv.Current.Content.Symlink &&
-		cv.Markers.Reliable && len(cv.Markers.Blocks) > 0
-	// The copied context is built from the same marker parse the accept
-	// controls rely on: without a reliable parse a block would name the wrong
-	// lines. It does not need the resolver, only a trustworthy parse, because
-	// the clipboard path sends text to the user's own assistant.
-	canCopy := cv.Conflict.Kind.Textual() && cv.Current.Content.Exists && cv.Current.Text &&
-		!cv.Current.Content.Binary && !cv.Current.Content.TooLarge &&
-		!cv.Current.Content.Submodule && !cv.Current.Content.Symlink &&
-		cv.Markers.Reliable && len(cv.Markers.Blocks) > 0
+	// symlink or a submodule has no sides to accept as text, markers the
+	// parser cannot trust would make "block 2" mean the wrong lines, and a file
+	// above the editor's limit cannot be written back by Save. Rewriting a
+	// conflict block in place is a capability, not a given: a Subversion
+	// working copy has no in-app resolution at all (its conflict view stays
+	// read-only, and "Mark as Resolved" runs svn resolve instead).
+	// A buffer exists only when the tab was editable at load; from then on the
+	// buffer itself decides what the controls offer, so a later disk change
+	// cannot hide Save under an unsaved result.
+	resolvable := t.cedit != nil
+	// The copied context is built from the same buffer (or the loaded view) the
+	// accept controls use: a stale block would name the wrong lines. It does
+	// not need the resolver, only a trustworthy parse, because the clipboard
+	// path sends text to the user's own assistant.
+	copyView := w.conflictViewForContext(t)
+	canCopy := copyView != nil && copyView.Conflict.Kind.Textual() && copyView.Current.Content.Exists && copyView.Current.Text &&
+		!copyView.Current.Content.Binary && !copyView.Current.Content.TooLarge &&
+		!copyView.Current.Content.Submodule && !copyView.Current.Content.Symlink &&
+		copyView.Markers.Reliable && len(copyView.Markers.Blocks) > 0
+	blocks := w.conflictBlocks(t)
+	n := len(blocks)
+	if n > 0 {
+		t.conflictBlock = min(t.conflictBlock, n-1)
+	} else {
+		t.conflictBlock = 0
+	}
+	dirty := t.cedit != nil && t.cedit.dirty
+	diskResolved := cv.Resolved || (cv.Conflict.Kind.Textual() && len(cv.Markers.Blocks) == 0 && cv.Current.Content.Exists)
+	resolved := diskResolved && !dirty
 	// Banner.
 	bh := float32(88)
 	if resolvable {
@@ -108,7 +149,6 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	br := splitTop(&r, bh)
 	inner := rect(br.X+10, br.Y+8, br.Width-20, bh-16)
 	bg, border := w.pal.BannerWarn, w.pal.BannerWarnBorder
-	resolved := cv.Resolved || (cv.Conflict.Kind.Textual() && len(cv.Markers.Blocks) == 0 && cv.Current.Content.Exists)
 	if resolved {
 		bg, border = w.pal.Banner, w.pal.BannerBorder
 	}
@@ -120,7 +160,7 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		icon = icons.Success
 		title = w.t(i18n.ConflictTitleResolved)
 		sub = w.t(i18n.ConflictSubResolved)
-	} else if n := len(cv.Markers.Blocks); n > 0 {
+	} else if n > 0 {
 		if n == 1 {
 			sub = w.t(i18n.ConflictSubFoundOne, n)
 		} else {
@@ -133,7 +173,13 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 				sub = w.t(i18n.ConflictSubAcceptMany, n)
 			}
 		}
-		if !cv.Markers.Reliable {
+		if !copyView.Markers.Reliable {
+			sub = w.t(i18n.ConflictSubUnreliable)
+		}
+	} else if t.cedit != nil {
+		if t.cedit.markers.Reliable {
+			sub = w.t(i18n.ConflictSubResultClean)
+		} else {
 			sub = w.t(i18n.ConflictSubUnreliable)
 		}
 	} else if !cv.Conflict.Kind.Textual() {
@@ -147,20 +193,40 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	bx, by := inner.X+34, inner.Y+38
 	label := w.t(i18n.ConflictActionMarkAsResolved)
 	bw := w.buttonWidth(label)
-	if w.button(idConflictStage, rect(bx, by, bw, 26), label, btnDefault, w.readOnly() || !resolved && cv.Conflict.Kind.Textual()) {
+	stageDisabled := w.readOnly() || dirty || !resolved && cv.Conflict.Kind.Textual()
+	if w.button(idConflictStage, rect(bx, by, bw, 26), label, btnDefault, stageDisabled) {
 		p := t.src.Path
 		w.after(func() { w.markResolved(p) })
 	}
-	if !resolved && cv.Conflict.Kind.Textual() {
+	switch {
+	case dirty:
+		w.tip(idConflictStage, w.t(i18n.ConflictTipSaveFirst))
+	case !resolved && cv.Conflict.Kind.Textual():
 		w.tip(idConflictStage, w.t(i18n.ConflictTipMarkAsResolved))
 	}
 	bx += bw + 8
+	if resolvable {
+		saveLabel := w.t(i18n.ConflictActionSave)
+		sw := w.buttonWidth(saveLabel)
+		if w.button(idConflictSave, rect(bx, by, sw, 26), saveLabel, btnNormal, !dirty || t.cedit.saving || t.busy || t.loading) {
+			w.after(func() { w.saveConflict(t) })
+		}
+		w.tip(idConflictSave, w.t(i18n.ConflictTipSave))
+		bx += sw + 8
+		revertLabel := w.t(i18n.ConflictActionRevert)
+		rw := w.buttonWidth(revertLabel)
+		if w.button(idConflictRevert, rect(bx, by, rw, 26), revertLabel, btnBorderless, !dirty || t.cedit.saving || t.busy || t.loading) {
+			w.after(func() { w.revertConflict(t) })
+		}
+		w.tip(idConflictRevert, w.t(i18n.ConflictTipRevert))
+		bx += rw + 8
+	}
 	ow := w.buttonWidth(w.t(i18n.ConflictActionOpenEditor))
 	if w.button(idConflictOpen, rect(bx, by, ow, 26), w.t(i18n.ConflictActionOpenEditor), btnNormal, w.readOnly() || !cv.Current.Content.Exists) {
 		p := t.src.Path
 		line := 0
-		if t.conflictBlock < len(cv.Markers.Blocks) && len(cv.Markers.Blocks) > 0 {
-			line = cv.Markers.Blocks[t.conflictBlock].Begin + 1
+		if t.conflictBlock < len(blocks) && len(blocks) > 0 {
+			line = blocks[t.conflictBlock].Begin + 1
 		}
 		w.after(func() { w.openExternal(p, line) })
 	}
@@ -185,9 +251,7 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		w.tip(idConflictCopyAI, w.t(i18n.ConflictTipCopyNothing))
 	}
 	// Conflict navigation.
-	n := len(cv.Markers.Blocks)
 	if n > 0 {
-		t.conflictBlock = min(t.conflictBlock, n-1)
 		nx := right(inner) - 8 - actionSize
 		if w.action(scConflictNav.At(1), nx, by, icons.Down, w.t(i18n.ConflictActionNext), actOpts{disabled: t.conflictBlock >= n-1}) {
 			w.after(func() { t.conflictBlock++; w.scrollToConflict(t) })
@@ -200,13 +264,14 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		sw := w.p.width(s, fontUI, regular)
 		w.p.text(s, rect(nx-sw-10, by, sw+2, 26), fontUI, regular, w.pal.TextMuted)
 	}
-	// Per-block resolution: accepting a side rewrites only that block on disk.
-	if resolvable {
+	// Per-block resolution: accepting a side edits the Result buffer, not the
+	// file on disk. Save is the only write path and the only stale check.
+	if resolvable && n > 0 {
 		rx := inner.X + 34
 		label := w.t(i18n.ConflictAcceptTitle, itoa(t.conflictBlock+1), itoa(n))
 		w.p.text(label, rect(rx, inner.Y+72, 230, 26), fontUI, regular, w.pal.TextMuted)
 		rx += 240
-		disabled := t.busy || t.loading || w.readOnly()
+		disabled := t.busy || t.loading || w.readOnly() || !t.cedit.markers.Reliable
 		choices := []struct {
 			id     ui.ID
 			label  string
@@ -221,7 +286,7 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 			cw := w.buttonWidth(c.label)
 			if w.button(c.id, rect(rx, inner.Y+72, cw, 26), c.label, btnNormal, disabled) {
 				choice := c.choice
-				w.after(func() { w.resolveConflictBlock(t, choice) })
+				w.after(func() { w.acceptConflictBlock(t, choice) })
 			}
 			w.tip(c.id, c.tip)
 			rx += cw + 8
@@ -256,13 +321,29 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 		maxLines = max(maxLines, len(p.disp))
 	}
 	content := float32(maxLines+3) * lineH
+	if t.cedit != nil {
+		gutter := w.gutterWidth(len(t.cedit.lines), cellW)
+		if w.focused(idConflictText) {
+			t.y, t.x = w.followBufferCaret(&t.cedit.textBuffer, t.y, t.x, pw-gutter, r.Height, cellW, lineH)
+		}
+		maxX := max(0, float32(t.cedit.maxCells)*cellW+40-(pw-gutter))
+		t.x = clampF(t.x, 0, maxX)
+	}
 	t.y = clampF(t.y, 0, max(0, content-r.Height))
 	w.onScrollIn(r, func(dx, dy float32) { t.y += dy; t.x = max(0, t.x+dx) })
 	w.diffKeys(t, idDiffRight, lineH, r.Height)
 	for i, p := range panes {
 		pr := rect(r.X+float32(i)*(pw+gap), r.Y, pw, r.Height)
-		w.paintTitle(rect(pr.X+10, titles.Y, pr.Width-16, titles.Height), p.title, "")
-		w.paintConflictPane(p, pr, t, cellW, lineH)
+		sub := ""
+		var edit *conflictEdit
+		if i == 1 {
+			edit = t.cedit
+			if edit != nil {
+				sub = w.t(i18n.ConflictLabelEditable)
+			}
+		}
+		w.paintTitle(rect(pr.X+10, titles.Y, pr.Width-16, titles.Height), p.title, sub)
+		w.paintConflictPane(p, pr, t, cellW, lineH, edit)
 		if i > 0 {
 			w.p.vline(pr.X-1, titles.Y, r.Height+titles.Height, w.pal.Border)
 		}
@@ -272,13 +353,20 @@ func (w *Window) paintConflict(t *diffTab, r ui.Rect) {
 	w.wrapBarDrag(idDiffScrollR, func(y float32) { t.y = y }, func() float32 { return t.y }, content, r.Height)
 }
 
-// conflictPanesCached keeps the panes with the tab between paints.
+// conflictPanesCached keeps the panes with the tab between paints. While the
+// Result pane edits, the buffer text is part of the key: a repaint with the
+// same text reuses the display rows, an accept or a keystroke rebuilds them.
 func (w *Window) conflictPanesCached(t *diffTab) []conflictPane {
-	if c, ok := conflictCache[t]; ok && c.res == t.res && c.tr == w.tr {
+	built := ""
+	if t.cedit != nil {
+		t.cedit.refresh()
+		built = t.cedit.built
+	}
+	if c, ok := conflictCache[t]; ok && c.res == t.res && c.tr == w.tr && c.built == built {
 		return c.panes
 	}
 	panes := w.conflictPanes(t)
-	conflictCache[t] = conflictEntry{res: t.res, tr: w.tr, panes: panes}
+	conflictCache[t] = conflictEntry{res: t.res, tr: w.tr, panes: panes, built: built}
 	return panes
 }
 
@@ -286,17 +374,22 @@ type conflictEntry struct {
 	res   any
 	tr    *i18n.Translator
 	panes []conflictPane
+	built string
 }
 
 var conflictCache = map[*diffTab]conflictEntry{}
 
-func (w *Window) paintConflictPane(p conflictPane, r ui.Rect, t *diffTab, cellW, lineH float32) {
+func (w *Window) paintConflictPane(p conflictPane, r ui.Rect, t *diffTab, cellW, lineH float32, edit *conflictEdit) {
 	_, _, fs := w.metrics()
 	gutter := w.gutterWidth(len(p.disp), cellW)
 	gr := rect(r.X, r.Y, gutter, r.Height)
 	tr := rect(r.X+gutter, r.Y, r.Width-gutter, r.Height)
 	style := ui.TextStyle{Size: fs, Color: w.pal.EditorText, Mono: true, MonoFace: w.mono}
 	numStyle := ui.TextStyle{Size: fs - 1, Color: w.pal.LineNumber, Mono: true, MonoFace: w.mono}
+	if edit != nil {
+		edit.tr, edit.top, edit.scrollX = tr, t.y, t.x
+		edit.cellW, edit.lineH, edit.painted = cellW, lineH, true
+	}
 	w.c.Clip(r)
 	first := max(0, int(t.y/lineH))
 	last := min(len(p.disp), int((t.y+r.Height)/lineH)+1)
@@ -310,6 +403,9 @@ func (w *Window) paintConflictPane(p conflictPane, r ui.Rect, t *diffTab, cellW,
 			w.p.fill(rect(tr.X, y, tr.Width, lineH), w.pal.DiffConflict)
 		case 3:
 			w.p.fill(rect(tr.X, y, tr.Width, lineH), lighten(w.pal.DiffConflict, 0.12))
+		}
+		if edit != nil {
+			w.paintBufferSelection(&edit.textBuffer, idConflictText, i, displayCells(p.disp[i]), tr, y, t.x, cellW, lineH)
 		}
 		w.c.LabelAligned(itoa(i+1), rect(gr.X, y, gr.Width-14, lineH), numStyle, ui.AlignRight)
 		if s := p.disp[i]; s != "" {
@@ -326,50 +422,53 @@ func (w *Window) paintConflictPane(p conflictPane, r ui.Rect, t *diffTab, cellW,
 			w.c.LabelRuns(s, rect(tr.X+6-t.x, y, float32(displayCells(s)+1)*cellW, lineH), style, cellW, runs)
 			w.c.Unclip()
 		}
+		if edit != nil {
+			w.paintBufferComposition(&edit.textBuffer, i, displayCells(p.disp[i]), tr, y, t.x, cellW, lineH)
+			w.paintBufferCaret(&edit.textBuffer, idConflictText, i, tr, y, t.x, cellW, lineH)
+		}
+	}
+	if edit != nil {
+		if len(p.disp) == 0 {
+			w.paintBufferCaret(&edit.textBuffer, idConflictText, 0, tr, r.Y, t.x, cellW, lineH)
+		}
+		// The Result pane is the only text field in this view: the two side
+		// panes stay read-only and register no editable hit.
+		w.c.HitWithOptions(idConflictText, tr, w.t(i18n.ConflictEditLabel), ui.HitOptions{
+			Role: ui.RoleTextField, Value: edit.built, Multiline: true,
+			TextBounds: rect(tr.X+6, tr.Y, tr.Width-6, tr.Height),
+			TextSize:   fs, TextColor: w.pal.EditorText,
+			HideNativeOverlays: true, Placement: &edit.textBuffer,
+		})
+		w.editors[idConflictText] = edit.ed
 	}
 	w.c.Unclip()
 	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
 }
 
 func (w *Window) scrollToConflict(t *diffTab) {
-	cv := t.res.Conflict
-	if cv == nil || t.conflictBlock < 0 || t.conflictBlock >= len(cv.Markers.Blocks) {
+	blocks := w.conflictBlocks(t)
+	if t.conflictBlock < 0 || t.conflictBlock >= len(blocks) {
 		return
 	}
 	_, lineH, _ := w.metrics()
-	t.y = max(0, float32(cv.Markers.Blocks[t.conflictBlock].Begin-4)*lineH)
-}
-
-// resolveConflictBlock accepts one side of the selected block in the working
-// file. The workspace re-reads the file, refuses a stale or non-textual view
-// and reports the reason; the tab is reloaded either way, so after an external
-// edit the panes show what is actually on disk.
-func (w *Window) resolveConflictBlock(t *diffTab, choice domain.ResolveChoice) {
-	res := t.res
-	if res == nil || res.Conflict == nil || t.loading || t.busy {
-		return
-	}
-	block := t.conflictBlock
-	if block < 0 || block >= len(res.Conflict.Markers.Blocks) {
-		return
-	}
-	t.busy = true
-	w.ws.ResolveConflict(res, block, choice, func(error) {
-		t.busy = false
-		w.loadTab(t)
-	})
+	t.y = max(0, float32(blocks[t.conflictBlock].Begin-4)*lineH)
 }
 
 // copyConflictForAI builds the structured context of the conflict tab and puts
 // it on the clipboard. Viff itself runs no model and opens no connection: the
 // text is for whatever assistant the user pastes it into. block is a 0-based
-// conflict block, or app.ConflictContextAll for the whole file.
+// conflict block, or app.ConflictContextAll for the whole file. While the Result
+// pane edits, the context comes from that buffer so it matches the screen.
 func (w *Window) copyConflictForAI(t *diffTab, block int) {
 	if t == nil || t.res == nil || t.res.Conflict == nil || w.ws.Repo == nil {
 		return
 	}
+	cv := w.conflictViewForContext(t)
+	if cv == nil || (block != vapp.ConflictContextAll && (block < 0 || block >= len(cv.Markers.Blocks))) {
+		return
+	}
 	rs := w.ws.Repo
-	text := vapp.ConflictContextText(t.res.Conflict, vapp.ConflictContextOptions{
+	text := vapp.ConflictContextText(cv, vapp.ConflictContextOptions{
 		RepoRoot:  rs.Repo.Root,
 		Operation: rs.Operation,
 		Block:     block,

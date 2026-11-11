@@ -785,8 +785,21 @@ func (w *Window) textInput(ctx app.TextInputContext) *app.TextInput {
 	if ctx.ID == idTerminal && w.termOpen && w.term.emu != nil {
 		return w.ensureTerminalInput()
 	}
-	if ctx.ID == idDiffText {
-		if t := w.ed.cur(); t != nil && t.edit != nil {
+	if ctx.ID == idDiffText || ctx.ID == idConflictText {
+		var buf *textBuffer
+		if t := w.ed.cur(); t != nil {
+			switch ctx.ID {
+			case idDiffText:
+				if t.edit != nil {
+					buf = &t.edit.textBuffer
+				}
+			case idConflictText:
+				if t.cedit != nil {
+					buf = &t.cedit.textBuffer
+				}
+			}
+		}
+		if buf != nil {
 			if w.inputs == nil {
 				w.inputs = make(map[ui.ID]*app.TextInput)
 			}
@@ -798,8 +811,8 @@ func (w *Window) textInput(ctx app.TextInputContext) *app.TextInput {
 			// Own the event loop so pasted CRLF is normalized before it
 			// reaches the editor; the editor still applies every command.
 			in.Editor = nil
-			in.State = app.TextStateOf(t.edit.ed)
-			in.OnEvent = t.edit.applyText
+			in.State = app.TextStateOf(buf.ed)
+			in.OnEvent = buf.applyText
 			in.NavigationKeys = false
 			return in
 		}

@@ -83,6 +83,10 @@ type diffTab struct {
 	// edit is the in-app editor state while the tab edits its working-tree
 	// file (fileedit.go); nil means the read-only viewer.
 	edit *fileEdit
+	// cedit is the editable Result pane of a conflict tab (conflictedit.go);
+	// nil means the read-only three-pane view or a conflict that cannot be
+	// edited in place.
+	cedit *conflictEdit
 	// editOK is the content half of canEdit, computed once per load so the
 	// toolbar does not scan the file on every paint. Conflicts are checked
 	// live in canEdit because they change with the status.
@@ -140,7 +144,7 @@ func (t *diffTab) title() string {
 	if t.src.View && t.src.Commit != "" {
 		name += " (" + domain.ShortHash(t.src.Commit) + ")"
 	}
-	if t.edit != nil && t.edit.dirty {
+	if t.edit != nil && t.edit.dirty || t.cedit != nil && t.cedit.dirty {
 		name += " *"
 	}
 	return name
@@ -165,11 +169,19 @@ func (w *Window) showDiff(src vapp.DiffSource, pin bool) {
 	t := &diffTab{src: src, preview: !pin, selOld: map[int]bool{}, selNew: map[int]bool{}, search: text.NewEditor(""), anchor: -1}
 	for i, o := range v.tabs {
 		if o.preview {
-			if o.edit != nil && o.edit.dirty {
+			if o.dirtyBuffer() {
 				// The preview holds unsaved text: keep it as a pinned tab and
 				// open the new source beside it instead of replacing it.
 				o.preview = false
 				continue
+			}
+			// The replaced preview's native input must not be kept alive by the
+			// input cache (the text field ID is shared with the new tab).
+			if o.edit != nil {
+				w.clearEditInput()
+			}
+			if o.cedit != nil {
+				w.clearConflictInput()
 			}
 			v.tabs[i] = t
 			v.activate(i)
@@ -224,7 +236,12 @@ func (w *Window) closeTab(i int) {
 	if v.tabs[i].edit != nil {
 		w.clearEditInput()
 	}
+	if v.tabs[i].cedit != nil {
+		w.clearConflictInput()
+	}
 	v.tabs[i].edit = nil
+	v.tabs[i].cedit = nil
+	delete(conflictCache, v.tabs[i])
 	v.tabs = append(v.tabs[:i], v.tabs[i+1:]...)
 	if v.active >= len(v.tabs) {
 		v.active = len(v.tabs) - 1
@@ -274,6 +291,18 @@ func (w *Window) loadTab(t *diffTab) {
 			// ⌘E again before it finished) must not leave the disk rows under
 			// the existing buffer; the next sync rebuilds from the editor.
 			t.edit.synced = false
+		}
+		if res.Conflict != nil {
+			created := t.cedit == nil
+			w.syncConflictEdit(t)
+			if created && t.cedit != nil && t == w.ed.cur() {
+				// The Result pane is the working surface of this tab; put the
+				// keyboard there as soon as the first load lands.
+				w.focusNext = idConflictText
+			}
+		} else if t.cedit != nil {
+			t.cedit = nil
+			w.clearConflictInput()
 		}
 		if first {
 			t.cur = -1
@@ -422,6 +451,11 @@ func (w *Window) refreshTabs() {
 			// Reload is the explicit way to take the new disk contents.
 			continue
 		}
+		if t.cedit != nil && (t.cedit.saving || t.cedit.changed()) {
+			// Same rule for the conflict Result pane: never reload over text
+			// the user typed. A clean buffer follows the disk.
+			continue
+		}
 		live := t.src.Working || t.src.View && t.src.Commit == ""
 		if !live || t.loading || !t.statusAt.Before(rs.StatusTime) {
 			continue
@@ -500,6 +534,9 @@ func (w *Window) paintTabs(r ui.Rect) {
 			// here so this frame's title already carries the marker.
 			t.edit.sync(t)
 		}
+		if t.cedit != nil {
+			t.cedit.refresh()
+		}
 		name := t.title()
 		tw := w.p.width(name, fontUI, regular)
 		width := 8 + 16 + 6 + tw + 6 + 18 + 6
@@ -550,12 +587,16 @@ func (w *Window) paintTabs(r ui.Rect) {
 				{title: w.t(i18n.WorkspaceMenuCloseOtherTabs), run: func() {
 					w.confirmDiscardOtherEdits(t, func() {
 						for _, o := range v.tabs {
-							if o != t && o.edit != nil {
+							if o == t {
+								continue
+							}
+							if o.edit != nil {
 								w.clearEditInput()
 							}
-							if o != t {
-								o.edit = nil
+							if o.cedit != nil {
+								w.clearConflictInput()
 							}
+							o.edit, o.cedit = nil, nil
 						}
 						v.tabs = []*diffTab{t}
 						t.clearTextSel()
@@ -722,7 +763,7 @@ func inArea(entries []domain.StatusEntry, p string) bool {
 }
 
 func (w *Window) closeTabOf(t *diffTab) {
-	if t.edit != nil && t.edit.dirty {
+	if t.dirtyBuffer() {
 		// A preview that became an editor keeps its buffer: pin it instead of
 		// following the next selection.
 		t.preview = false
