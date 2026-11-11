@@ -466,6 +466,9 @@ const tipDelay = 700 * time.Millisecond
 func (w *Window) paintTooltip(full ui.Rect) {
 	hov := w.c.Hovered()
 	text, ok := w.tips[hov]
+	if w.tipArea.Width > 0 && !contains(w.tipArea, w.mouse.X, w.mouse.Y) {
+		ok = false
+	}
 	if !ok || w.drag != nil || len(w.popups) > 0 {
 		w.tipID = ui.ID{}
 		return
@@ -480,24 +483,32 @@ func (w *Window) paintTooltip(full ui.Rect) {
 	}
 	main, short := splitShortcut(text)
 	short = kbdHint(short)
-	tw := w.p.width(main, fontUI, regular)
 	sw := float32(0)
 	if short != "" {
 		sw = w.p.width(short, fontUI, regular) + 12
 	}
-	r := rect(w.tipAt.X+4, w.tipAt.Y+20, tw+sw+20, 30)
-	if right(r) > full.Width-6 {
-		r.X = full.Width - 6 - r.Width
+	const lineH = float32(20)
+	maxWidth := max(1, min(640, full.Width-32-sw))
+	maxLines := max(1, int((full.Height-22)/lineH))
+	lines := w.c.WrapLines(nil, main, fontUI, regular, maxWidth, maxLines)
+	tw := float32(0)
+	for _, line := range lines {
+		tw = max(tw, w.p.width(line, fontUI, regular))
 	}
-	if bottom(r) > full.Height-6 {
+	r := rect(w.tipAt.X+4, w.tipAt.Y+20, tw+sw+20, float32(len(lines))*lineH+10)
+	r.X = max(full.X+6, min(r.X, right(full)-6-r.Width))
+	if bottom(r) > bottom(full)-6 {
 		r.Y = w.tipAt.Y - 8 - r.Height
 	}
+	r.Y = max(full.Y+6, min(r.Y, bottom(full)-6-r.Height))
 	w.c.PushLayer(40)
 	w.c.Shadow(r, 6, ui.ShadowStyle{OffsetY: 2, Blur: 8}, ui.Color{Alpha: 0.25})
 	w.p.outline(r, 6, 1, w.pal.PopupBorder, w.pal.Tooltip)
-	w.p.text(main, rect(r.X+10, r.Y, tw, r.Height), fontUI, regular, w.pal.TooltipText)
+	for i, line := range lines {
+		w.p.text(line, rect(r.X+10, r.Y+5+float32(i)*lineH, tw, lineH), fontUI, regular, w.pal.TooltipText)
+	}
 	if short != "" {
-		w.p.text(short, rect(r.X+10+tw+12, r.Y, sw, r.Height), fontUI, regular, w.pal.TextSecond)
+		w.p.text(short, rect(r.X+10+tw+12, r.Y+5, sw, lineH), fontUI, regular, w.pal.TextSecond)
 	}
 	w.c.PopLayer()
 }
