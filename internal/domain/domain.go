@@ -326,6 +326,9 @@ type BranchStatus struct {
 type Status struct {
 	Branch  BranchStatus
 	Entries []StatusEntry
+	// IndexKey identifies staged changes, including object changes that leave
+	// the staged path, mode and status letter unchanged.
+	IndexKey [32]byte
 }
 
 // Counts returns the number of entries in each area.

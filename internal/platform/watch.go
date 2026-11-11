@@ -19,37 +19,39 @@ type Watcher interface{ Close() }
 // that touches thousands of files becomes one refresh. meta is sticky within
 // a burst so a Git-directory change is never lost behind worktree events.
 type debouncer struct {
-	mu      sync.Mutex
-	timer   *time.Timer
-	meta    bool
-	delay   time.Duration
-	changed func(meta bool)
-	closed  bool
+	mu       sync.Mutex
+	timer    *time.Timer
+	meta     bool
+	overflow bool
+	delay    time.Duration
+	changed  func(meta, overflow bool)
+	closed   bool
 }
 
-func newDebouncer(delay time.Duration, changed func(bool)) *debouncer {
+func newDebouncer(delay time.Duration, changed func(bool, bool)) *debouncer {
 	return &debouncer{delay: delay, changed: changed}
 }
 
-func (d *debouncer) event(meta bool) {
+func (d *debouncer) event(meta, overflow bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
 		return
 	}
 	d.meta = d.meta || meta
+	d.overflow = d.overflow || overflow
 	if d.timer != nil {
 		return
 	}
 	d.timer = time.AfterFunc(d.delay, func() {
 		d.mu.Lock()
-		m := d.meta
-		d.meta = false
+		m, overflow := d.meta, d.overflow
+		d.meta, d.overflow = false, false
 		d.timer = nil
 		closed := d.closed
 		d.mu.Unlock()
 		if !closed {
-			d.changed(m)
+			d.changed(m, overflow)
 		}
 	})
 }
@@ -118,7 +120,7 @@ func gitFingerprint(repo domain.Repo) string {
 
 // startPolling checks the Git directory every interval and reports a
 // working-tree check every worktreeEvery intervals.
-func startPolling(repo domain.Repo, interval time.Duration, worktreeEvery int, changed func(bool)) *pollWatcher {
+func startPolling(repo domain.Repo, interval time.Duration, worktreeEvery int, changed func(bool, bool)) *pollWatcher {
 	p := &pollWatcher{stop: make(chan struct{})}
 	go func() {
 		last := gitFingerprint(repo)
@@ -134,9 +136,9 @@ func startPolling(repo domain.Repo, interval time.Duration, worktreeEvery int, c
 				fp := gitFingerprint(repo)
 				if fp != last {
 					last = fp
-					changed(true)
+					changed(true, false)
 				} else if worktreeEvery > 0 && n%worktreeEvery == 0 {
-					changed(false)
+					changed(false, false)
 				}
 			}
 		}

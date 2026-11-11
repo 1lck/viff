@@ -74,6 +74,7 @@ type Window struct {
 	tipID     ui.ID
 	tipSince  time.Duration
 	tipAt     ui.Point
+	tipArea   ui.Rect // optional bounds within the hovered hit; rebuilt each paint
 
 	popups []*popup // menu stack: popups[0] is the root, later ones are submenus
 	dialog *dialog
@@ -500,6 +501,7 @@ func (w *Window) Paint(c *ui.Canvas, size ui.Size) {
 	w.drags = resetMap(w.drags)
 	w.keys = resetMap(w.keys)
 	w.tips = resetMap(w.tips)
+	w.tipArea = ui.Rect{}
 	w.editors = resetMap(w.editors)
 	w.areas = resetMap(w.areas)
 	w.modalTop = 0
@@ -655,7 +657,7 @@ func (w *Window) onPointer(e ui.PointerEvent) ui.EventResult {
 		}
 	}
 	if e.Kind == ui.PointerMove || e.Kind == ui.PointerExit {
-		if w.tipID != (ui.ID{}) {
+		if w.tipID != (ui.ID{}) || w.tipArea.Width > 0 {
 			return ui.EventResult{Repaint: true}
 		}
 		return ui.EventResult{}

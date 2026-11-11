@@ -7,13 +7,13 @@ package platform
 #include <CoreServices/CoreServices.h>
 #include <stdint.h>
 
-extern void viffFSEvent(uintptr_t handle, char *path);
+extern void viffFSEvent(uintptr_t handle, char *path, uint32_t flags);
 
 static void viffCallback(ConstFSEventStreamRef stream, void *info, size_t count, void *paths,
                          const FSEventStreamEventFlags flags[], const FSEventStreamEventId ids[]) {
 	char **list = (char **)paths;
 	for (size_t i = 0; i < count; i++) {
-		viffFSEvent((uintptr_t)info, list[i]);
+		viffFSEvent((uintptr_t)info, list[i], flags[i]);
 	}
 }
 
@@ -72,14 +72,21 @@ type fsWatch struct {
 }
 
 //export viffFSEvent
-func viffFSEvent(handle C.uintptr_t, path *C.char) {
+func viffFSEvent(handle C.uintptr_t, path *C.char, flags C.uint32_t) {
 	w, ok := cgo.Handle(handle).Value().(*fsWatch)
 	if !ok {
 		return
 	}
+	const lost = C.kFSEventStreamEventFlagMustScanSubDirs | C.kFSEventStreamEventFlagUserDropped |
+		C.kFSEventStreamEventFlagKernelDropped | C.kFSEventStreamEventFlagEventIdsWrapped |
+		C.kFSEventStreamEventFlagRootChanged
+	if flags&lost != 0 {
+		w.debounce.event(true, true)
+		return
+	}
 	p := C.GoString(path)
 	if relevant, meta := classify(w.repo, p); relevant {
-		w.debounce.event(meta)
+		w.debounce.event(meta, false)
 	}
 }
 
@@ -87,7 +94,7 @@ func viffFSEvent(handle C.uintptr_t, path *C.char) {
 // FSEvents delivers per-file events without one descriptor per file, so
 // large trees cost nothing while idle. A slow fingerprint check of the Git
 // directory backs it up in case events are dropped.
-func Watch(repo domain.Repo, changed func(meta bool)) (Watcher, error) {
+func Watch(repo domain.Repo, changed func(meta, overflow bool)) (Watcher, error) {
 	w := &fsWatch{repo: repo, debounce: newDebouncer(250*time.Millisecond, changed)}
 	roots := []string{repo.Root}
 	for _, d := range []string{repo.MetaDir, repo.CommonDir} {

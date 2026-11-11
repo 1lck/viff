@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -29,6 +30,17 @@ func (l *localSSH) Command(ctx context.Context, _ sshpath.Repo, _ string, args [
 
 func (l *localSSH) ReadFile(_ context.Context, _ domain.Repo, rel string) (Content, error) {
 	return readWorktree(filepath.Join(l.dir, filepath.FromSlash(rel)))
+}
+
+func (l *localSSH) IndexRevision(_ context.Context, _ domain.Repo, _ string) (string, error) {
+	st, err := os.Stat(filepath.Join(l.dir, ".git", "index"))
+	if os.IsNotExist(err) {
+		return "missing", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(st.ModTime().UnixNano(), 10), nil
 }
 
 func (l *localSSH) Operation(context.Context, domain.Repo) (domain.Operation, error) {

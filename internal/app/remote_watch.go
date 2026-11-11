@@ -122,9 +122,9 @@ func (w *Workspace) startRemoteWatch(repo domain.Repo) Watcher {
 // changed files and avoids a collision argument for no measurable cost.
 func remoteStatusKey(s domain.Status) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\x1f%s\x1f%t\x1f%s\x1f%d\x1f%d\x1f%t\x1f%d",
+	fmt.Fprintf(&b, "%s\x1f%s\x1f%t\x1f%s\x1f%d\x1f%d\x1f%t\x1f%d\x1f%x",
 		s.Branch.Head, s.Branch.Branch, s.Branch.Detached, s.Branch.Upstream,
-		s.Branch.Ahead, s.Branch.Behind, s.Branch.HasAB, s.Branch.Stashes)
+		s.Branch.Ahead, s.Branch.Behind, s.Branch.HasAB, s.Branch.Stashes, s.IndexKey)
 	for _, e := range s.Entries {
 		b.WriteByte('\n')
 		fmt.Fprintf(&b, "%s\x1f%s\x1f%c\x1f%c\x1f%c\x1f%s\x1f%s\x1f%s\x1f%s",

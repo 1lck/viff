@@ -70,6 +70,11 @@ func (w *Workspace) run(title string, undo *undoSpec, op Op, o RunOptions) {
 		return
 	}
 	task, ctx, finish := w.startTask(title, !o.Read)
+	if !o.Read && rs.LFSStats.Status == LFSStatsLoading {
+		// Even a write that leaves the same final HEAD/index can race with
+		// the scan. Its follow-up status query handles completed statistics.
+		w.invalidateLFSStats(rs)
+	}
 	repo := rs.Repo
 	go func() {
 		var lock interface {
