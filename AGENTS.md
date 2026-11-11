@@ -45,7 +45,7 @@ skill 是必读步骤，不是可选参考。按改动类型加载，跨类型�
 
 ## 项目事实
 
-- Go 版本与依赖以 `go.mod` 为准（当前 Go 1.27.3，`github.com/vivaui/viva v0.2.3`）；模块名 `viff`。
+- Go 版本与依赖以 `go.mod` 为准（当前 Go 1.27.3，`github.com/vivaui/viva v0.4.0`）；模块名 `viff`。
 - 入口 `cmd/viff`；界面在 `internal/ui`（Viva 视图）；构建产物在 `build/`、安装包在 `dist/`，**都不提交**。
 - 界面文案默认**英文**，可在设置 → General → Language 切到简体中文；新增文案走 `internal/i18n` 的消息表，不要写死字面量。仓库文档的双语布局按文件而定，**沿用该文件既有布局，不要重排**：README 分成英文 `README.md` 与中文 `README.zh-CN.md`；`CONTRIBUTING.md`、`SECURITY.md` 在同一文件内分 `## 中文` / `## English`；`docs/testing.md` 等专题文档按段落中英对照；发布说明必须是「中文 → `---` → English」。
 - 系统 `git` 是运行时依赖，不是 vendor 的库；不假设 Git 版本，能力要探测。

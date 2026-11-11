@@ -4,8 +4,8 @@ go 1.27.3
 
 require (
 	github.com/creack/pty v1.1.24
-	github.com/vivaui/viva v0.2.4
-	golang.org/x/sys v0.49.0
+	github.com/vivaui/viva v0.4.0
+	golang.org/x/sys v0.50.0
 )
 
 require (
