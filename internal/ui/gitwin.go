@@ -232,7 +232,7 @@ func (w *Window) paintLogFilters(r ui.Rect) {
 		ax -= actionSize + 2
 	}
 	if w.action(idLogRefresh, ax, ay, icons.Refresh, w.t(i18n.ChromeActionRefresh), actOpts{}) {
-		w.after(func() { w.ws.ReloadLog(); w.ws.Refresh(true) })
+		w.after(func() { w.ws.ReloadLog(); w.ws.RefreshManually() })
 	}
 	if f.Active() {
 		ax -= actionSize + 2

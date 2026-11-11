@@ -421,21 +421,32 @@ func (w *Window) paintStatus(r ui.Rect) {
 		x = right(lr) + 12
 	}
 
-	// A repository that uses Git LFS gets a quiet marker with its managed file
-	// count. It turns into a warning colour when the LFS rules exist but
-	// git-lfs is missing, the case the Commit panel and notification explain.
 	x += 20
-	if rs.LFS.Managed {
+	if rs.LFS.Managed || rs.LFS.Err != nil || rs.LFSStats.Status != vapp.LFSStatsUnqueried {
 		label := w.lfsStatusLabel(rs)
 		lw := w.p.width(label, fontUI, regular)
 		lr := rect(x, r.Y, lw+8, r.Height)
 		color := w.pal.Link
-		if rs.LFS.NeedsInstall() {
+		if rs.LFS.NeedsInstall() || rs.LFS.Err != nil {
 			color = w.pal.Warning
+		}
+		if w.ws.CanRefreshLFSStats() {
+			w.toolbarHover(idStatusLFS, lr)
+		}
+		if w.focused(idStatusLFS) {
+			w.focusRing(inset(lr, 1, 2), 4)
 		}
 		w.p.text(label, lr, fontUI, regular, color)
 		tip := w.lfsStatusTip(rs)
-		w.c.HitWithOptions(idStatusLFS, lr, tip, ui.HitOptions{Role: ui.RoleStatus, SkipFocus: true})
+		if rs.LFS.Installed {
+			enabled := w.ws.CanRefreshLFSStats()
+			w.c.HitWithOptions(idStatusLFS, lr, tip, ui.HitOptions{Role: ui.RoleButton, Disabled: !enabled})
+			if enabled {
+				w.clicked(idStatusLFS, w.ws.RefreshLFSStats)
+			}
+		} else {
+			w.c.HitWithOptions(idStatusLFS, lr, tip, ui.HitOptions{Role: ui.RoleStatus, SkipFocus: true})
+		}
 		w.tip(idStatusLFS, tip)
 		x = right(lr) + 12
 	}

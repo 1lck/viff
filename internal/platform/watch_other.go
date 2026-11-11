@@ -20,7 +20,7 @@ import (
 // system behind \\wsl.localhost, where a stat costs orders of magnitude more
 // than on a local disk. Five seconds keeps changes visible while leaving the
 // redirector room; tuning belongs to a measurement, not a guess (ADR 0038).
-func Watch(repo domain.Repo, changed func(meta bool)) (Watcher, error) {
+func Watch(repo domain.Repo, changed func(meta, overflow bool)) (Watcher, error) {
 	interval, worktreeEvery := 5*time.Second, 6
 	if wslpath.Is(repo.Root) {
 		// Every poll here already round-trips 9P, so the working tree is not

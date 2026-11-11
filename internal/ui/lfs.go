@@ -2,11 +2,13 @@ package viffui
 
 import (
 	"runtime"
+	"strings"
 
 	"github.com/vivaui/viva/app"
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
+	"viff/internal/gitcli"
 	"viff/internal/i18n"
 	"viff/internal/ui/icons"
 )
@@ -26,32 +28,72 @@ func lfsInstallHint() (hint, command string) {
 	return "your package manager (apt, dnf, pacman) or https://git-lfs.com", "https://git-lfs.com"
 }
 
-// lfsStatusLabel is the status-bar marker: "LFS", with the number of managed
-// files when git-lfs could list them.
 func (w *Window) lfsStatusLabel(rs *vapp.RepoState) string {
 	label := w.t(i18n.ChromeStatusLFS)
-	if n := len(rs.LFS.Files); n > 0 {
-		label += " " + itoa(n)
+	if !rs.LFSStats.UpdatedAt.IsZero() {
+		label += " " + itoa(len(rs.LFSStats.Files))
+	}
+	if state := w.lfsStatsState(rs); state != "" {
+		label += " · " + state
 	}
 	return label
 }
 
+func (w *Window) lfsStatsState(rs *vapp.RepoState) string {
+	switch rs.LFSStats.Status {
+	case vapp.LFSStatsLoading:
+		return w.t(i18n.LFSStatsLoading)
+	case vapp.LFSStatsStale:
+		return w.t(i18n.LFSStatsStale)
+	case vapp.LFSStatsFailed:
+		return w.t(i18n.LFSStatsFailed)
+	}
+	return ""
+}
+
 // lfsStatusTip explains the marker and names the missing dependency.
 func (w *Window) lfsStatusTip(rs *vapp.RepoState) string {
-	var tip string
-	if n := len(rs.LFS.Files); n > 0 {
-		tip = w.t(i18n.ChromeTipLFSFiles, n)
-	} else {
-		tip = w.t(i18n.ChromeTipLFSRules, len(rs.LFS.Patterns))
+	var lines []string
+	if rs.LFS.Installed {
+		lines = append(lines, w.t(i18n.LFSRefreshStats))
+	}
+	if rs.LFS.Managed {
+		lines = append(lines, w.t(i18n.ChromeTipLFSRules, len(rs.LFS.Patterns)))
+	}
+	if rs.LFS.Err != nil {
+		lines = append(lines, w.t(i18n.ChromeTipLFSRulesFailed, gitcli.CodeOf(rs.LFS.Err)))
+	}
+	if state := w.lfsStatsState(rs); state != "" {
+		lines = append(lines, state)
+	}
+	if !rs.LFSStats.UpdatedAt.IsZero() {
+		lines = append(lines, w.t(i18n.ChromeTipLFSFiles, len(rs.LFSStats.Files)),
+			w.t(i18n.LFSStatsUpdated, rs.LFSStats.UpdatedAt.Local().Format("2006-01-02 "+w.clockLayout())))
+	} else if rs.LFSStats.Status == vapp.LFSStatsUnqueried {
+		lines = append(lines, w.t(i18n.LFSStatsUnqueried))
+	}
+	if rs.LFSStats.Code != "" {
+		lines = append(lines, w.t(i18n.LFSStatsErrorCode, rs.LFSStats.Code))
+		if rs.LFSStats.Code == "lfs.cleanup_unconfirmed" {
+			lines = append(lines, w.t(i18n.LFSStatsUnconfirmed))
+		}
 	}
 	if rs.LFS.NeedsInstall() {
 		if w.readOnly() {
-			tip += "\n" + w.t(i18n.ChromeTipLFSMissingRemote)
+			lines = append(lines, w.t(i18n.ChromeTipLFSMissingRemote))
 		} else {
-			tip += "\n" + w.t(i18n.ChromeTipLFSMissing)
+			lines = append(lines, w.t(i18n.ChromeTipLFSMissing))
 		}
 	}
-	return tip
+	return strings.Join(lines, "\n")
+}
+
+func (w *Window) copyLFSFileList() {
+	rs := w.repo()
+	if rs == nil || rs.LFSStats.Status != vapp.LFSStatsCurrent || len(rs.LFSStats.Files) == 0 {
+		return
+	}
+	w.copyText(strings.Join(rs.LFSStats.Files, "\n"))
 }
 
 // paintLFSBanner warns in the Commit panel that LFS files cannot be fetched or

@@ -230,7 +230,7 @@ func run() (code int) {
 	updates := updater.NewClient(version.Version)
 	ws.SetUpdateService(updates)
 	updates.Cleanup()
-	ws.Watch = func(repo domain.Repo, changed func(meta bool)) (vapp.Watcher, error) {
+	ws.Watch = func(repo domain.Repo, changed func(meta, overflow bool)) (vapp.Watcher, error) {
 		return platform.Watch(repo, changed)
 	}
 	win = viffui.New(ws)

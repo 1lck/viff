@@ -70,7 +70,12 @@ const (
 func KindOf(err error) ErrorKind { return vcs.KindOf(err) }
 
 // CodeOf returns the stable error code for err, "" for nil.
-func CodeOf(err error) string { return vcs.CodeOf(err) }
+func CodeOf(err error) string {
+	if errors.Is(err, ErrLFSReapUnconfirmed) {
+		return "lfs.cleanup_unconfirmed"
+	}
+	return vcs.CodeOf(err)
+}
 
 // firstArg is re-exported for the message format kept below.
 func firstArg(args []string) string { return vcs.FirstArg(args) }
@@ -395,6 +400,10 @@ func (r *Runner) Run(ctx context.Context, dir string, args ...string) ([]byte, e
 
 // RunInput executes git with stdin.
 func (r *Runner) RunInput(ctx context.Context, dir string, stdin []byte, args ...string) ([]byte, error) {
+	return r.runInput(ctx, dir, stdin, false, args...)
+}
+
+func (r *Runner) runInput(ctx context.Context, dir string, stdin []byte, processTree bool, args ...string) ([]byte, error) {
 	start := time.Now()
 	cmd, err := r.command(ctx, dir, args)
 	if err != nil {
@@ -407,7 +416,11 @@ func (r *Runner) RunInput(ctx context.Context, dir string, stdin []byte, args ..
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
-	err = cmd.Run()
+	if processTree {
+		err = process.RunTree(cmd)
+	} else {
+		err = cmd.Run()
+	}
 	if err != nil {
 		err = r.wrap(ctx, dir, args, err, stderr.buf.String(), stdout.String())
 	}

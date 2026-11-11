@@ -63,6 +63,7 @@ const (
 	EventRepoOpen          = "repo.open"
 	EventRepoClose         = "repo.close"
 	EventRepoRefresh       = "repo.refresh"
+	EventRepoLFS           = "repo.lfs"
 	EventRepoWatch         = "repo.watch"
 	EventTaskStart         = "task.start"
 	EventTaskEnd           = "task.end"

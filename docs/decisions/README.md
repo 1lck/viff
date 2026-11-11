@@ -50,3 +50,5 @@
 | [0044](0044-repository-name-search.md) | 欢迎页仓库搜索默认只匹配名称 |
 | [0045](0045-diff-folding-and-pane-resize.md) | Diff 折叠未更改片段与可调分栏 |
 | [0046](0046-multi-repository-projects.md) | 多仓库项目的 Project 面板聚合（Phase A） |
+| [0047](0047-lfs-on-demand-statistics.md) | 按需查询 LFS 文件统计 |
+| [0048](0048-lfs-attribute-discovery-cache.md) | 复用 Git 状态并缓存 LFS 属性文件发现 |
