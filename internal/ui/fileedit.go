@@ -1,19 +1,13 @@
 package viffui
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"errors"
-	"sort"
-	"strings"
 	"unicode/utf8"
 
-	"github.com/vivaui/viva/app"
 	"github.com/vivaui/viva/text"
 	"github.com/vivaui/viva/ui"
 
 	vapp "viff/internal/app"
-	"viff/internal/domain"
 	"viff/internal/i18n"
 )
 
@@ -32,36 +26,11 @@ import (
 // mode, so the button is absent instead of failing later.
 const editContentLimit = vapp.EditLimit
 
-// editPos is a caret position in the editor's display grid.
-type editPos struct {
-	line int
-	cell int
-}
-
-// fileEdit is the edit-mode state of one tab. The editor owns the text,
-// selection and undo history; this type owns the mapping to display rows and
-// the geometry of the last paint.
+// fileEdit is the edit-mode state of one tab. The shared textBuffer owns the
+// editor, the disk baseline, the display rows and the paint geometry; this type
+// only adds the file viewer's layout.
 type fileEdit struct {
-	ed       *text.Editor
-	original string
-	built    string
-	expected [sha256.Size]byte
-	lineEnd  string
-	bom      bool
-	synced   bool
-	noFinal  bool
-	lines    []string
-	starts   []int
-	dirty    bool
-	saving   bool
-
-	// Geometry of the last paint, used by ui.TextPlacement.
-	tr      ui.Rect
-	top     float32
-	scrollX float32
-	cellW   float32
-	lineH   float32
-	painted bool
+	textBuffer
 }
 
 // canEdit reports whether t can switch to the editor. Historical revisions,
@@ -93,41 +62,22 @@ func editableContent(t *diffTab) bool {
 	return len(c.Data) <= editContentLimit && utf8.Valid(bytesWithoutBOM(c.Data))
 }
 
-func bytesWithoutBOM(data []byte) []byte {
-	return bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
-}
-
 // enterEdit switches t to the editor. It does not write anything: the buffer
 // belongs to the tab until Save.
 func (w *Window) enterEdit(t *diffTab) {
 	if t == nil || t.edit != nil || !w.canEdit(t) {
 		return
 	}
-	c := t.res.New.Content
-	bom := bytes.HasPrefix(c.Data, []byte{0xEF, 0xBB, 0xBF})
-	raw := bytesWithoutBOM(c.Data)
-	if !utf8.Valid(raw) {
-		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.FileviewEditing), w.t(i18n.FileviewEditNotUTF8))
+	buf, err := newTextBuffer(t.res.New.Content.Data)
+	if err != nil {
+		body := w.t(i18n.FileviewEditNotUTF8)
+		if errors.Is(err, vapp.ErrEditTooLarge) {
+			body = w.t(i18n.FileviewEditTooLarge)
+		}
+		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.FileviewEditing), body)
 		return
 	}
-	if len(raw) > editContentLimit {
-		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.FileviewEditing), w.t(i18n.FileviewEditTooLarge))
-		return
-	}
-	value := string(raw)
-	lineEnd := domain.DetectLineEnding(value)
-	normalized := normalizeNewlines(value)
-	ed := text.NewEditor(normalized)
-	ed.MoveTo(0, false)
-	ed.ClearHistory()
-	t.edit = &fileEdit{
-		ed:       ed,
-		original: normalized,
-		built:    "\x00", // force the first sync even for an empty file
-		expected: sha256.Sum256(c.Data),
-		lineEnd:  lineEnd,
-		bom:      bom,
-	}
+	t.edit = &fileEdit{textBuffer: *buf}
 	t.annotate = false
 	t.searchOpen = false
 	t.clearTextSel()
@@ -209,13 +159,20 @@ func (w *Window) saveEdit(t *diffTab) {
 }
 
 func (w *Window) notifySaveError(t *diffTab, err error) {
+	w.notifySaveFailure(t, err, func() { w.reloadEditNow(t) })
+}
+
+// notifySaveFailure maps the save errors the app layer returns to the one
+// warning each surface shows. reload is the action offered for a file that
+// changed or disappeared; the caller decides what discarding means there.
+func (w *Window) notifySaveFailure(t *diffTab, err error, reload func()) {
 	switch {
 	case errors.Is(err, vapp.ErrEditChanged):
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.FileviewChangedTitle), w.t(i18n.FileviewChangedBody),
-			vapp.NoticeAction{Title: w.t(i18n.FileviewReload), Run: func() { w.reloadEditNow(t) }})
+			vapp.NoticeAction{Title: w.t(i18n.FileviewReload), Run: reload})
 	case errors.Is(err, vapp.ErrEditMissing):
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.FileviewSaveFailed, t.src.Path), w.t(i18n.FileviewFileMissing),
-			vapp.NoticeAction{Title: w.t(i18n.FileviewReload), Run: func() { w.reloadEditNow(t) }})
+			vapp.NoticeAction{Title: w.t(i18n.FileviewReload), Run: reload})
 	case errors.Is(err, vapp.ErrEditReadOnly):
 		w.ws.Notify(vapp.NoticeWarning, w.t(i18n.FileviewSaveFailed, t.src.Path), w.t(i18n.FileviewEditReadOnly))
 	case errors.Is(err, vapp.ErrEditTooLarge):
@@ -267,165 +224,14 @@ func (w *Window) revertEdit(t *diffTab) {
 	w.Invalidate()
 }
 
-// applyText mirrors one native text event into the editor. It is the hook that
-// normalizes a pasted CRLF to LF before the display rows are rebuilt.
-func (e *fileEdit) applyText(ev app.TextEvent) (app.TextState, error) {
-	if ev.Kind == app.TextInsert || ev.Kind == app.TextPaste {
-		ev.Text = normalizeNewlines(ev.Text)
-	}
-	ev.Apply(e.ed)
-	return app.TextStateOf(e.ed), nil
-}
-
-func normalizeNewlines(s string) string {
-	if !strings.ContainsRune(s, '\r') {
-		return s
-	}
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	return strings.ReplaceAll(s, "\r", "\n")
-}
-
 // sync rebuilds the display rows and syntax when the editor text changed.
 func (e *fileEdit) sync(t *diffTab) {
-	value := e.ed.String()
-	if e.synced && value == e.built {
+	if !e.refresh() {
 		return
 	}
-	e.synced = true
-	e.built = value
-	e.lines, e.noFinal = domain.SplitLines(value)
-	e.starts = e.starts[:0]
-	pos := 0
-	for i, line := range e.lines {
-		e.starts = append(e.starts, pos)
-		pos += len(line)
-		if i < len(e.lines)-1 || !e.noFinal {
-			pos++ // the newline that ended this line
-		}
-	}
-	e.starts = append(e.starts, pos)
 	t.newDisp = expandAll(e.lines)
 	t.newSyn = highlight(t.src.Path, t.newDisp)
-	t.maxCells = 0
-	for _, line := range t.newDisp {
-		t.maxCells = max(t.maxCells, displayCells(line))
-	}
-	e.dirty = value != e.original
-}
-
-// posOfRune maps a rune offset of the editor to a display row and cell.
-func (e *fileEdit) posOfRune(index int) editPos {
-	return e.posOfByte(runeToByte(e.built, index))
-}
-
-// posOfByte maps a UTF-8 byte offset to a display row and cell. A caret at the
-// end of a final newline belongs to the last visible row: SplitLines has no
-// empty row for it, and the read-only view never showed one.
-func (e *fileEdit) posOfByte(offset int) editPos {
-	if len(e.lines) == 0 {
-		return editPos{}
-	}
-	offset = max(0, min(offset, len(e.built)))
-	line := sort.Search(len(e.starts), func(i int) bool { return e.starts[i] > offset }) - 1
-	if line < 0 {
-		line = 0
-	}
-	if line >= len(e.lines) {
-		line = len(e.lines) - 1
-	}
-	col := max(0, min(offset-e.starts[line], len(e.lines[line])))
-	return editPos{line: line, cell: columnOf(e.lines[line], col, 4)}
-}
-
-// byteAt maps a row and display cell to a byte offset in the editor text.
-func (e *fileEdit) byteAt(line, cell int) int {
-	if len(e.lines) == 0 {
-		return 0
-	}
-	line = max(0, min(line, len(e.lines)-1))
-	return e.starts[line] + byteOffsetAtCell(e.lines[line], cell)
-}
-
-// byteOffsetAtCell walks a raw line to the byte boundary nearest a display
-// cell. A tab takes the cells to the next four-column stop; a wide rune keeps
-// its two cells together.
-func byteOffsetAtCell(raw string, cell int) int {
-	if cell <= 0 {
-		return 0
-	}
-	col := 0
-	for i, r := range raw {
-		w := cellWidthOf(r)
-		if r == '\t' {
-			w = 4 - col%4
-		}
-		if col+w > cell {
-			return i
-		}
-		col += w
-		if col == cell {
-			return i + utf8.RuneLen(r)
-		}
-	}
-	return len(raw)
-}
-
-func (e *fileEdit) caretPos() editPos { return e.posOfRune(e.ed.Caret()) }
-
-func (e *fileEdit) selectionPoints() (start, end editPos, ok bool) {
-	sel := e.ed.Selection()
-	if sel.Start == sel.End {
-		return editPos{}, editPos{}, false
-	}
-	start, end = e.posOfRune(sel.Start), e.posOfRune(sel.End)
-	if start.line > end.line || start.line == end.line && start.cell > end.cell {
-		start, end = end, start
-	}
-	return start, end, true
-}
-
-func (e *fileEdit) compositionPoints() (start, end editPos, ok bool) {
-	r, composing := e.ed.Composition()
-	if !composing || r.Start == r.End {
-		return editPos{}, editPos{}, false
-	}
-	start, end = e.posOfRune(r.Start), e.posOfRune(r.End)
-	if start.line > end.line || start.line == end.line && start.cell > end.cell {
-		start, end = end, start
-	}
-	return start, end, true
-}
-
-// ---- ui.TextPlacement ------------------------------------------------------
-
-// OffsetAt is where the runtime puts the caret for a press or a drag. The
-// offset is a byte offset into the field's Value, as the interface requires.
-func (e *fileEdit) OffsetAt(point ui.Point) (int, bool) {
-	if !e.painted || !contains(e.tr, point.X, point.Y) {
-		return 0, false
-	}
-	if len(e.lines) == 0 {
-		return 0, true
-	}
-	line := int((point.Y - e.tr.Y + e.top) / e.lineH)
-	line = max(0, min(line, len(e.lines)-1))
-	cell := int((point.X - (e.tr.X + 6 - e.scrollX)) / e.cellW)
-	return e.byteAt(line, cell), true
-}
-
-// CaretBounds is where the platform puts an input-method window. It reports
-// false while the caret is outside the painted rows.
-func (e *fileEdit) CaretBounds() (ui.Rect, bool) {
-	if !e.painted {
-		return ui.Rect{}, false
-	}
-	p := e.caretPos()
-	y := e.tr.Y + float32(p.line)*e.lineH - e.top
-	if y+e.lineH < e.tr.Y || y > bottom(e.tr) {
-		return ui.Rect{}, false
-	}
-	x := e.tr.X + 6 - e.scrollX + float32(p.cell)*e.cellW
-	return ui.Rect{X: x, Y: y, Width: 1, Height: e.lineH}, true
+	t.maxCells = e.maxCells
 }
 
 // ---- painting --------------------------------------------------------------
@@ -444,7 +250,7 @@ func (w *Window) paintEditBody(t *diffTab, r ui.Rect) {
 		t.y += dy
 	})
 	if w.focused(idDiffText) {
-		w.followEditCaret(t, e, r, gutter, cellW, lineH)
+		t.y, t.x = w.followBufferCaret(&e.textBuffer, t.y, t.x, r.Width-gutter, r.Height, cellW, lineH)
 		t.y = clampF(t.y, 0, max(0, content-r.Height))
 		t.x = clampF(t.x, 0, maxX)
 	}
@@ -460,7 +266,7 @@ func (w *Window) paintEditBody(t *diffTab, r ui.Rect) {
 	var runs []ui.TextRun
 	for i := first; i < last; i++ {
 		y := r.Y + float32(i)*lineH - t.y
-		w.paintEditSelection(t, e, i, displayCells(t.newDisp[i]), tr, y, cellW, lineH)
+		w.paintBufferSelection(&e.textBuffer, idDiffText, i, displayCells(t.newDisp[i]), tr, y, t.x, cellW, lineH)
 		w.p.c.LabelAligned(itoa(i+1), rect(gr.X, y, gr.Width-14, lineH), numStyle, ui.AlignRight)
 		line := t.newDisp[i]
 		if line != "" {
@@ -473,11 +279,11 @@ func (w *Window) paintEditBody(t *diffTab, r ui.Rect) {
 			w.c.LabelRuns(line, rect(tr.X+6-t.x, y, float32(displayCells(line)+1)*cellW, lineH), style, cellW, runs)
 			w.c.Unclip()
 		}
-		w.paintEditComposition(t, e, i, displayCells(t.newDisp[i]), tr, y, cellW, lineH)
-		w.paintEditCaret(t, e, i, tr, y, lineH)
+		w.paintBufferComposition(&e.textBuffer, i, displayCells(t.newDisp[i]), tr, y, t.x, cellW, lineH)
+		w.paintBufferCaret(&e.textBuffer, idDiffText, i, tr, y, t.x, cellW, lineH)
 	}
 	if len(t.newDisp) == 0 {
-		w.paintEditCaret(t, e, 0, tr, r.Y, lineH)
+		w.paintBufferCaret(&e.textBuffer, idDiffText, 0, tr, r.Y, t.x, cellW, lineH)
 	}
 	w.c.Unclip()
 	w.p.vline(gr.X+gr.Width-1, r.Y, r.Height, w.pal.Border)
@@ -487,103 +293,33 @@ func (w *Window) paintEditBody(t *diffTab, r ui.Rect) {
 		Role: ui.RoleTextField, Value: e.built, Multiline: true,
 		TextBounds: rect(tr.X+6, tr.Y, tr.Width-6, tr.Height),
 		TextSize:   fs, TextColor: w.pal.EditorText,
-		HideNativeOverlays: true, Placement: e,
+		HideNativeOverlays: true, Placement: &e.textBuffer,
 	})
 	w.editors[idDiffText] = e.ed
 	w.vbar(idDiffScrollR, r, &scroller{Y: t.y}, content)
 	w.wrapBarDrag(idDiffScrollR, func(y float32) { t.y = y }, func() float32 { return t.y }, content, r.Height)
 }
 
-// followEditCaret scrolls the smallest amount that keeps the caret visible.
-func (w *Window) followEditCaret(t *diffTab, e *fileEdit, r ui.Rect, gutter, cellW, lineH float32) {
-	p := e.caretPos()
-	if float32(p.line+1)*lineH > t.y+r.Height {
-		t.y = float32(p.line+1)*lineH - r.Height
-	}
-	if float32(p.line)*lineH < t.y {
-		t.y = float32(p.line) * lineH
-	}
-	width := max(r.Width-gutter, cellW)
-	x := float32(p.cell) * cellW
-	if x < t.x {
-		t.x = x
-	}
-	if x+cellW > t.x+width {
-		t.x = x + cellW - width
-	}
-}
-
-func (w *Window) paintEditSelection(t *diffTab, e *fileEdit, line, cells int, tr ui.Rect, y, cellW, lineH float32) {
-	start, end, ok := e.selectionPoints()
-	if !ok || line < start.line || line > end.line {
-		return
-	}
-	from, to := 0, cells
-	if line == start.line {
-		from = start.cell
-	}
-	if line == end.line {
-		to = end.cell
-	}
-	from = max(0, min(from, cells))
-	to = max(from, min(to, cells))
-	if to <= from {
-		return
-	}
-	c := w.pal.Selection
-	if !w.focused(idDiffText) {
-		c = w.pal.SelectionInac
-	}
-	x := tr.X + 6 - t.x + float32(from)*cellW
-	w.c.Clip(tr)
-	w.p.fill(rect(x, y, float32(to-from)*cellW, lineH), c)
-	w.c.Unclip()
-}
-
-// paintEditComposition underlines the range an input method is composing.
-func (w *Window) paintEditComposition(t *diffTab, e *fileEdit, line, cells int, tr ui.Rect, y, cellW, lineH float32) {
-	start, end, ok := e.compositionPoints()
-	if !ok || line < start.line || line > end.line {
-		return
-	}
-	from, to := 0, cells
-	if line == start.line {
-		from = start.cell
-	}
-	if line == end.line {
-		to = end.cell
-	}
-	from = max(0, min(from, cells))
-	to = max(from, min(to, cells))
-	if to <= from {
-		return
-	}
-	x := tr.X + 6 - t.x + float32(from)*cellW
-	w.c.Clip(tr)
-	w.p.fill(rect(x, y+lineH-2, float32(to-from)*cellW, 2), w.pal.Link)
-	w.c.Unclip()
-}
-
-func (w *Window) paintEditCaret(t *diffTab, e *fileEdit, line int, tr ui.Rect, y, lineH float32) {
-	if !w.focused(idDiffText) {
-		return
-	}
-	p := e.caretPos()
-	if p.line != line {
-		return
-	}
-	x := tr.X + 6 - t.x + float32(p.cell)*e.cellW
-	w.c.Clip(tr)
-	w.p.vline(x, y+1, lineH-2, w.pal.Text)
-	w.c.Unclip()
-}
-
 // ---- lifecycle -------------------------------------------------------------
+
+// dirtyBuffer reports unsaved text in either in-app editor: the file editor or
+// the conflict Result pane. Guards ask it instead of a concrete mode so a new
+// editable surface cannot silently opt out of them.
+func (t *diffTab) dirtyBuffer() bool {
+	if t.edit != nil && t.edit.dirty {
+		return true
+	}
+	if t.cedit != nil {
+		t.cedit.refresh()
+		return t.cedit.dirty
+	}
+	return false
+}
 
 // dirtyEdit returns the first tab with unsaved editor changes, or nil.
 func (w *Window) dirtyEdit() *diffTab {
 	for _, t := range w.ed.tabs {
-		if t.edit != nil && t.edit.dirty {
+		if t.dirtyBuffer() {
 			return t
 		}
 	}
@@ -607,7 +343,7 @@ func (w *Window) confirmDiscardEdits(then func()) {
 // dropped.
 func (w *Window) confirmDiscardOtherEdits(keep *diffTab, then func()) {
 	for _, t := range w.ed.tabs {
-		if t == keep || t.edit == nil || !t.edit.dirty {
+		if t == keep || !t.dirtyBuffer() {
 			continue
 		}
 		w.confirm(w.t(i18n.FileviewDiscardTitle), w.t(i18n.FileviewDiscardBody, t.src.Path), w.t(i18n.FileviewDiscardButton), then)
@@ -622,7 +358,7 @@ func (w *Window) requestCloseTab(index int) {
 		return
 	}
 	t := w.ed.tabs[index]
-	if t.edit != nil && t.edit.dirty {
+	if t.dirtyBuffer() {
 		w.confirm(w.t(i18n.FileviewDiscardTitle), w.t(i18n.FileviewDiscardBody, t.src.Path), w.t(i18n.FileviewDiscardButton), func() {
 			for i, o := range w.ed.tabs {
 				if o == t {
