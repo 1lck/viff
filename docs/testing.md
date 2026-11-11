@@ -51,6 +51,51 @@ go test -count=1 -tags "vivahead litheaudit" ./internal/ui
 
 ## Pre-publication acceptance / 发布前验收
 
+### LFS and refresh performance / LFS 与刷新性能
+
+Run these regressions in isolated temporary repositories; lifecycle and cache
+bounds are documented in [ADR 0047](decisions/0047-lfs-on-demand-statistics.md)
+and [0048](decisions/0048-lfs-attribute-discovery-cache.md).
+
+以下回归使用隔离临时仓库；生命周期与缓存上限见
+[ADR 0047](decisions/0047-lfs-on-demand-statistics.md) 和
+[0048](decisions/0048-lfs-attribute-discovery-cache.md)。
+
+```sh
+go test -count=1 -run '^Test(LFS|Refresh|ParseStatus|Status|RunTree)' ./internal/app ./internal/gitcli ./internal/process
+go test -count=1 -tags 'vivahead litheaudit' -run '^Test(LFS|RemoteRepositoryReadOnly)' ./internal/ui
+```
+
+Tests cover automatic refreshes without enumeration, attribute discovery and
+cache invalidation, tool availability after rule failure, explicit statistics,
+stale results, failure recovery, worktree isolation and refresh coalescing.
+Local shallow clones verify history reload after `--unshallow`/`--deepen=1`
+without moving HEAD or refs. Dark/light headless tests check keyboard access,
+count, time, errors and clipboard behavior.
+
+测试覆盖自动刷新零枚举、属性发现与缓存失效、规则失败时保留工具能力、主动统计、
+过期结果、失败恢复、工作树隔离与刷新合并。本地浅克隆验证 `--unshallow`/`--deepen=1`
+在 HEAD、refs 不变时重载历史。明暗主题无头测试检查键盘操作、数量、时间、错误及剪贴板。
+
+Native process and SSH/WSL lease tests cover cancellation, early parent exit,
+missing exit proof, inspection failure and completion/cancellation races. Run
+`TestLFSLease` on Unix and `TestRunTree` on each target OS; only confirmed cleanup
+releases a worktree's statistics reservation.
+
+原生进程与 SSH/WSL 保活测试覆盖取消、父进程提前退出、缺少退出确认、检查失败和
+完成/取消竞态。在 Unix 运行 `TestLFSLease`，各目标系统运行 `TestRunTree`；
+确认回收后才释放工作树统计名额。
+
+For performance comparisons, use the same disposable checkout, separate
+settings/logs and a fixed observation window with watching enabled. Record
+startup and idle separately, count attribute discovery and LFS listing commands,
+and measure complete Git process-tree CPU separately from Viff. Report the OS,
+Git/LFS/Go versions, fixture size, commands and repeated measurements.
+
+性能对照使用同一隔离工作树、独立设置/日志，启用监听并固定观察时长。分开统计启动与
+空闲，记录属性发现与 LFS 枚举次数，将 Git 完整进程树 CPU 与 Viff 本体分别计量。
+报告系统、Git/LFS/Go 版本、夹具规模、命令和重复测量结果。
+
 The November 4, 2026 acceptance used macOS development builds and native Windows
 test executables running on Windows Server 2022 Datacenter x64, Git
 2.56.0.windows.4, and Microsoft's Basic Display Adapter. The latest result for

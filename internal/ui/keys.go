@@ -194,7 +194,7 @@ func (w *Window) shortcut(e ui.KeyEvent) bool {
 			w.ed.activate((w.ed.active + n - 1) % n)
 		}
 	case ch == "r" && !shift:
-		w.ws.Refresh(true)
+		w.ws.RefreshManually()
 	default:
 		return false
 	}

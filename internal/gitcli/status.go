@@ -3,6 +3,7 @@ package gitcli
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -66,7 +67,11 @@ func (r *Runner) Status(ctx context.Context, repo domain.Repo) (domain.Status, e
 	if err != nil {
 		return domain.Status{}, err
 	}
-	return ParseStatus(out), nil
+	st, complete := parseStatus(out)
+	if !complete {
+		return domain.Status{}, errors.New("incomplete Git status snapshot")
+	}
+	return st, nil
 }
 
 // HeadState is what HEAD names right now: the commit and the branch checked
@@ -116,7 +121,23 @@ func exitCodeOf(err error) int {
 // raw bytes converted to string, never unquoted or re-escaped, so they can be
 // passed back to Git exactly.
 func ParseStatus(out []byte) domain.Status {
+	st, _ := parseStatus(out)
+	return st
+}
+
+func parseStatus(out []byte) (domain.Status, bool) {
 	var st domain.Status
+	complete := len(out) > 0 && out[len(out)-1] == 0
+	var oid, branch bool
+	index := sha256.New()
+	staged := func(path string, identity ...string) {
+		index.Write([]byte(path))
+		index.Write([]byte{0})
+		for _, value := range identity {
+			index.Write([]byte(value))
+			index.Write([]byte{0})
+		}
+	}
 	fields := bytes.Split(out, []byte{0})
 	for i := 0; i < len(fields); i++ {
 		f := string(fields[i])
@@ -126,11 +147,17 @@ func ParseStatus(out []byte) domain.Status {
 		switch f[0] {
 		case '#':
 			parseBranchHeader(&st.Branch, f)
+			oid = oid || strings.HasPrefix(f, "# branch.oid ") && len(f) > len("# branch.oid ")
+			branch = branch || strings.HasPrefix(f, "# branch.head ") && len(f) > len("# branch.head ")
 		case '1':
 			// 1 XY sub mH mI mW hH hI path
 			p := strings.SplitN(f, " ", 9)
-			if len(p) < 9 {
+			if len(p) < 9 || len(p[1]) != 2 || p[8] == "" {
+				complete = false
 				continue
+			}
+			if p[1][0] != '.' {
+				staged(p[8], p[1][:1], p[4], p[7])
 			}
 			st.Entries = append(st.Entries, domain.StatusEntry{
 				Path: p[8], Index: p[1][0], Worktree: p[1][1], Submodule: p[2],
@@ -139,38 +166,49 @@ func ParseStatus(out []byte) domain.Status {
 		case '2':
 			// 2 XY sub mH mI mW hH hI Xscore path NUL origPath
 			p := strings.SplitN(f, " ", 10)
-			if len(p) < 10 {
+			if len(p) < 10 || len(p[1]) != 2 || p[9] == "" || i+1 >= len(fields) || len(fields[i+1]) == 0 {
+				complete = false
 				continue
 			}
 			e := domain.StatusEntry{
 				Path: p[9], Index: p[1][0], Worktree: p[1][1], Submodule: p[2],
 				ModeHead: p[3], ModeIndex: p[4], ModeWork: p[5],
 			}
-			if i+1 < len(fields) {
-				i++
-				e.OrigPath = string(fields[i])
+			i++
+			e.OrigPath = string(fields[i])
+			if p[1][0] != '.' {
+				staged(e.Path, p[1][:1], p[4], p[7], e.OrigPath)
 			}
 			st.Entries = append(st.Entries, e)
 		case 'u':
 			// u XY sub m1 m2 m3 mW h1 h2 h3 path
 			p := strings.SplitN(f, " ", 11)
-			if len(p) < 11 {
+			if len(p) < 11 || len(p[1]) != 2 || p[10] == "" {
+				complete = false
 				continue
 			}
+			staged(p[10], p[1], p[3], p[4], p[5], p[7], p[8], p[9])
 			st.Entries = append(st.Entries, domain.StatusEntry{
 				Path: p[10], Index: p[1][0], Worktree: p[1][1], Submodule: p[2], ModeWork: p[6],
 			})
 		case '?':
-			if len(f) > 2 {
+			if len(f) > 2 && f[1] == ' ' {
 				st.Entries = append(st.Entries, domain.StatusEntry{Path: f[2:], Index: '?', Worktree: '?'})
+			} else {
+				complete = false
 			}
 		case '!':
-			if len(f) > 2 {
+			if len(f) > 2 && f[1] == ' ' {
 				st.Entries = append(st.Entries, domain.StatusEntry{Path: f[2:], Index: '!', Worktree: '!'})
+			} else {
+				complete = false
 			}
+		default:
+			complete = false
 		}
 	}
-	return st
+	index.Sum(st.IndexKey[:0])
+	return st, complete && oid && branch
 }
 
 func parseBranchHeader(b *domain.BranchStatus, line string) {

@@ -82,6 +82,9 @@ type Workspace struct {
 
 	// Repo is the open repository, nil on the welcome screen.
 	Repo *RepoState
+	// lfsScans keeps a canceled scan reserved until its process has exited,
+	// including when the same worktree was closed and immediately reopened.
+	lfsScans map[string]*lfsScan
 
 	// Caps are the optional features of the active backend, derived from the
 	// instance by NewWorkspace. The UI hides what the backend cannot do instead
@@ -175,7 +178,7 @@ type Workspace struct {
 	backends []probeTarget
 	// Watch starts file-system watching for a repository; set by the
 	// composition root so platform code stays out of this package.
-	Watch func(repo domain.Repo, changed func(meta bool)) (Watcher, error)
+	Watch func(repo domain.Repo, changed func(meta, overflow bool)) (Watcher, error)
 	// ConfirmCheckout asks the UI whether to stash local changes and retry a
 	// checkout Git blocked. It runs on the UI thread and returns true when the
 	// user accepted; nil reports the failure instead of offering the choice.
@@ -299,8 +302,7 @@ var quietReads = map[string]bool{
 	"ls-tree": true, "blame": true, "ls-remote": true, "show-ref": true,
 	"symbolic-ref": true, "describe": true, "grep": true, "check-ignore": true,
 	"check-ref-format": true, "name-rev": true, "stash": true,
-	// LFS detection runs `lfs version` and `lfs ls-files`, both reads; a
-	// failure is still shown.
+	// The capability probe is a read; its failure is still shown.
 	"lfs": true,
 	// --version is not a subcommand, but the startup probe goes through
 	// Runner.Log and must not appear as Console noise before any repository
@@ -392,6 +394,11 @@ func (w *Workspace) logCommand(dir string, args []string, took time.Duration, er
 		return
 	}
 	op := args[0]
+	// The stats event reports the outcome and code of the whole listing.
+	// Do not copy a partial list or a path-bearing error to logs or Console.
+	if op == "lfs" && len(args) > 1 && args[1] == "ls-files" {
+		return
+	}
 	write := commandWrites(args)
 	if err != nil {
 		w.record(observability.Event{

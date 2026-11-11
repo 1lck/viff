@@ -7,10 +7,20 @@ package i18n
 // command Viff runs.
 const (
 	// Status-bar marker and its tooltip.
-	ChromeStatusLFS     = Key("chrome.status.lfs")
-	ChromeTipLFSFiles   = Key("chrome.tip.lfsFiles")
-	ChromeTipLFSRules   = Key("chrome.tip.lfsRules")
-	ChromeTipLFSMissing = Key("chrome.tip.lfsMissing")
+	ChromeStatusLFS         = Key("chrome.status.lfs")
+	ChromeTipLFSFiles       = Key("chrome.tip.lfsFiles")
+	ChromeTipLFSRules       = Key("chrome.tip.lfsRules")
+	ChromeTipLFSRulesFailed = Key("chrome.tip.lfsRulesFailed")
+	ChromeTipLFSMissing     = Key("chrome.tip.lfsMissing")
+	LFSRefreshStats         = Key("lfs.refreshStats")
+	LFSCopyFileList         = Key("lfs.copyFileList")
+	LFSStatsUnqueried       = Key("lfs.stats.unqueried")
+	LFSStatsLoading         = Key("lfs.stats.loading")
+	LFSStatsStale           = Key("lfs.stats.stale")
+	LFSStatsFailed          = Key("lfs.stats.failed")
+	LFSStatsUpdated         = Key("lfs.stats.updated")
+	LFSStatsErrorCode       = Key("lfs.stats.errorCode")
+	LFSStatsUnconfirmed     = Key("lfs.stats.unconfirmed")
 	// The server's git-lfs is missing; the install command belongs to the
 	// server, not to the client this status bar is running on.
 	ChromeTipLFSMissingRemote = Key("chrome.tip.lfsMissingRemote")
@@ -30,8 +40,18 @@ func init() {
 		ChromeStatusLFS:           "LFS",
 		ChromeTipLFSFiles:         "Git LFS: %d managed files",
 		ChromeTipLFSRules:         "Git LFS: %d rules",
+		ChromeTipLFSRulesFailed:   "Could not refresh LFS rules (%s). Refresh the repository to retry.",
 		ChromeTipLFSMissing:       "git-lfs is not installed",
 		ChromeTipLFSMissingRemote: "git-lfs is not installed on the server",
+		LFSRefreshStats:           "Refresh LFS Statistics",
+		LFSCopyFileList:           "Copy LFS File List",
+		LFSStatsUnqueried:         "Managed files have not been counted",
+		LFSStatsLoading:           "Counting…",
+		LFSStatsStale:             "Out of date",
+		LFSStatsFailed:            "Count failed",
+		LFSStatsUpdated:           "Last counted: %s",
+		LFSStatsErrorCode:         "Error code: %s",
+		LFSStatsUnconfirmed:       "The query's exit could not be confirmed. Check Git/LFS processes on the repository host, then restart Viff to try again.",
 
 		WorkspaceLFSMissingTitle: "Git LFS is not installed",
 		WorkspaceLFSRuleOne:      "%d LFS rule",
@@ -46,8 +66,18 @@ func init() {
 		ChromeStatusLFS:           "LFS",
 		ChromeTipLFSFiles:         "Git LFS：%d 个受管文件",
 		ChromeTipLFSRules:         "Git LFS：%d 条规则",
+		ChromeTipLFSRulesFailed:   "无法更新 LFS 规则（%s）。刷新仓库可重试。",
 		ChromeTipLFSMissing:       "未安装 git-lfs",
 		ChromeTipLFSMissingRemote: "服务器上未安装 git-lfs",
+		LFSRefreshStats:           "更新 LFS 统计",
+		LFSCopyFileList:           "复制 LFS 文件清单",
+		LFSStatsUnqueried:         "尚未统计受管文件",
+		LFSStatsLoading:           "统计中…",
+		LFSStatsStale:             "已过期",
+		LFSStatsFailed:            "统计失败",
+		LFSStatsUpdated:           "上次统计：%s",
+		LFSStatsErrorCode:         "错误码：%s",
+		LFSStatsUnconfirmed:       "未收到查询退出确认。请检查仓库所在机器上的 Git/LFS 进程，再重启 Viff 重试。",
 
 		WorkspaceLFSMissingTitle: "未安装 Git LFS",
 		WorkspaceLFSRuleOne:      "%d 条 LFS 规则",

@@ -26,6 +26,8 @@ type SSHTransport interface {
 	Command(ctx context.Context, target sshpath.Repo, remoteDir string, args []string) (*exec.Cmd, error)
 	// ReadFile reads one working-tree file, bounded by ContentLimit.
 	ReadFile(ctx context.Context, repo domain.Repo, rel string) (Content, error)
+	// IndexRevision reads metadata for Git's resolved index path.
+	IndexRevision(ctx context.Context, repo domain.Repo, absolutePath string) (string, error)
 	// Operation rebuilds the in-progress operation from the server's Git
 	// directory.
 	Operation(ctx context.Context, repo domain.Repo) (domain.Operation, error)
@@ -101,6 +103,24 @@ func (t sshTransport) ReadFile(ctx context.Context, repo domain.Repo, rel string
 		return Content{}, err
 	}
 	return parseRemoteContent(rel, out)
+}
+
+// Linux and BSD stat use different switches. An atomic Git index replacement
+// changes the device/inode tuple even when size and timestamp coincide.
+const remoteIndexRevisionScript = `p=$1
+if [ ! -e "$p" ]; then printf 'missing\n'; exit 0; fi
+LC_ALL=C stat -L -c '%d:%i:%s:%y:%z' "$p" 2>/dev/null ||
+LC_ALL=C stat -L -f '%d:%i:%z:%m:%c' "$p"`
+
+func (t sshTransport) IndexRevision(ctx context.Context, repo domain.Repo, absolutePath string) (string, error) {
+	out, err := t.r.runRemoteScript(ctx, repo, remoteIndexRevisionScript, absolutePath)
+	if err != nil {
+		return "", err
+	}
+	if len(out) == 0 {
+		return "", fmt.Errorf("server returned no Git index revision")
+	}
+	return string(out), nil
 }
 
 // remoteFileScript is the POSIX sh program used for one working-tree read.

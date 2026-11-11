@@ -234,7 +234,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	tb := splitTop(&content, 34)
 	x, y := tb.X+8, tb.Y+(tb.Height-actionSize)/2
 	if w.action(idCmRefresh, x, y, icons.Refresh, w.t(i18n.WorkspaceActionRefresh), actOpts{}) {
-		w.after(func() { w.ws.Refresh(true) })
+		w.after(w.ws.RefreshManually)
 	}
 	x += actionSize + 2
 	sel := w.selectedEntries()

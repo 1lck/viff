@@ -26,7 +26,9 @@ type remoteHeadReader interface {
 
 // lfsReporter detects Git LFS usage in the working copy.
 type lfsReporter interface {
-	LFS(ctx context.Context, repo domain.Repo) gitcli.LFSStatus
+	LFS(context.Context, domain.Repo, []string, *gitcli.LFSCache) (gitcli.LFSStatus, *gitcli.LFSCache)
+	LFSInputs(context.Context, domain.Repo) (gitcli.LFSInputs, error)
+	LFSFiles(context.Context, domain.Repo) ([]string, error)
 }
 
 // HEAD is the commit and branch the undo history records before and after a
@@ -59,15 +61,4 @@ func (w *Workspace) remoteHeads(ctx context.Context, repo domain.Repo) (map[stri
 		return nil, nil
 	}
 	return h.RemoteHeads(ctx, repo)
-}
-
-// lfsStatus reports LFS usage, or an empty status when the backend has no LFS.
-// The zero value claims nothing is installed or managed, which is the correct
-// answer for a working copy that cannot be using Git LFS at all.
-func (w *Workspace) lfsStatus(ctx context.Context, repo domain.Repo) gitcli.LFSStatus {
-	h, ok := w.Git.(lfsReporter)
-	if !ok {
-		return gitcli.LFSStatus{}
-	}
-	return h.LFS(ctx, repo)
 }
