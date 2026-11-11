@@ -18,6 +18,14 @@ import (
 	"viff/internal/ui/icons"
 )
 
+// The left dock's layout bounds. The Project tree and the Commit panel share
+// the dock, so they share this width and clamp: switching tabs must not move
+// the splitter, and the editor keeps its width across the switch.
+const (
+	leftPanelMinWidth  = 240
+	leftPanelEditorMin = 300
+)
+
 // paintMain lays out the IDE frame: toolbar, stripes, islands, status bar.
 func (w *Window) paintMain(full ui.Rect) {
 	area := full
@@ -66,27 +74,23 @@ func (w *Window) paintMain(full ui.Rect) {
 	// The left dock holds one tool window at a time, like IntelliJ's left
 	// stripe: the Project tree replaces the Commit panel instead of squeezing
 	// the editor with two fixed panels.
-	if w.projectOpen {
-		pw := clampF(s.ProjectPanelWidth, 240, max(240, area.Width-320))
-		pr := splitLeft(&area, pw)
+	if w.projectOpen || w.commitOpen {
+		maxWidth := max(leftPanelMinWidth, area.Width-leftPanelEditorMin)
+		lw := clampF(s.LeftPanelWidth, leftPanelMinWidth, maxWidth)
+		lr := splitLeft(&area, lw)
 		area.X += islandGap
 		area.Width -= islandGap
-		w.paintProject(pr)
-		start := pw
-		w.splitter(idSplitProject, rect(right(pr), pr.Y, islandGap, pr.Height), true,
-			func() { start = pw },
-			func(d float32) { s.ProjectPanelWidth = clampF(start+d, 240, max(240, full.Width-2*stripeW-300)) },
-			w.saveSettings)
-	} else if w.commitOpen {
-		cw := clampF(s.CommitPanelWidth, 240, max(240, area.Width-300))
-		cr := splitLeft(&area, cw)
-		area.X += islandGap
-		area.Width -= islandGap
-		w.paintCommitWindow(cr)
-		start := cw
-		w.splitter(idSplitCommit, rect(right(cr), cr.Y, islandGap, cr.Height), true,
-			func() { start = cw },
-			func(d float32) { s.CommitPanelWidth = clampF(start+d, 240, max(240, full.Width-2*stripeW-300)) },
+		id := idSplitCommit
+		if w.projectOpen {
+			w.paintProject(lr)
+			id = idSplitProject
+		} else {
+			w.paintCommitWindow(lr)
+		}
+		start := lw
+		w.splitter(id, rect(right(lr), lr.Y, islandGap, lr.Height), true,
+			func() { start = lw },
+			func(d float32) { s.LeftPanelWidth = clampF(start+d, leftPanelMinWidth, maxWidth) },
 			w.saveSettings)
 	}
 	w.paintEditor(area)

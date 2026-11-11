@@ -761,7 +761,7 @@ func TestChangeListsBarAtDefaultAndNarrowWidths(t *testing.T) {
 	f.snap("70-bar-default-1440")
 
 	// The narrowest Commit panel: 240px, as clamped by the splitting code.
-	f.ws.Settings.CommitPanelWidth = 240
+	f.ws.Settings.LeftPanelWidth = 240
 	f.win.Invalidate()
 	f.s.Settle(80*time.Millisecond, time.Second)
 	if !f.s.HasText("Commit includes all staged files") {
@@ -773,7 +773,7 @@ func TestChangeListsBarAtDefaultAndNarrowWidths(t *testing.T) {
 	f.snap("71-bar-panel-240")
 
 	// A 900px window with the default panel width.
-	f.ws.Settings.CommitPanelWidth = 340
+	f.ws.Settings.LeftPanelWidth = 340
 	resize(t, f, 900, 900)
 	f.win.Invalidate()
 	f.s.Settle(80*time.Millisecond, time.Second)
