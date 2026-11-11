@@ -34,9 +34,12 @@ var ErrUnsupported = &vcs.Error{Kind: vcs.ErrOther, Stderr: "this operation is n
 // stage into. Untracked files are excluded either way — they need an explicit
 // add first — and a conflicted working copy can commit nothing.
 //
-// The UI needs this to decide whether the Commit button can be pressed. Asking
-// for the staged count directly made the button permanently disabled on
-// Subversion, where that count is always zero.
+// The UI uses this for the default commit scope. A checked selection is a
+// second, explicit scope (CommitRequest.Paths): checked files are committed
+// from the working tree without staging, so a zero count does not by itself
+// disable Commit while files are checked. Asking for the staged count directly
+// made the button permanently disabled on Subversion, where that count is
+// always zero.
 func (w *Workspace) CommittableCount() int {
 	if w.Repo == nil {
 		return 0

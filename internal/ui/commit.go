@@ -69,29 +69,83 @@ const (
 	rowFile
 )
 
-// Space above the commit buttons: the scope line is always there, and the
-// checked-but-unstaged prompt adds a warning line and its Stage Selected
-// button. The heights are fixed so the layout can reserve them before the
-// change tree is painted.
+// Space above the commit buttons: the scope line is always there, an optional
+// warning line explains a scope that differs from the index, and Stage
+// Selected adds its button. The heights are fixed so the layout can reserve
+// them before the change tree is painted.
 const (
-	commitScopeHintH     = 20
-	commitNotStagedHintH = 20
-	commitStageButtonH   = 28
+	commitScopeHintH   = 20
+	commitWarningHintH = 20
+	commitStageButtonH = 28
 
-	// commitInlinePromptW is the hint width at which the staged prompt's
-	// warning and its button share a row. Below it the warning gets its own
-	// row, so a narrow Commit panel still shows the full message.
+	// commitInlinePromptW is the hint width at which the warning and the Stage
+	// Selected button share a row. Below it the warning gets its own row, so a
+	// narrow Commit panel still shows both.
 	commitInlinePromptW = 300
 )
 
-func commitHintHeight(notStaged int, width float32) float32 {
-	if notStaged == 0 {
-		return commitScopeHintH
+// commitScope is what Commit records when files are checked. A checked file is
+// committed from its current working-tree content, so the checked set is the
+// scope and files outside it are never included.
+type commitScope struct {
+	// rows are the checked file rows, after directories and groups expand.
+	rows []changeRow
+	// files is the number of distinct checked files. A rename is one file but
+	// contributes two paths.
+	files int
+	// paths are the literal paths the commit records, sorted. A staged rename
+	// contributes its old and new path, so both sides move together.
+	paths []string
+	// unstaged counts checked files whose working-tree content is not in the
+	// index (modified, untracked or deleted).
+	unstaged int
+	// partial counts checked files with staged and unstaged changes. The
+	// commit uses the working-tree version, so their staged version is not
+	// kept separately.
+	partial int
+	// keptStaged counts staged files outside the checked set. They stay staged
+	// and out of this commit.
+	keptStaged int
+	// blocked reports that an operation in progress forbids a partial commit
+	// (merge and cherry-pick record MERGE_HEAD/CHERRY_PICK_HEAD).
+	blocked bool
+	// unversioned counts checked files a backend without an index cannot
+	// commit yet. They stay out of the commit; when nothing else is checked,
+	// committing the default scope would silently include files the user did
+	// not check, so the button is disabled instead.
+	unversioned int
+}
+
+// hasWarning reports whether the scope differs from the index enough to
+// explain it under the scope line.
+func (s commitScope) hasWarning() bool {
+	return s.blocked || s.unversioned > 0 || s.partial > 0 || s.unstaged > 0 || s.keptStaged > 0
+}
+
+// commitBlocked reports that pressing Commit must not run: a merge or
+// cherry-pick in progress cannot record a subset, and a selection made only of
+// files the backend cannot commit would otherwise fall back to its default
+// scope.
+func (s commitScope) commitBlocked() bool {
+	return s.blocked || (s.unversioned > 0 && s.files == 0)
+}
+
+func commitHintHeight(scope commitScope, stage bool, width float32) float32 {
+	warn := scope.hasWarning()
+	h := float32(commitScopeHintH)
+	if warn {
+		h += commitWarningHintH
 	}
-	if width >= commitInlinePromptW {
-		return commitScopeHintH + commitStageButtonH
+	if stage {
+		if warn && width >= commitInlinePromptW {
+			// The warning and the button share one row, which keeps the
+			// changes tree from losing a row on a narrow Commit panel.
+			h += commitStageButtonH - commitWarningHintH
+		} else {
+			h += commitStageButtonH
+		}
 	}
-	return commitScopeHintH + commitNotStagedHintH + commitStageButtonH
+	return h
 }
 
 var areaOrder = []domain.Area{domain.AreaConflicts, domain.AreaStaged, domain.AreaUnstaged, domain.AreaUntracked}
@@ -293,8 +347,9 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	// Rebuild the rows here, before the hint layout reads the selection, and
 	// let paintChanges reuse this table instead of building it a second time.
 	w.buildRows()
-	pending := w.commitStagePaths()
-	hintH := commitHintHeight(len(pending), content.Width-20)
+	scope := w.commitScope()
+	stagePaths := w.commitStagePaths(scope.rows)
+	hintH := commitHintHeight(scope, len(stagePaths) > 0, content.Width-20)
 	if w.readOnly() || w.cm.msgCollapsed {
 		hintH = 0
 	}
@@ -322,7 +377,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 			func(d float32) { v.msgH = clampF(startH-d, 60, max(60, content.Height+msgH-110)) }, nil)
 	}
 	w.paintChanges(content)
-	w.paintCommitMessage(bottomR, msgH, pending)
+	w.paintCommitMessage(bottomR, msgH, scope, stagePaths)
 }
 
 // paintOperationBanner shows a merge/rebase/cherry-pick in progress.
@@ -888,15 +943,80 @@ func (w *Window) selectedEntries() []changeRow {
 	return out
 }
 
+// commitScope resolves the checked rows into the commit's range. With an
+// index every checked file is recorded from its working-tree content, whether
+// it is staged, unstaged, untracked or deleted; files outside the set are left
+// alone. Without an index only tracked rows can be committed, which is what
+// Subversion schedules.
+func (w *Window) commitScope() commitScope {
+	var scope commitScope
+	scope.rows = w.selectedEntries()
+	if len(scope.rows) == 0 {
+		return scope
+	}
+	rs := w.repo()
+	// A file with staged and unstaged changes appears in both areas; checking
+	// either row commits the same file, so count and commit it once.
+	entries := make(map[string]domain.StatusEntry, len(scope.rows))
+	for _, row := range scope.rows {
+		if row.entry.Ignored() {
+			continue
+		}
+		if _, ok := entries[row.entry.Path]; !ok {
+			entries[row.entry.Path] = row.entry
+		}
+	}
+	paths := make(map[string]bool, len(entries))
+	for path, e := range entries {
+		if !w.ws.Caps.Index && e.Untracked() {
+			scope.unversioned++
+			continue
+		}
+		scope.files++
+		paths[path] = true
+		if e.OrigPath != "" && w.ws.Caps.Index {
+			// A staged rename is one checked file whose old path is deleted
+			// from the index; both sides belong to the commit.
+			paths[e.OrigPath] = true
+		}
+		if e.Unstaged() || e.Untracked() {
+			scope.unstaged++
+		}
+		if e.Staged() && e.Unstaged() {
+			scope.partial++
+		}
+	}
+	scope.paths = make([]string, 0, len(paths))
+	for p := range paths {
+		scope.paths = append(scope.paths, p)
+	}
+	sort.Strings(scope.paths)
+	if !w.ws.Caps.Index {
+		return scope
+	}
+	switch rs.Operation.Kind {
+	case domain.OpMerge, domain.OpCherryPick:
+		scope.blocked = scope.files > 0
+	}
+	for _, e := range rs.Entries(domain.AreaStaged) {
+		if paths[e.Path] || (e.OrigPath != "" && paths[e.OrigPath]) {
+			continue
+		}
+		scope.keptStaged++
+	}
+	return scope
+}
+
 // commitStagePaths returns the checked files Stage Selected may stage: rows in
 // the working tree that the index can take. Staged rows, conflicts and a
 // backend without an index are left out, so the action can never unstage or
-// resolve anything the user did not check.
-func (w *Window) commitStagePaths() []string {
+// resolve anything the user did not check. Committing no longer depends on it:
+// checked files are committed from the working tree either way.
+func (w *Window) commitStagePaths(rows []changeRow) []string {
 	if w.readOnly() || !w.ws.Caps.Index {
 		return nil
 	}
-	return stageSelectedPaths(w.selectedEntries())
+	return stageSelectedPaths(rows)
 }
 
 func stageSelectedPaths(rows []changeRow) []string {
@@ -1167,46 +1287,97 @@ func (w *Window) setClipboardText(s string) error {
 
 // ---- message and commit buttons ------------------------------------------------
 
-// paintCommitScope states what Commit records and, when checked files are not
-// staged, offers to stage exactly those files. It does not change the commit
-// scope: Commit still takes every staged file, checked or not.
-func (w *Window) paintCommitScope(r ui.Rect, pending []string) {
-	hint := w.t(i18n.WorkspaceCommitScopeHint)
-	if !w.ws.Caps.Index {
-		hint = w.t(i18n.WorkspaceCommitScopeHintPaths)
-	}
+// paintCommitScope states what Commit records, warns when the scope differs
+// from the index, and offers to stage exactly the checked files for users who
+// prefer to keep staging fine-grained. It never changes the scope: Commit
+// records the checked files from the working tree whether they are staged or
+// not.
+func (w *Window) paintCommitScope(r ui.Rect, scope commitScope, stagePaths []string) {
 	const iconW = 20
 	w.p.iconIn(icons.Info, rect(r.X, r.Y+2, 14, 14))
+	hint := w.commitScopeText(scope)
 	w.p.text(w.p.truncateMiddle(hint, fontSmall, regular, max(0, r.Width-iconW)),
 		rect(r.X+iconW, r.Y, r.Width-iconW, commitScopeHintH), fontSmall, regular, w.pal.TextSecond)
-	if len(pending) == 0 {
-		return
-	}
 
-	msg := w.pluralT(len(pending), i18n.WorkspaceCountNotStagedOne, i18n.WorkspaceCountNotStagedMany)
+	warning := w.commitScopeWarning(scope)
 	label := w.t(i18n.WorkspaceButtonStageSelected)
 	bw := w.buttonWidth(label)
-	drawWarning := func(x, y, width, height float32) {
-		w.p.iconIn(icons.Warning, rect(x, y, 14, height))
-		w.p.text(w.p.truncateMiddle(msg, fontSmall, regular, max(0, width-iconW)),
-			rect(x+iconW, y, max(0, width-iconW), height), fontSmall, regular, w.pal.Warning)
-	}
-	paths := append([]string(nil), pending...)
 	rowY := r.Y + commitScopeHintH
-	if r.Width >= commitInlinePromptW {
-		drawWarning(r.X, rowY, max(0, r.Width-bw-8), commitStageButtonH)
-		if w.button(idCmStageSelected, rect(right(r)-bw, rowY, bw, commitStageButtonH), label, btnNormal, false) {
+	drawWarning := func(x, y, width, height float32) {
+		text := w.p.truncateMiddle(warning, fontSmall, regular, max(0, width-iconW))
+		w.p.iconIn(icons.Warning, rect(x, y, 14, height))
+		w.p.text(text, rect(x+iconW, y, max(0, width-iconW), height), fontSmall, regular, w.pal.Warning)
+	}
+	inline := len(stagePaths) > 0 && warning != "" && r.Width >= commitInlinePromptW
+	if warning != "" {
+		if inline {
+			drawWarning(r.X, rowY, max(0, r.Width-bw-8), commitStageButtonH)
+		} else {
+			drawWarning(r.X, rowY, r.Width, commitWarningHintH)
+			rowY += commitWarningHintH
+		}
+	}
+	if len(stagePaths) > 0 {
+		paths := append([]string(nil), stagePaths...)
+		x := r.X
+		if inline {
+			x = right(r) - bw
+		}
+		if w.button(idCmStageSelected, rect(x, rowY, bw, commitStageButtonH), label, btnNormal, false) {
 			w.after(func() { w.ws.StagePaths(paths) })
 		}
-		return
-	}
-	drawWarning(r.X, rowY, r.Width, commitNotStagedHintH)
-	if w.button(idCmStageSelected, rect(r.X, rowY+commitNotStagedHintH, bw, commitStageButtonH), label, btnNormal, false) {
-		w.after(func() { w.ws.StagePaths(paths) })
 	}
 }
 
-func (w *Window) paintCommitMessage(r ui.Rect, msgH float32, pending []string) {
+// commitScopeText is the one-line statement of the commit's range.
+func (w *Window) commitScopeText(scope commitScope) string {
+	switch {
+	case scope.unversioned > 0 && scope.files == 0:
+		return w.t(i18n.WorkspaceCommitScopeUnversioned)
+	case scope.files == 0 && w.ws.Caps.Index:
+		return w.t(i18n.WorkspaceCommitScopeHint)
+	case scope.files == 0:
+		return w.t(i18n.WorkspaceCommitScopeEveryChange)
+	case w.cm.amend:
+		return w.pluralT(scope.files, i18n.WorkspaceCommitScopeAmendOne, i18n.WorkspaceCommitScopeAmendMany)
+	}
+	return w.pluralT(scope.files, i18n.WorkspaceCommitScopeCheckedOne, i18n.WorkspaceCommitScopeCheckedMany)
+}
+
+// commitScopeWarning explains how the scope differs from the index. Checked
+// files that are not staged are still committed, so the line says what is
+// included; staged files outside the scope are named so their absence is not a
+// surprise. The facts share one line so the changes tree keeps its height.
+func (w *Window) commitScopeWarning(scope commitScope) string {
+	switch {
+	case scope.blocked:
+		return w.t(i18n.WorkspaceCommitScopeBlocked)
+	case scope.unversioned > 0 && scope.files == 0:
+		return w.t(i18n.WorkspaceCommitScopeStageFirst)
+	}
+	var parts []string
+	if scope.unversioned > 0 {
+		parts = append(parts, w.pluralT(scope.unversioned, i18n.WorkspaceCommitScopeUnversionedOne, i18n.WorkspaceCommitScopeUnversionedMany))
+	}
+	// Staged files outside the scope come first: the tail of a middle-truncated
+	// line survives, so both ends carry a fact when the panel is narrow.
+	if scope.keptStaged > 0 {
+		parts = append(parts, w.pluralT(scope.keptStaged, i18n.WorkspaceCommitScopeKeepStagedOne, i18n.WorkspaceCommitScopeKeepStagedMany))
+	}
+	if scope.partial > 0 {
+		parts = append(parts, w.pluralT(scope.partial, i18n.WorkspaceCommitScopePartialOne, i18n.WorkspaceCommitScopePartialMany))
+	}
+	if rest := scope.unstaged - scope.partial; rest > 0 {
+		one, many := i18n.WorkspaceCommitScopeUnstagedOne, i18n.WorkspaceCommitScopeUnstagedMany
+		if scope.partial > 0 {
+			one, many = i18n.WorkspaceCommitScopeMoreUnstagedOne, i18n.WorkspaceCommitScopeMoreUnstagedMany
+		}
+		parts = append(parts, w.pluralT(rest, one, many))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func (w *Window) paintCommitMessage(r ui.Rect, msgH float32, scope commitScope, stagePaths []string) {
 	v := &w.cm
 	rs := w.repo()
 	if w.readOnly() {
@@ -1277,18 +1448,18 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32, pending []string) {
 		return
 	}
 
-	// The commit scope and, when checked files are not staged, the action that
-	// stages exactly those files. It sits above the buttons so the reason a
-	// disabled Commit is visible without hovering its tooltip.
-	hintH := commitHintHeight(len(pending), r.Width-20)
-	w.paintCommitScope(rect(r.X+10, bottom(mr)+4, r.Width-20, hintH), pending)
+	// The commit scope and its warnings, plus the action that stages exactly
+	// the checked files. It sits above the buttons so the range is visible
+	// without hovering a tooltip.
+	hintH := commitHintHeight(scope, len(stagePaths) > 0, r.Width-20)
+	w.paintCommitScope(rect(r.X+10, bottom(mr)+4, r.Width-20, hintH), scope, stagePaths)
 
 	// Buttons.
 	by := bottom(mr) + hintH + 10
 	committable := w.ws.CommittableCount()
 	_, _, _, conflicts := rs.Status.Counts()
 	empty := strings.TrimSpace(value) == ""
-	can := !empty && (committable > 0 || v.amend) && conflicts == 0
+	can := !empty && (scope.files > 0 || committable > 0 || v.amend) && conflicts == 0 && !scope.commitBlocked()
 	label := w.t(i18n.WorkspaceButtonCommit)
 	if v.amend {
 		label = w.t(i18n.WorkspaceButtonAmendCommit)
@@ -1300,7 +1471,11 @@ func (w *Window) paintCommitMessage(r ui.Rect, msgH float32, pending []string) {
 	switch {
 	case conflicts > 0:
 		w.tip(idCmCommit, w.t(i18n.WorkspaceTipResolveBeforeCommit))
-	case committable == 0 && !v.amend:
+	case scope.blocked:
+		w.tip(idCmCommit, w.t(i18n.WorkspaceTipCommitScopeBlocked))
+	case scope.unversioned > 0 && scope.files == 0:
+		w.tip(idCmCommit, w.t(i18n.WorkspaceTipCheckedNotVersioned))
+	case scope.files == 0 && committable == 0 && !v.amend:
 		if w.ws.Caps.Index {
 			w.tip(idCmCommit, w.t(i18n.WorkspaceTipStageToCommit))
 		} else {
@@ -1439,26 +1614,69 @@ func (w *Window) doCommit(push bool) {
 	}
 	v := &w.cm
 	rs := w.repo()
+	// The scope comes from the rows the view built. Rebuild them here so a
+	// keyboard commit after a refresh uses the current selection rather than
+	// a table that has not been painted yet.
+	w.buildRows()
+	scope := w.commitScope()
 	committable := w.ws.CommittableCount()
 	_, _, _, conflicts := rs.Status.Counts()
 	msg := strings.TrimSpace(v.msg.String())
-	if msg == "" || conflicts > 0 || (committable == 0 && !v.amend) {
+	if msg == "" || conflicts > 0 || scope.commitBlocked() {
 		return
 	}
-	// A backend without an index commits the rows the user checked; without
-	// them svn commit takes the whole working copy, so the boxes would be
-	// decoration. Checked rows that the backend cannot schedule (untracked and
-	// ignored files) are left out, so the commit never fails over a file that
-	// was never under version control.
-	var paths []string
-	if !w.ws.Caps.Index {
-		for _, row := range w.selectedEntries() {
-			if row.entry.Untracked() || row.entry.Ignored() {
-				continue
-			}
-			paths = append(paths, row.entry.Path)
-		}
+	if scope.files == 0 && committable == 0 && !v.amend {
+		return
 	}
+	if scope.partial > 0 {
+		// The checked file has staged content plus newer working-tree changes.
+		// Committing the working-tree version replaces its staged version, so
+		// ask before doing that. The prompt names the action that was pressed,
+		// and cancel leaves both the index and the message untouched.
+		paths := append([]string(nil), scope.paths...)
+		w.confirmCommitScope(scope.partial, paths, push, w.commitButtonLabel(push))
+		return
+	}
+	w.commitChecked(scope.paths, push)
+}
+
+// commitButtonLabel is the label of the Commit button for the current mode, so
+// a confirmation opens with the action the user actually pressed.
+func (w *Window) commitButtonLabel(push bool) string {
+	switch {
+	case push && w.cm.amend:
+		return w.t(i18n.WorkspaceButtonAmendCommitAndPush)
+	case push:
+		return w.t(i18n.WorkspaceButtonCommitAndPush)
+	case w.cm.amend:
+		return w.t(i18n.WorkspaceButtonAmendCommit)
+	}
+	return w.t(i18n.WorkspaceButtonCommit)
+}
+
+// confirmCommitScope asks before a commit replaces the staged version of
+// checked files that have both staged and unstaged changes. The working-tree
+// version is the scope; staged changes to files outside the checks are kept
+// either way.
+func (w *Window) confirmCommitScope(partial int, paths []string, push bool, label string) {
+	w.openDialog(&dialog{
+		title: w.t(i18n.WorkspaceDialogCommitScopeTitle), ok: label, width: 500,
+		body: func(f *form) {
+			f.text(w.pluralT(partial, i18n.WorkspaceDialogCommitScopeBodyOne, i18n.WorkspaceDialogCommitScopeBodyMany))
+		},
+		onOK: func() bool {
+			w.commitChecked(paths, push)
+			return true
+		},
+	})
+}
+
+// commitChecked records paths, or the backend's default scope when paths is
+// empty. The message is cleared and Push opened only after the commit
+// succeeded, so a failed or cancelled commit leaves the message and never
+// pushes.
+func (w *Window) commitChecked(paths []string, push bool) {
+	v := &w.cm
 	req := vapp.CommitRequest{Message: v.msg.String(), Amend: v.amend, SignOff: v.signOff, NoVerify: v.noVerify, Paths: paths}
 	w.ws.Commit(req, func() {
 		setText(v.msg, "")

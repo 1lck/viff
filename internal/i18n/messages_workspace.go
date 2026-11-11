@@ -96,6 +96,8 @@ const (
 	WorkspaceTipCollapseMessage     = Key("workspace.tip.collapseMessage")
 	WorkspaceTipExpandMessage       = Key("workspace.tip.expandMessage")
 	WorkspaceTipAddRemoteToPush     = Key("workspace.tip.addRemoteToPush")
+	WorkspaceTipCommitScopeBlocked  = Key("workspace.tip.commitScopeBlocked")
+	WorkspaceTipCheckedNotVersioned = Key("workspace.tip.checkedNotVersioned")
 	WorkspaceTipAIGenerate          = Key("workspace.tip.aiGenerate")
 	WorkspaceAIGenerating           = Key("workspace.ai.generating")
 	WorkspaceAIGenerateFailed       = Key("workspace.ai.generateFailed")
@@ -135,8 +137,25 @@ const (
 	// The commit scope above the buttons, and the prompt that offers to stage
 	// checked files that are not staged yet. The scope depends on the backend:
 	// Git commits the index, a backend without one commits the checked paths.
-	WorkspaceCommitScopeHint      = Key("workspace.commit.scopeHint")
-	WorkspaceCommitScopeHintPaths = Key("workspace.commit.scopeHintPaths")
+	WorkspaceCommitScopeHint             = Key("workspace.commit.scopeHint")
+	WorkspaceCommitScopeEveryChange      = Key("workspace.commit.scopeEveryChange")
+	WorkspaceCommitScopeCheckedOne       = Key("workspace.commit.scopeChecked.one")
+	WorkspaceCommitScopeCheckedMany      = Key("workspace.commit.scopeChecked.many")
+	WorkspaceCommitScopeAmendOne         = Key("workspace.commit.scopeAmend.one")
+	WorkspaceCommitScopeAmendMany        = Key("workspace.commit.scopeAmend.many")
+	WorkspaceCommitScopeUnstagedOne      = Key("workspace.commit.scopeUnstaged.one")
+	WorkspaceCommitScopeUnstagedMany     = Key("workspace.commit.scopeUnstaged.many")
+	WorkspaceCommitScopePartialOne       = Key("workspace.commit.scopePartial.one")
+	WorkspaceCommitScopePartialMany      = Key("workspace.commit.scopePartial.many")
+	WorkspaceCommitScopeMoreUnstagedOne  = Key("workspace.commit.scopeMoreUnstaged.one")
+	WorkspaceCommitScopeMoreUnstagedMany = Key("workspace.commit.scopeMoreUnstaged.many")
+	WorkspaceCommitScopeKeepStagedOne    = Key("workspace.commit.scopeKeepStaged.one")
+	WorkspaceCommitScopeKeepStagedMany   = Key("workspace.commit.scopeKeepStaged.many")
+	WorkspaceCommitScopeBlocked          = Key("workspace.commit.scopeBlocked")
+	WorkspaceCommitScopeUnversioned      = Key("workspace.commit.scopeUnversioned")
+	WorkspaceCommitScopeUnversionedOne   = Key("workspace.commit.scopeUnversionedFile.one")
+	WorkspaceCommitScopeUnversionedMany  = Key("workspace.commit.scopeUnversionedFile.many")
+	WorkspaceCommitScopeStageFirst       = Key("workspace.commit.scopeStageFirst")
 
 	WorkspaceHintPush          = Key("workspace.hint.push")
 	WorkspaceHintUpdateProject = Key("workspace.hint.updateProject")
@@ -215,8 +234,9 @@ const (
 	WorkspaceCountUnversionedOne  = Key("workspace.count.unversionedFiles.one")
 	WorkspaceCountUnversionedMany = Key("workspace.count.unversionedFiles.many")
 
-	WorkspaceCountNotStagedOne  = Key("workspace.count.notStaged.one")
-	WorkspaceCountNotStagedMany = Key("workspace.count.notStaged.many")
+	WorkspaceDialogCommitScopeTitle    = Key("workspace.dialog.commitScope.title")
+	WorkspaceDialogCommitScopeBodyOne  = Key("workspace.dialog.commitScope.body.one")
+	WorkspaceDialogCommitScopeBodyMany = Key("workspace.dialog.commitScope.body.many")
 )
 
 func init() {
@@ -302,6 +322,8 @@ func init() {
 		WorkspaceTipCollapseMessage:     "Collapse the commit message",
 		WorkspaceTipExpandMessage:       "Expand the commit message",
 		WorkspaceTipAddRemoteToPush:     "Add a remote to push",
+		WorkspaceTipCommitScopeBlocked:  "A merge or cherry-pick commits the whole index; uncheck the files or finish it first",
+		WorkspaceTipCheckedNotVersioned: "Stage the checked files first",
 		WorkspaceTipAIGenerate:          "Write the message with AI",
 		WorkspaceAIGenerating:           "Writing the message…",
 		WorkspaceAIGenerateFailed:       "The AI could not write the message",
@@ -336,8 +358,25 @@ func init() {
 		WorkspaceAIConfirmAsk:           "Generate a commit message with AI?",
 		WorkspaceAIConfirmGenerate:      "Generate",
 
-		WorkspaceCommitScopeHint:      "Commit staged files only",
-		WorkspaceCommitScopeHintPaths: "Commit includes the checked files",
+		WorkspaceCommitScopeHint:             "Commit staged files only",
+		WorkspaceCommitScopeEveryChange:      "Commit every changed file",
+		WorkspaceCommitScopeCheckedOne:       "Working-tree commit of %d checked file",
+		WorkspaceCommitScopeCheckedMany:      "Working-tree commit of %d checked files",
+		WorkspaceCommitScopeAmendOne:         "Working-tree amend of %d checked file",
+		WorkspaceCommitScopeAmendMany:        "Working-tree amend of %d checked files",
+		WorkspaceCommitScopeUnstagedOne:      "%d checked file not staged",
+		WorkspaceCommitScopeUnstagedMany:     "%d checked files not staged",
+		WorkspaceCommitScopePartialOne:       "%d checked file partly staged",
+		WorkspaceCommitScopePartialMany:      "%d checked files partly staged",
+		WorkspaceCommitScopeMoreUnstagedOne:  "%d more checked file not staged",
+		WorkspaceCommitScopeMoreUnstagedMany: "%d more checked files not staged",
+		WorkspaceCommitScopeKeepStagedOne:    "%d staged file stays staged",
+		WorkspaceCommitScopeKeepStagedMany:   "%d staged files stay staged",
+		WorkspaceCommitScopeBlocked:          "Merge or cherry-pick in progress commits the whole index",
+		WorkspaceCommitScopeUnversioned:      "Checked files are not under version control",
+		WorkspaceCommitScopeUnversionedOne:   "%d checked file is not under version control",
+		WorkspaceCommitScopeUnversionedMany:  "%d checked files are not under version control",
+		WorkspaceCommitScopeStageFirst:       "Stage the checked files first",
 
 		WorkspaceHintPush:          "Push",
 		WorkspaceHintUpdateProject: "Update Project",
@@ -408,8 +447,9 @@ func init() {
 		WorkspaceCountUnversionedOne:  "%d unversioned file",
 		WorkspaceCountUnversionedMany: "%d unversioned files",
 
-		WorkspaceCountNotStagedOne:  "%d selected file is not staged",
-		WorkspaceCountNotStagedMany: "%d selected files are not staged",
+		WorkspaceDialogCommitScopeTitle:    "Commit checked files",
+		WorkspaceDialogCommitScopeBodyOne:  "This checked file has staged and unstaged changes. The commit records the working tree version, so the staged version is replaced; unchecked staged changes stay staged.",
+		WorkspaceDialogCommitScopeBodyMany: "%d checked files have staged and unstaged changes. The commit records the working tree versions, so their staged versions are replaced; unchecked staged changes stay staged.",
 	})
 
 	register(ZHCN, map[Key]string{
@@ -494,6 +534,8 @@ func init() {
 		WorkspaceTipCollapseMessage:     "折叠提交说明",
 		WorkspaceTipExpandMessage:       "展开提交说明",
 		WorkspaceTipAddRemoteToPush:     "添加远端后才能推送",
+		WorkspaceTipCommitScopeBlocked:  "合并或拣选进行中只能提交整个索引；请取消勾选，或先完成该操作",
+		WorkspaceTipCheckedNotVersioned: "请先暂存勾选的文件",
 		WorkspaceTipAIGenerate:          "用 AI 生成提交说明",
 		WorkspaceAIGenerating:           "正在生成提交说明…",
 		WorkspaceAIGenerateFailed:       "AI 没能生成提交说明",
@@ -528,8 +570,25 @@ func init() {
 		WorkspaceAIConfirmAsk:           "确认使用 AI 生成提交说明？",
 		WorkspaceAIConfirmGenerate:      "生成",
 
-		WorkspaceCommitScopeHint:      "提交只包含已暂存的文件",
-		WorkspaceCommitScopeHintPaths: "提交包含勾选的文件",
+		WorkspaceCommitScopeHint:             "提交只包含已暂存的文件",
+		WorkspaceCommitScopeEveryChange:      "提交全部已更改的文件",
+		WorkspaceCommitScopeCheckedOne:       "提交 %d 个勾选文件的工作树内容",
+		WorkspaceCommitScopeCheckedMany:      "提交 %d 个勾选文件的工作树内容",
+		WorkspaceCommitScopeAmendOne:         "修订 %d 个勾选文件的工作树内容",
+		WorkspaceCommitScopeAmendMany:        "修订 %d 个勾选文件的工作树内容",
+		WorkspaceCommitScopeUnstagedOne:      "%d 个勾选文件未暂存",
+		WorkspaceCommitScopeUnstagedMany:     "%d 个勾选文件未暂存",
+		WorkspaceCommitScopePartialOne:       "%d 个勾选文件部分暂存",
+		WorkspaceCommitScopePartialMany:      "%d 个勾选文件部分暂存",
+		WorkspaceCommitScopeMoreUnstagedOne:  "另有 %d 个勾选文件未暂存",
+		WorkspaceCommitScopeMoreUnstagedMany: "另有 %d 个勾选文件未暂存",
+		WorkspaceCommitScopeKeepStagedOne:    "%d 个已暂存文件保持暂存",
+		WorkspaceCommitScopeKeepStagedMany:   "%d 个已暂存文件保持暂存",
+		WorkspaceCommitScopeBlocked:          "合并或拣选进行中只能提交整个索引",
+		WorkspaceCommitScopeUnversioned:      "勾选的文件尚未纳入版本控制",
+		WorkspaceCommitScopeUnversionedOne:   "%d 个勾选文件尚未纳入版本控制",
+		WorkspaceCommitScopeUnversionedMany:  "%d 个勾选文件尚未纳入版本控制",
+		WorkspaceCommitScopeStageFirst:       "请先暂存勾选的文件",
 
 		WorkspaceHintPush:          "推送",
 		WorkspaceHintUpdateProject: "更新项目",
@@ -600,7 +659,8 @@ func init() {
 		WorkspaceCountUnversionedOne:  "%d 个未跟踪文件",
 		WorkspaceCountUnversionedMany: "%d 个未跟踪文件",
 
-		WorkspaceCountNotStagedOne:  "%d 个已勾选的文件尚未暂存",
-		WorkspaceCountNotStagedMany: "%d 个已勾选的文件尚未暂存",
+		WorkspaceDialogCommitScopeTitle:    "提交勾选的文件",
+		WorkspaceDialogCommitScopeBodyOne:  "这个勾选的文件同时有已暂存与未暂存改动。提交记录工作树版本，因此已暂存版本会被替换；未勾选的已暂存改动仍保持暂存。",
+		WorkspaceDialogCommitScopeBodyMany: "%d 个勾选的文件同时有已暂存与未暂存改动。提交记录工作树版本，因此已暂存版本会被替换；未勾选的已暂存改动仍保持暂存。",
 	})
 }

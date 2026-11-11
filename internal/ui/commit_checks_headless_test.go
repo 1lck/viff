@@ -5,11 +5,14 @@ package viffui
 import (
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/vivaui/viva/app"
 	"github.com/vivaui/viva/ui"
 
 	"viff/internal/domain"
@@ -381,38 +384,28 @@ func TestChangeTreeCollapsedSelectionTargets(t *testing.T) {
 	}
 }
 
-// Checking files has never staged them, so a checked file must not make
-// Commit look ready on its own. The panel states the real scope and offers the
-// missing step next to the button; Commit stays disabled until the file is
-// actually in the index (issue #82).
-func TestCommitPanelStageSelectedFromCheckedFiles(t *testing.T) {
+// A checked file is committed from the working tree without staging it first
+// (issue #84). Commit no longer depends on the index, while Stage Selected
+// stays available for users who want the old fine-grained flow.
+func TestCommitPanelCommitsCheckedFilesWithoutStaging(t *testing.T) {
 	f := newUIFixture(t)
-	// Start with an empty index so the test can prove that a commit contains
-	// only what Stage Selected staged, not every checked file.
-	f.git("reset", "-q", "README.md")
-	// Commit and Push is disabled without a remote; the panel must say why.
-	f.git("remote", "remove", "origin")
+	// Start with an empty index so the test proves nothing is staged behind
+	// the scenes before the scoped commit.
+	f.git("reset", "-q")
 	f.start(1440, 900)
 	f.win.openRepo(f.dir)
 	f.settle()
 
-	if got := stagedNames(f); len(got) != 0 {
-		t.Fatalf("test needs an empty index, staged: %v", got)
+	staged := stagedNames(f)
+	if len(staged) != 0 {
+		t.Fatalf("test needs an empty index, staged: %v", staged)
 	}
 	f.win.buildRows()
 	idx := f.win.rowIndex(rowKey(domain.AreaUnstaged, "main.go"))
 	if idx < 0 {
 		t.Fatalf("main.go is not an unstaged row: %+v", f.win.cm.rows)
 	}
-	hit := changeCheckHit(t, f, scChangeChecks.At(idx))
-	if err := f.s.Click(hit.Bounds.X+8, hit.Bounds.Y+hit.Bounds.Height/2); err != nil {
-		t.Fatal(err)
-	}
-	f.settle()
-	if !f.win.cm.sel[rowKey(domain.AreaUnstaged, "main.go")] {
-		t.Fatalf("checkbox did not check main.go: %v", f.win.cm.sel)
-	}
-
+	f.win.toggleRowCheck(idx)
 	f.click("Commit message")
 	if err := f.s.Type("Commit the checked file"); err != nil {
 		t.Fatal(err)
@@ -422,78 +415,34 @@ func TestCommitPanelStageSelectedFromCheckedFiles(t *testing.T) {
 	if got := f.ws.CommittableCount(); got != 0 {
 		t.Fatalf("CommittableCount = %d with an empty index", got)
 	}
-	if !commitControl(t, f, idCmCommit).Disabled {
-		t.Fatal("Commit is enabled while the checked file is not staged")
+	if commitControl(t, f, idCmCommit).Disabled {
+		t.Fatal("Commit is disabled although a file is checked")
 	}
 	for _, want := range []string{
-		"Commit staged files only",
-		"1 selected file is not staged",
+		"Working-tree commit of 1 checked file",
+		"1 checked file not staged",
 		"Stage Selected",
 	} {
 		if !f.s.HasText(want) {
 			t.Fatalf("missing %q\ntexts: %s", want, strings.Join(f.s.Texts(), " | "))
 		}
 	}
-	if got := f.win.tips[idCmCommitPush]; got != "Add a remote to push" {
-		t.Fatalf("Commit and Push tooltip = %q, want the missing-remote hint", got)
-	}
-	if !commitControl(t, f, idCmCommitPush).Disabled {
-		t.Fatal("Commit and Push is enabled without a remote")
-	}
-	f.snap("82-before-stage-selected")
+	f.snap("84-checked-unstaged")
 
-	// The hint and the action must stay visible at the Commit panel's minimum
-	// width, where the change-list bar already needs a full row of its own.
+	// The scope line and the actions must survive the Commit panel's minimum
+	// width, where the warning takes its own row.
 	f.ws.Settings.LeftPanelWidth = 240
 	f.win.Invalidate()
 	f.s.Settle(80*time.Millisecond, time.Second)
-	for _, want := range []string{"Commit staged files only", "Stage Selected"} {
+	for _, want := range []string{"Working-tree", "Stage Selected"} {
 		if !f.s.HasText(want) {
 			t.Fatalf("missing %q at a 240px panel\ntexts: %s", want, strings.Join(f.s.Texts(), " | "))
 		}
 	}
-	f.snap("82-narrow-stage-selected")
+	f.snap("84-checked-unstaged-narrow")
 	f.ws.Settings.LeftPanelWidth = 340
 	f.win.Invalidate()
 	f.s.Settle(80*time.Millisecond, time.Second)
-
-	// Stage Selected is reachable with Tab and activates with Enter.
-	stage, ok := paintedHit(f, "Stage Selected")
-	if !ok {
-		t.Fatalf("Stage Selected has no hit\ntexts: %s", strings.Join(f.s.Texts(), " | "))
-	}
-	focused := false
-	for i := 0; i < 40; i++ {
-		if err := f.s.Keys("tab"); err != nil {
-			t.Fatal(err)
-		}
-		if f.s.Snapshot().Focused == stage.ID {
-			focused = true
-			break
-		}
-	}
-	if !focused {
-		t.Fatalf("Stage Selected never took keyboard focus; focus = %v", f.s.Snapshot().Focused)
-	}
-	if err := f.s.Keys("enter"); err != nil {
-		t.Fatal(err)
-	}
-	f.settle()
-
-	staged := stagedNames(f)
-	if len(staged) != 1 || !staged["main.go"] {
-		t.Fatalf("Stage Selected staged %v, want only main.go", staged)
-	}
-	if got := f.ws.CommittableCount(); got != 1 {
-		t.Fatalf("CommittableCount = %d after staging main.go", got)
-	}
-	if commitControl(t, f, idCmCommit).Disabled {
-		t.Fatal("Commit stayed disabled after Stage Selected")
-	}
-	if f.s.HasText("Stage Selected") || f.s.HasText("is not staged") {
-		t.Fatalf("staging hint stayed visible after staging\ntexts: %s", strings.Join(f.s.Texts(), " | "))
-	}
-	f.snap("82-after-stage-selected")
 
 	f.click("Commit")
 	f.settle()
@@ -504,18 +453,22 @@ func TestCommitPanelStageSelectedFromCheckedFiles(t *testing.T) {
 	if len(committed) != 1 || !committed["main.go"] {
 		t.Fatalf("commit contains %v, want only main.go", committed)
 	}
+	if staged := stagedNames(f); len(staged) != 0 {
+		t.Fatalf("scoped commit staged files behind the user's back: %v", staged)
+	}
+	if got := f.win.cm.msg.String(); got != "" {
+		t.Fatalf("message not cleared: %q", got)
+	}
 }
 
-// Existing staged content is the real commit scope even while an unstaged file
-// is checked: pressing Commit must not silently stage the checked file, and
-// the warning must say that it is not part of the commit yet.
-func TestCommitScopeWithExistingStagedContent(t *testing.T) {
+// Existing staged content outside the checked set is kept staged and out of
+// the commit; the panel names it so the unchecked range is not a surprise.
+func TestCommitScopeKeepsUncheckedStagedContent(t *testing.T) {
 	f := newUIFixture(t)
 	f.start(1440, 900)
 	f.win.openRepo(f.dir)
 	f.settle()
 
-	// The fixture stages README.md and leaves main.go unstaged.
 	if got := stagedNames(f); !got["README.md"] || got["main.go"] {
 		t.Fatalf("fixture index = %v", got)
 	}
@@ -525,40 +478,208 @@ func TestCommitScopeWithExistingStagedContent(t *testing.T) {
 		t.Fatalf("main.go is not an unstaged row: %+v", f.win.cm.rows)
 	}
 	f.win.toggleRowCheck(idx)
-	if err := f.s.ClickLabel("Commit message"); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.s.Type("Commit the staged file"); err != nil {
-		t.Fatal(err)
-	}
+	setText(f.win.cm.msg, "Commit the checked file")
+	f.win.Invalidate()
 	f.s.Settle(40*time.Millisecond, time.Second)
 
 	if got := f.ws.CommittableCount(); got != 1 {
 		t.Fatalf("CommittableCount = %d, want the staged README", got)
 	}
 	if commitControl(t, f, idCmCommit).Disabled {
-		t.Fatal("Commit is disabled although README.md is staged and the message is set")
+		t.Fatal("Commit is disabled although a file is checked")
 	}
+	// A wide panel shows both facts in full; at the default width the single
+	// warning line truncates its middle, so the test widens the panel rather
+	// than asserting a truncated run.
+	f.ws.Settings.LeftPanelWidth = 600
+	f.win.Invalidate()
+	f.s.Settle(80*time.Millisecond, time.Second)
 	for _, want := range []string{
-		"Commit staged files only",
-		"1 selected file is not staged",
-		"Stage Selected",
+		"Working-tree commit of 1 checked file",
+		"1 checked file not staged",
+		"1 staged file stays staged",
 	} {
 		if !f.s.HasText(want) {
 			t.Fatalf("missing %q\ntexts: %s", want, strings.Join(f.s.Texts(), " | "))
 		}
 	}
-	f.snap("82-staged-scope-with-checked-unstaged")
+	f.snap("84-checked-with-staged-outside")
 
-	// Commit without Stage Selected: the checked file is not added silently.
 	f.click("Commit")
 	f.settle()
 	committed := committedPaths(f)
-	if len(committed) != 1 || !committed["README.md"] {
-		t.Fatalf("commit contains %v, want only the staged README.md", committed)
+	if len(committed) != 1 || !committed["main.go"] {
+		t.Fatalf("commit contains %v, want only the checked main.go", committed)
+	}
+	if got := stagedNames(f); !got["README.md"] || len(got) != 1 {
+		t.Fatalf("unchecked staged README was not preserved: %v", got)
+	}
+}
+
+// A checked file with staged and unstaged changes commits its working-tree
+// content, replacing the staged version. That is a real range change, so the
+// panel warns and the click asks before writing.
+func TestCommitScopePartialStagingConfirms(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	// README.md is staged in the fixture; a second edit makes it MM.
+	f.write("README.md", "# Viff demo\n\nA newer working-tree README.\n")
+	f.ws.Refresh(true)
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		for _, e := range f.ws.Repo.Status.Entries {
+			if e.Path == "README.md" && e.Staged() && e.Unstaged() {
+				return !f.ws.Busy() && !f.ws.Pending()
+			}
+		}
+		return false
+	}, 20*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+
+	f.win.buildRows()
+	idx := f.win.rowIndex(rowKey(domain.AreaStaged, "README.md"))
+	if idx < 0 {
+		t.Fatalf("README.md is not a staged row: %+v", f.win.cm.rows)
+	}
+	f.win.toggleRowCheck(idx)
+	if err := f.s.ClickLabel("Commit message"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.Type("Commit the worktree README"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+
+	for _, want := range []string{
+		"Working-tree commit of 1 checked file",
+		"1 checked file partly staged",
+	} {
+		if !f.s.HasText(want) {
+			t.Fatalf("missing %q\ntexts: %s", want, strings.Join(f.s.Texts(), " | "))
+		}
+	}
+
+	before := strings.TrimSpace(f.git("log", "-1", "--format=%s"))
+	f.click("Commit")
+	f.s.Settle(80*time.Millisecond, time.Second)
+	if !f.s.HasText("Commit checked files") || !f.s.HasText("staged and unstaged changes") {
+		t.Fatalf("missing confirmation\ntexts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if err := f.s.Keys("escape"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(60*time.Millisecond, time.Second)
+	if subj := strings.TrimSpace(f.git("log", "-1", "--format=%s")); subj != before {
+		t.Fatalf("cancel committed %q", subj)
+	}
+	if got := stagedNames(f); !got["README.md"] {
+		t.Fatalf("cancel changed the index: %v", got)
+	}
+
+	// Confirming records the working-tree version and clears the staged half.
+	f.click("Commit")
+	f.s.Settle(80*time.Millisecond, time.Second)
+	if err := f.s.Keys("enter"); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	if subj := strings.TrimSpace(f.git("log", "-1", "--format=%s")); subj != "Commit the worktree README" {
+		t.Fatalf("last commit = %q", subj)
+	}
+	if committed := committedPaths(f); !committed["README.md"] || len(committed) != 1 {
+		t.Fatalf("commit contains %v, want only README.md", committed)
+	}
+	if got := f.git("show", "HEAD:README.md"); !strings.Contains(got, "newer working-tree README") {
+		t.Fatalf("HEAD:README.md = %q, want the worktree version", got)
 	}
 	if got := stagedNames(f); len(got) != 0 {
-		t.Fatalf("index not clean after commit: %v", got)
+		t.Fatalf("partially staged README left content in the index: %v", got)
+	}
+}
+
+// Stage Selected remains the fine-grained path: staging first and then
+// committing with the files still checked records the same files.
+func TestStageSelectedStillStagesCheckedFiles(t *testing.T) {
+	f := newUIFixture(t)
+	f.git("reset", "-q")
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+	f.win.buildRows()
+	idx := f.win.rowIndex(rowKey(domain.AreaUnstaged, "main.go"))
+	if idx < 0 {
+		t.Fatalf("main.go is not an unstaged row: %+v", f.win.cm.rows)
+	}
+	f.win.toggleRowCheck(idx)
+	if err := f.s.ClickLabel("Commit message"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.Type("Stage then commit"); err != nil {
+		t.Fatal(err)
+	}
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.click("Stage Selected")
+	f.settle()
+
+	if got := stagedNames(f); !got["main.go"] || len(got) != 1 {
+		t.Fatalf("Stage Selected staged %v, want only main.go", got)
+	}
+	if f.s.HasText("not staged") {
+		t.Fatalf("warning stayed after staging: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if commitControl(t, f, idCmCommit).Disabled {
+		t.Fatal("Commit disabled after Stage Selected")
+	}
+	f.click("Commit")
+	f.settle()
+	if subj := strings.TrimSpace(f.git("log", "-1", "--format=%s")); subj != "Stage then commit" {
+		t.Fatalf("last commit = %q", subj)
+	}
+	if committed := committedPaths(f); !committed["main.go"] || len(committed) != 1 {
+		t.Fatalf("commit contains %v, want only main.go", committed)
+	}
+}
+
+// Amend with a checked scope rewrites only those files from the working tree
+// and keeps staged files outside the checks staged.
+func TestCommitAmendUsesCheckedScope(t *testing.T) {
+	f := newUIFixture(t)
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	f.win.buildRows()
+	idx := f.win.rowIndex(rowKey(domain.AreaUnstaged, "main.go"))
+	if idx < 0 {
+		t.Fatalf("main.go is not an unstaged row: %+v", f.win.cm.rows)
+	}
+	f.win.toggleRowCheck(idx)
+	f.win.toggleAmend()
+	f.settle()
+	if !f.win.cm.amend || strings.TrimSpace(f.win.cm.msg.String()) == "" {
+		t.Fatalf("Amend did not load HEAD's message\ntexts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if !f.s.HasText("Working-tree amend of 1 checked file") {
+		t.Fatalf("missing amend scope\ntexts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	before := strings.TrimSpace(f.git("rev-parse", "HEAD"))
+	f.click("Amend Commit")
+	f.settle()
+	if subj := strings.TrimSpace(f.git("log", "-1", "--format=%s")); subj != "Log the listen address" {
+		t.Fatalf("amended subject = %q", subj)
+	}
+	if after := strings.TrimSpace(f.git("rev-parse", "HEAD")); after == before {
+		t.Fatal("HEAD did not move on amend")
+	}
+	if committed := committedPaths(f); !committed["main.go"] || len(committed) != 1 {
+		t.Fatalf("amended commit contains %v, want only main.go", committed)
+	}
+	if got := stagedNames(f); !got["README.md"] || len(got) != 1 {
+		t.Fatalf("unchecked staged README not preserved after amend: %v", got)
 	}
 }
 
@@ -584,4 +705,154 @@ func committedPaths(f *uiFixture) map[string]bool {
 		}
 	}
 	return out
+}
+
+// The default path is unchanged: with nothing checked, Commit records the
+// staged files and leaves the rest of the working tree alone.
+func TestCommitWithoutChecksCommitsStaged(t *testing.T) {
+	f := newUIFixture(t)
+	// The old Commit-and-Push remote rule is unchanged by the scoped commit:
+	// without a remote the second button stays disabled and says why.
+	f.git("remote", "remove", "origin")
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+
+	if got := stagedNames(f); !got["README.md"] || got["main.go"] {
+		t.Fatalf("fixture index = %v", got)
+	}
+	if !f.s.HasText("Commit staged files only") {
+		t.Fatalf("default scope hint missing\ntexts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	setText(f.win.cm.msg, "Commit the stage")
+	f.win.Invalidate()
+	f.s.Settle(40*time.Millisecond, time.Second)
+	if commitControl(t, f, idCmCommit).Disabled {
+		t.Fatal("Commit is disabled although README.md is staged")
+	}
+	if got := f.win.tips[idCmCommitPush]; got != "Add a remote to push" {
+		t.Fatalf("Commit and Push tooltip = %q, want the missing-remote hint", got)
+	}
+	if !commitControl(t, f, idCmCommitPush).Disabled {
+		t.Fatal("Commit and Push is enabled without a remote")
+	}
+	f.click("Commit")
+	f.settle()
+
+	if subject := strings.TrimSpace(f.git("log", "-1", "--format=%s")); subject != "Commit the stage" {
+		t.Fatalf("last commit = %q", subject)
+	}
+	committed := committedPaths(f)
+	if len(committed) != 1 || !committed["README.md"] {
+		t.Fatalf("commit contains %v, want only the staged README.md", committed)
+	}
+	if got := stagedNames(f); len(got) != 0 {
+		t.Fatalf("index not clean after the default commit: %v", got)
+	}
+}
+
+// A conflicted working copy can commit nothing at all, checked files included;
+// the existing Resolve rule still wins over the commit scope.
+func TestCommitBlockedByConflicts(t *testing.T) {
+	f := newUIFixture(t)
+	f.git("switch", "-q", "-c", "conflict-side")
+	f.write("config.json", "{\n  \"name\": \"demo\",\n  \"port\": 1234\n}\n")
+	f.git("commit", "-q", "-am", "side port")
+	f.git("switch", "-q", "main")
+	f.write("config.json", "{\n  \"name\": \"demo\",\n  \"port\": 4321\n}\n")
+	f.git("commit", "-q", "-am", "main port")
+	merge, err := f.gitMayFail("merge", "conflict-side")
+	if err == nil {
+		t.Fatalf("merge produced no conflict: %s", merge)
+	}
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+	if len(f.ws.Repo.Conflicts) == 0 {
+		t.Fatalf("no conflicts after merge: %+v", f.ws.Repo.Status)
+	}
+
+	f.win.buildRows()
+	idx := f.win.rowIndex(rowKey(domain.AreaConflicts, "config.json"))
+	if idx < 0 {
+		t.Fatalf("config.json is not a conflict row: %+v", f.win.cm.rows)
+	}
+	f.win.toggleRowCheck(idx)
+	setText(f.win.cm.msg, "Must not commit")
+	f.win.Invalidate()
+	f.s.Settle(40*time.Millisecond, time.Second)
+	if !commitControl(t, f, idCmCommit).Disabled {
+		t.Fatal("Commit is enabled during a conflict")
+	}
+}
+
+// Commit and Push records the same checked range as Commit and opens the Push
+// dialog only after the commit succeeded.
+func TestCommitAndPushUsesCheckedScope(t *testing.T) {
+	f := newUIFixture(t)
+	f.git("reset", "-q")
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+	f.win.buildRows()
+	idx := f.win.rowIndex(rowKey(domain.AreaUnstaged, "main.go"))
+	if idx < 0 {
+		t.Fatalf("main.go is not an unstaged row: %+v", f.win.cm.rows)
+	}
+	f.win.toggleRowCheck(idx)
+	setText(f.win.cm.msg, "Commit and push the checked file")
+	f.win.Invalidate()
+	f.s.Settle(40*time.Millisecond, time.Second)
+
+	f.click("Commit and Push…")
+	f.settle()
+	if subject := strings.TrimSpace(f.git("log", "-1", "--format=%s")); subject != "Commit and push the checked file" {
+		t.Fatalf("last commit = %q", subject)
+	}
+	if committed := committedPaths(f); !committed["main.go"] || len(committed) != 1 {
+		t.Fatalf("commit contains %v, want only main.go", committed)
+	}
+	if f.win.dialog == nil {
+		t.Fatal("Push dialog did not open after a successful commit")
+	}
+}
+
+// A rejected commit never reaches Push: no local commit, no push dialog.
+func TestCommitAndPushFailureDoesNotPush(t *testing.T) {
+	f := newUIFixture(t)
+	f.git("reset", "-q")
+	f.start(1440, 900)
+	f.win.openRepo(f.dir)
+	f.settle()
+	hook := filepath.Join(f.dir, ".git", "hooks", "pre-commit")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho hook failed >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.win.buildRows()
+	idx := f.win.rowIndex(rowKey(domain.AreaUnstaged, "main.go"))
+	if idx < 0 {
+		t.Fatalf("main.go is not an unstaged row: %+v", f.win.cm.rows)
+	}
+	f.win.toggleRowCheck(idx)
+	setText(f.win.cm.msg, "Must not commit")
+	f.win.Invalidate()
+	f.s.Settle(40*time.Millisecond, time.Second)
+	before := len(f.ws.Notifications)
+
+	f.click("Commit and Push…")
+	if err := f.s.WaitFor(func(app.Snapshot) bool {
+		return len(f.ws.Notifications) > before && !f.ws.Busy() && !f.ws.Pending()
+	}, 20*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	if f.win.dialog != nil {
+		t.Fatalf("Push dialog opened after a failed commit: %+v", f.win.dialog)
+	}
+	if !strings.Contains(f.git("log", "-1", "--format=%s"), "Log the listen address") {
+		t.Fatalf("HEAD moved after a failed commit: %s", f.git("log", "-1", "--format=%s"))
+	}
+	if n := f.ws.Notifications[len(f.ws.Notifications)-1]; n.Title != "Commit failed" {
+		t.Fatalf("notice = %+v", n)
+	}
 }

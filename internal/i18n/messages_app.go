@@ -150,6 +150,13 @@ const (
 	AppNoticeCommittedBodyMany = Key("app.notice.committedBodyMany")
 	AppNoticeAmendedBody       = Key("app.notice.amendedBody")
 
+	// A scoped commit whose checked paths changed, or whose repository entered
+	// a merge/cherry-pick, refuses instead of committing a different range.
+	AppNoticeCommitScopeChanged     = Key("app.notice.commitScopeChanged")
+	AppNoticeCommitScopeChangedBody = Key("app.notice.commitScopeChangedBody")
+	AppNoticeCommitScopeBlocked     = Key("app.notice.commitScopeBlocked")
+	AppNoticeCommitScopeBlockedBody = Key("app.notice.commitScopeBlockedBody")
+
 	// Session undo: the operation names, the notification wording, and the
 	// reasons an undo refuses because the repository moved on.
 	AppUndoOpCommit       = Key("app.undo.op.commit")
@@ -366,6 +373,11 @@ func init() {
 		AppNoticeCommittedBodyMany: "%d files committed: %s",
 		AppNoticeAmendedBody:       "Amended: %s",
 
+		AppNoticeCommitScopeChanged:     "Commit selection changed",
+		AppNoticeCommitScopeChangedBody: "the checked files changed after they were shown; review the selection and commit again",
+		AppNoticeCommitScopeBlocked:     "Cannot commit the checked files",
+		AppNoticeCommitScopeBlockedBody: "a merge or cherry-pick in progress commits the whole index; uncheck the files or finish the operation first",
+
 		AppUndoOpCommit:       "Commit",
 		AppUndoOpAmend:        "Amend",
 		AppUndoOpMerge:        "Merge",
@@ -573,6 +585,11 @@ func init() {
 		AppNoticeCommittedBody:     "已提交 %d 个文件：%s",
 		AppNoticeCommittedBodyMany: "已提交 %d 个文件：%s",
 		AppNoticeAmendedBody:       "已修订：%s",
+
+		AppNoticeCommitScopeChanged:     "提交范围已变化",
+		AppNoticeCommitScopeChangedBody: "勾选的文件在选择后发生了变化；请重新查看勾选内容再提交",
+		AppNoticeCommitScopeBlocked:     "无法只提交勾选的文件",
+		AppNoticeCommitScopeBlockedBody: "合并或拣选（cherry-pick）进行中时只能提交整个索引；请取消勾选，或先完成该操作",
 
 		AppUndoOpCommit:       "提交",
 		AppUndoOpAmend:        "修订",

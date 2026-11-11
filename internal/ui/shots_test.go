@@ -129,6 +129,15 @@ func (f *uiFixture) gitIn(dir string, args ...string) string {
 	return string(out)
 }
 
+func (f *uiFixture) gitMayFail(args ...string) (string, error) {
+	f.t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = f.dir
+	cmd.Env = append(append(os.Environ(), f.env...), "GIT_EDITOR=true")
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 func (f *uiFixture) gitDated(date string, args ...string) {
 	f.t.Helper()
 	cmd := exec.Command("git", args...)
