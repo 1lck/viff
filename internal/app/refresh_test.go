@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -84,6 +86,7 @@ func newRefreshFixture(t *testing.T) (*fixture, *refreshBackend, *fakeObs) {
 		return []byte(fmt.Sprintf("asset-%d.bin\x00", b.lists.Add(1))), nil
 	}
 	f.w.Git = b
+	f.w.Caps = CapabilitiesOf(b)
 	f.open()
 	obs := &fakeObs{}
 	f.w.SetRecorder(obs, obs)
@@ -192,6 +195,57 @@ func TestRefreshConsumesPendingBeforeFollowUp(t *testing.T) {
 	}
 }
 
+// Metadata can change reachable history without moving HEAD or any ref.
+// Queued metadata must invalidate the loaded log for both a completed shallow
+// clone and a deepened clone that still has a shallow boundary.
+func TestRefreshPendingMetadataReloadsShallowHistory(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		fetch   string
+		count   int
+		shallow bool
+	}{
+		{"unshallow", "--unshallow", 3, false},
+		{"deepen", "--deepen=1", 2, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f, b, _ := newRefreshFixture(t)
+			f.git("commit", "-q", "--allow-empty", "-m", "middle")
+			f.git("commit", "-q", "--allow-empty", "-m", "tip")
+			parent := strings.TrimSpace(f.git("rev-parse", "HEAD^"))
+			remote := filepath.Join(t.TempDir(), "remote.git")
+			f.git("clone", "-q", "--bare", f.dir, remote)
+			// Keep the checkout under the fixture's original directory, so
+			// its log reader closes before the fixture removes the tree.
+			checkout := filepath.Join(f.dir, "shallow")
+			f.git("clone", "-q", "--no-local", "--depth=1", remote, checkout)
+			f.dir = checkout
+			f.open()
+			if !f.w.Repo.Shallow || len(f.w.Repo.Log.Commits) != 1 {
+				t.Fatalf("fixture: shallow=%v, log rows=%d", f.w.Repo.Shallow, len(f.w.Repo.Log.Commits))
+			}
+			q := b.block(t, nil)
+			f.w.Refresh(false)
+			waitRefreshStarted(t, q)
+			refs := f.git("show-ref")
+			f.git("fetch", "-q", tt.fetch)
+			if got := strings.TrimSpace(f.git("rev-list", "--count", "HEAD")); got != fmt.Sprint(tt.count) || f.git("show-ref") != refs {
+				t.Fatalf("history fixture: commits=%s, want %d with unchanged refs", got, tt.count)
+			}
+			f.w.Refresh(true)
+			q.unblock()
+			f.settle(f.idle)
+			rs := f.w.Repo
+			if rs.Shallow != tt.shallow || len(rs.Log.Commits) != tt.count {
+				t.Fatalf("after fetch: shallow=%v, log rows=%d, want %v and %d", rs.Shallow, len(rs.Log.Commits), tt.shallow, tt.count)
+			}
+			if got := rs.Log.Commits[1].Hash; got != parent {
+				t.Fatalf("loaded parent=%s, want %s", got, parent)
+			}
+		})
+	}
+}
+
 func TestRefreshPendingAfterFailure(t *testing.T) {
 	for _, failure := range []error{errors.New("status failed"), context.Canceled} {
 		t.Run(failure.Error(), func(t *testing.T) {
@@ -219,6 +273,9 @@ func TestRefreshPendingDoesNotCrossRepositoryLifetime(t *testing.T) {
 	for _, action := range []string{"switch", "reopen", "close", "gone"} {
 		t.Run(action, func(t *testing.T) {
 			f, b, obs := newRefreshFixture(t)
+			// Suppress command Console callbacks: once the replacement is
+			// idle, the old refresh completion is the only possible post.
+			b.SetCommandLog(nil)
 			old := f.w.Repo
 			var failure error
 			if action == "gone" {
@@ -245,7 +302,10 @@ func TestRefreshPendingDoesNotCrossRepositoryLifetime(t *testing.T) {
 				f.open()
 			}
 			current := f.w.Repo
-			before := b.calls.Load()
+			var currentSeq uint64
+			if current != nil {
+				currentSeq = current.statusSeq
+			}
 			// All new-generation work has settled. The next posted result is
 			// the deliberately late old refresh; wait without draining it.
 			q.unblock()
@@ -268,7 +328,9 @@ func TestRefreshPendingDoesNotCrossRepositoryLifetime(t *testing.T) {
 			} else if f.w.Repo != current {
 				t.Fatal("old result replaced the current repository")
 			}
-			if b.calls.Load() != before {
+			// Refresh changes these fields on the UI thread before launching
+			// Status. Its goroutine's call counter can still be unchanged here.
+			if current != nil && action != "gone" && (current.statusSeq != currentSeq || current.refreshing) {
 				t.Fatal("old pending request started a refresh in the new lifetime")
 			}
 			if current != nil && action != "gone" && current.Gen <= old.Gen {

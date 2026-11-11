@@ -484,6 +484,11 @@ func (w *Workspace) Refresh(meta bool) {
 			if rs.refreshMore {
 				meta := rs.refreshMeta
 				rs.refreshMore, rs.refreshMeta = false, false
+				if meta {
+					// Deepening history need not move any ref. Invalidate with
+					// the pending metadata pass, after the old pass publishes.
+					rs.refsKey = ""
+				}
 				w.Refresh(meta)
 			}
 		})
