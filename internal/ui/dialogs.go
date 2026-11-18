@@ -740,7 +740,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	s := w.ws.Settings
 	collapsed := map[string]bool{}
 	if revealSearch {
-		for _, key := range []string{"appearance", "behavior", "gitExec", "tools", "diagnostics", "updates", "fonts", "commands", "remote"} {
+		for _, key := range []string{"appearance", "behavior", "gitExec", "svnExec", "tools", "diagnostics", "updates", "fonts", "commands", "remote"} {
 			collapsed[key] = true
 		}
 	}
@@ -878,16 +878,10 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 				f.field(w.t(i18n.SettingsLabelGitPath), gitPath, w.gitPathPlaceholder(gitExe), false)
 			}
 			f.gap(6)
-			// The svn path only appears for a Subversion working copy: the
-			// settings page is a fixed-height dialog, and one extra group on
-			// every backend pushed the font and search controls below the
-			// visible area, where they could not be clicked at all.
-			if !w.ws.Caps.Index {
-				if f.collapsibleGroup("svnExec", w.t(i18n.SettingsGroupSVNExec)) {
-					f.field(w.t(i18n.SettingsLabelSVNPath), svnPath, w.t(i18n.SettingsPlaceholderAuto), false)
-				}
-				f.gap(6)
+			if f.collapsibleGroup("svnExec", w.t(i18n.SettingsGroupSVNExec)) {
+				f.field(w.t(i18n.SettingsLabelSVNPath), svnPath, w.t(i18n.SettingsPlaceholderAuto), false)
 			}
+			f.gap(6)
 			if f.collapsibleGroup("tools", w.t(i18n.SettingsGroupTools)) {
 				f.field(w.t(i18n.SettingsLabelEditor), editor, "code -g {file}:{line}", false)
 				f.y -= 8

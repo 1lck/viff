@@ -69,9 +69,7 @@ type Settings struct {
 	Language string `json:"language,omitempty"`
 
 	GitPath string `json:"gitPath"`
-	// SVNPath is the svn executable; empty means PATH. It exists so a user
-	// whose Subversion lives outside PATH (a common case on Windows) can point
-	// Viff at it, the same way GitPath does for Git.
+	// SVNPath overrides automatic svn lookup for nonstandard installations.
 	SVNPath       string `json:"svnPath,omitempty"`
 	AutoFetch     bool   `json:"autoFetch"`
 	AutoFetchMins int    `json:"autoFetchMinutes"`
