@@ -199,7 +199,9 @@ func TestDiffFontSelection(t *testing.T) {
 	f.win.Invalidate()
 	f.s.Settle(60*time.Millisecond, 2*time.Second)
 
-	f.click("Default (bundled or system fixed-pitch)")
+	const diffFontDefault = "Default (bundled or system fixed-pitch)"
+	scrollDialogTo(t, f, diffFontDefault)
+	f.click(diffFontDefault)
 	f.s.Settle(40*time.Millisecond, time.Second)
 
 	var row ui.Rect

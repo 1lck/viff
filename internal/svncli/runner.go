@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -26,9 +27,9 @@ const stderrLimit = 64 << 10
 // adapter — see docs/decisions/0024-svn-support.md (finding S11).
 var nonInteractive = []string{"--non-interactive"}
 
-// Runner executes the svn client. The zero value uses "svn" from PATH.
+// Runner executes the svn client. The zero value locates svn automatically.
 type Runner struct {
-	// Path is the svn executable; "" means look it up on PATH.
+	// Path is the svn executable; "" enables automatic lookup.
 	Path string
 	// Env is added to the inherited environment.
 	Env []string
@@ -108,6 +109,16 @@ func (r *Runner) svn() (string, error) {
 	}
 	p, err := exec.LookPath("svn")
 	if err != nil {
+		if runtime.GOOS == "darwin" {
+			// Finder launches without the user's shell PATH. Check the default
+			// Homebrew prefixes for Apple Silicon and Intel.
+			for _, candidate := range []string{"/opt/homebrew/bin/svn", "/usr/local/bin/svn"} {
+				if bin, lookupErr := exec.LookPath(candidate); lookupErr == nil {
+					r.resolved = bin
+					return bin, nil
+				}
+			}
+		}
 		r.findErr = &vcs.Error{Kind: vcs.ErrNoGit, Tool: "svn", Err: err}
 		return "", r.findErr
 	}
