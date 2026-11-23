@@ -351,7 +351,7 @@ func (w *Workspace) Refresh(meta bool) {
 	repo := rs.Repo
 	generation := rs.lfs.rules.generation
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		ctx, cancel := context.WithTimeout(w.lifetime, 2*time.Minute)
 		defer cancel()
 		// The queries are reads against the immutable repo identity; the
 		// groups are independent, so they run concurrently instead of paying
@@ -420,6 +420,9 @@ func (w *Workspace) Refresh(meta bool) {
 					w.Close()
 					if w.ActiveRoot == rs.rootKey {
 						w.ActiveRoot = ""
+						if w.repos.catalog.store.Active == rs.rootKey {
+							w.repos.catalog.store.Active = ""
+						}
 						w.saveRepositories()
 					}
 					return

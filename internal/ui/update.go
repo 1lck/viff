@@ -3,6 +3,8 @@ package viffui
 import (
 	"strings"
 
+	"github.com/vivaui/viva/ui"
+
 	vapp "viff/internal/app"
 	"viff/internal/i18n"
 	"viff/internal/platform"
@@ -12,8 +14,13 @@ import (
 // The dialog renders the state the check posts; it never performs the network
 // request itself.
 func (w *Window) checkForUpdates() {
-	w.ws.CheckForUpdates(true)
-	w.openUpdateDialog()
+	owner := w.updateWindow()
+	if owner != w {
+		owner.show()
+	}
+	owner.ws.CheckForUpdates(true)
+	owner.openUpdateDialog()
+	owner.Invalidate()
 }
 
 // openUpdateDialog shows the in-app update flow. Its body and action label are
@@ -78,7 +85,7 @@ func (w *Window) submitUpdateAction() bool {
 		w.ws.DownloadUpdate()
 		return false
 	case vapp.UpdateReady:
-		w.ws.InstallUpdate()
+		w.installUpdate()
 		return false
 	case vapp.UpdateManual:
 		if state.ManualPath != "" {
@@ -87,7 +94,7 @@ func (w *Window) submitUpdateAction() bool {
 		return false
 	case vapp.UpdateError:
 		if w.ws.HasDownloadedUpdate() {
-			w.ws.InstallUpdate()
+			w.installUpdate()
 		} else if w.ws.HasUpdate() {
 			w.ws.DownloadUpdate()
 		} else {
@@ -96,6 +103,43 @@ func (w *Window) submitUpdateAction() bool {
 		return false
 	}
 	return true
+}
+
+func (w *Window) installUpdate() {
+	install := func() {
+		// The confirmation may have been shown in another window. Its action
+		// is stale if the window that held the downloaded update has closed.
+		if w.updateWindow() != w {
+			return
+		}
+		w.ws.InstallUpdate()
+		if w.ws.Update.Phase == vapp.UpdateInstalling {
+			w.openUpdateDialog()
+			if w.windows != nil {
+				w.windows.invalidate()
+			} else {
+				w.Invalidate()
+			}
+		}
+	}
+	if w.windows != nil {
+		w.windows.ConfirmQuit(install)
+	} else {
+		w.confirmDiscardEdits(install)
+	}
+}
+
+// installingUpdate is shared by all windows. Once the helper starts, it will
+// replace and relaunch Viff on exit, so editing stays paused from confirmation
+// until either the application quits or the install attempt fails.
+func (w *Window) installingUpdate() bool {
+	owner := w.updateWindow()
+	return owner != nil && owner.ws.Update.Phase == vapp.UpdateInstalling
+}
+
+func (w *Window) paintInstallingUpdate(full ui.Rect) {
+	w.p.textCenter(w.t(i18n.UpdateNoticeInstalling), rect(0, full.Height/2-rowH, full.Width, rowH), fontUI, semibold, w.pal.Text)
+	w.p.textCenter(w.t(i18n.UpdateNoticeInstallHint), rect(0, full.Height/2, full.Width, rowH), fontUI, regular, w.pal.TextSecond)
 }
 
 // cancelUpdateDownload cancels an in-flight download before closing. The
@@ -136,9 +180,6 @@ func (w *Window) paintUpdate(f *form) {
 	case vapp.UpdateReady:
 		f.bold(w.t(i18n.UpdateNoticeReady, state.Version))
 		f.muted(w.t(i18n.UpdateNoticeRestartHint))
-	case vapp.UpdateInstalling:
-		f.bold(w.t(i18n.UpdateNoticeInstalling))
-		f.muted(w.t(i18n.UpdateNoticeInstallHint))
 	case vapp.UpdateManual:
 		f.bold(w.t(i18n.UpdateNoticeManualDownload, state.Version))
 		if state.Message != "" {

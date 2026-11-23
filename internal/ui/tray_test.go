@@ -4,7 +4,7 @@ import "testing"
 
 // The status item's menu offers the way back and the way out.
 func TestTrayMenu(t *testing.T) {
-	w := &Window{}
+	w := &Windows{}
 	quit := false
 	w.quit = func() { quit = true }
 
@@ -30,6 +30,6 @@ func TestTrayMenu(t *testing.T) {
 // A headless run has no native window, so the status-item callback must stay
 // harmless instead of dereferencing it.
 func TestTrayCallbacksWithoutNative(t *testing.T) {
-	w := &Window{}
-	w.ShowFromTray()
+	w := &Windows{}
+	w.Show()
 }

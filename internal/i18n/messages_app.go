@@ -200,6 +200,8 @@ const (
 	AppActionUpdate                    = Key("app.action.update")
 	AppActionCreateBranchAtOldPosition = Key("app.action.createBranchAtOldPosition")
 
+	AppErrorRepositoryOpenInAnotherWindow = Key("app.error.repositoryOpenInAnotherWindow")
+
 	AppErrorOpenRepositoryFirst      = Key("app.error.openRepositoryFirst")
 	AppErrorNoConflictView           = Key("app.error.noConflictView")
 	AppErrorNoTextToMerge            = Key("app.error.noTextToMerge")
@@ -419,6 +421,8 @@ func init() {
 		AppActionUpdate:                    "Update",
 		AppActionCreateBranchAtOldPosition: "Create branch at old position",
 
+		AppErrorRepositoryOpenInAnotherWindow: "Close the repository in the other window before removing it.",
+
 		AppErrorOpenRepositoryFirst:      "open a repository first",
 		AppErrorNoConflictView:           "no conflict view to resolve; reload the diff",
 		AppErrorNoTextToMerge:            "there is no text to merge",
@@ -631,6 +635,8 @@ func init() {
 		AppActionRestore:                   "恢复",
 		AppActionUpdate:                    "更新",
 		AppActionCreateBranchAtOldPosition: "在原位置创建分支",
+
+		AppErrorRepositoryOpenInAnotherWindow: "请先在另一个窗口中关闭该仓库，再移除它。",
 
 		AppErrorOpenRepositoryFirst:      "请先打开一个仓库",
 		AppErrorNoConflictView:           "没有可解决的冲突视图；请重新加载 diff",

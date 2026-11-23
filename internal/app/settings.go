@@ -16,7 +16,11 @@ type Settings = storage.Settings
 // which is what makes a change effective on the next command rather than on
 // the next start.
 func (w *Workspace) ApplyGitSettings() {
-	w.Git.SetConfig(gitcli.Config{
+	backend := w.gitBackend()
+	if backend == nil || w.Settings == nil {
+		return
+	}
+	backend.SetConfig(gitcli.Config{
 		SSHCommand:       w.Settings.SSHCommand,
 		GPGProgram:       w.Settings.GPGProgram,
 		SigningKey:       w.Settings.SigningKey,

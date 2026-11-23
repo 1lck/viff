@@ -737,6 +737,14 @@ func (w *Window) gitPathPlaceholder(exe string) string {
 // openSettingsDialog opens the settings dialog on one page: 0 General, 1 Git,
 // 2 AI. revealSearch folds the other General groups and expands Search.
 func (w *Window) openSettingsDialog(page int, revealSearch bool) {
+	if w.windows != nil {
+		for _, other := range w.windows.windows {
+			if other != w && other.dialog != nil && other.dialog.settings {
+				other.show()
+				return
+			}
+		}
+	}
 	s := w.ws.Settings
 	collapsed := map[string]bool{}
 	if revealSearch {
@@ -808,7 +816,8 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 	}
 	pullTitle := w.pullTitles()
 	w.openDialog(&dialog{
-		title: w.t(i18n.SettingsTitle), ok: w.t(i18n.CommonOK), cancel: w.t(i18n.CommonCancel), width: 600,
+		settings: true,
+		title:    w.t(i18n.SettingsTitle), ok: w.t(i18n.CommonOK), cancel: w.t(i18n.CommonCancel), width: 600,
 		collapsed: collapsed,
 		// The page tabs sit in the header, outside the scrolling body: they stay
 		// put at any offset, so switching pages never needs a scroll first.
@@ -1029,9 +1038,7 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			s.Theme = theme
 			s.FontSize = float32(n)
 			s.GitPath = strings.TrimSpace(gitPath.String())
-			w.ws.SetGitPath(s.GitPath)
 			s.SVNPath = strings.TrimSpace(svnPath.String())
-			w.ws.SetSVNPath(s.SVNPath)
 			s.ExternalEditor = strings.TrimSpace(editor.String())
 			gitDraft.commit(s)
 			aiDraft.commit(s)
@@ -1040,12 +1047,8 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			s.AutoUpdateCheck = autoUpdate
 			s.CheckoutOnDoubleClick = doubleClickCheckout
 			s.TimeFormat = timeFormat
-			if marks != s.DiffMarks || codemap != s.DiffCodemap {
-				s.DiffMarks, s.DiffCodemap = marks, codemap
-				// The caches are dropped or built here, so the new setting
-				// applies to every open tab without reloading it.
-				defer w.rebuildDiffEdge()
-			}
+			diffEdgeChanged := marks != s.DiffMarks || codemap != s.DiffCodemap
+			s.DiffMarks, s.DiffCodemap = marks, codemap
 			if m > 0 {
 				s.AutoFetchMins = m
 			}
@@ -1053,24 +1056,41 @@ func (w *Window) openSettingsDialog(page int, revealSearch bool) {
 			if debugLog {
 				s.LogLevel = "debug"
 			}
-			w.ws.SetLogLevel(s.LogLevel)
 			s.EditorFont = editorFont
 			s.DiffFont = diffFont
 			s.Language = language
 			s.SearchTool = searchTool
 			s.RipgrepPath = strings.TrimSpace(ripgrepPath.String())
-			w.applyTheme()
-			w.applyFont()
-			w.applyLanguage()
-			w.Invalidate()
+			if w.windows != nil {
+				for _, window := range w.windows.windows {
+					window.applyPreferences(diffEdgeChanged)
+				}
+			} else {
+				w.applyPreferences(diffEdgeChanged)
+			}
 			w.flushSettings()
-			w.startAutoFetch()
 			if autoUpdate && !autoUpdateWas {
-				w.ws.CheckForUpdates(false)
+				w.updateWindow().ws.CheckForUpdates(false)
 			}
 			return true
 		},
 	})
+}
+
+func (w *Window) applyPreferences(diffEdgeChanged bool) {
+	s := w.ws.Settings
+	w.ws.SetGitPath(s.GitPath)
+	w.ws.SetSVNPath(s.SVNPath)
+	w.ws.ApplyGitSettings()
+	w.ws.SetLogLevel(s.LogLevel)
+	w.applyTheme()
+	w.applyFont()
+	w.applyLanguage()
+	if diffEdgeChanged {
+		w.rebuildDiffEdge()
+	}
+	w.startAutoFetch()
+	w.Invalidate()
 }
 
 // addToGitignore appends untracked paths to the repository's .gitignore.

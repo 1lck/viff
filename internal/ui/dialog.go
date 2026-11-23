@@ -37,6 +37,7 @@ type dialog struct {
 	focus      ui.ID
 	focused    bool
 	noCancel   bool
+	settings   bool // only one window can edit shared preferences at a time
 	// collapsed holds the folded state of a dialog's collapsible groups by
 	// key. The form is rebuilt on every paint, so the state lives here.
 	collapsed map[string]bool

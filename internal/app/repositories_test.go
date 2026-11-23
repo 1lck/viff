@@ -956,3 +956,52 @@ func TestRepositoriesInterleavedOpenActivateCloseRace(t *testing.T) {
 		t.Fatal("fresh Open reused generation 0")
 	}
 }
+
+func TestSiblingWorkspacesShareCatalogWithoutSwitchingRepositories(t *testing.T) {
+	f := newRepositoriesFixture(t)
+	defer f.w.Dispose()
+	repoA := f.newRepo("main")
+	repoB := f.newRepo("second")
+	repoC := f.newRepo("third")
+	f.open(repoA)
+
+	sibling := NewSiblingWorkspace(&gitcli.Runner{Env: f.env}, f.w, nil)
+	defer sibling.Dispose()
+	if sibling.ActiveRoot != "" || sibling.Repo != nil {
+		t.Fatal("new sibling inherited the first workspace's active repository")
+	}
+	other := *f
+	other.w = sibling
+	other.open(repoB)
+	if err := f.add(repoC); err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range []*Workspace{f.w, sibling} {
+		if len(w.Repositories) != 3 {
+			t.Fatalf("shared catalog = %+v, want three repositories", w.Repositories)
+		}
+	}
+	if f.w.ActiveRoot != canonicalPath(repoA) || sibling.ActiveRoot != canonicalPath(repoB) {
+		t.Fatalf("active repositories changed: %q, %q", f.w.ActiveRoot, sibling.ActiveRoot)
+	}
+	if !f.mustSummary(repoA).Loaded || !other.mustSummary(repoB).Loaded {
+		t.Fatal("catalog updates discarded a window's loaded summary")
+	}
+	if err := f.w.RemoveRepository(repoB); !errors.Is(err, ErrRepositoryOpenInAnotherWindow) {
+		t.Fatalf("removing the second window's repository returned %v", err)
+	}
+	if err := sibling.RemoveRepository(repoC); err != nil {
+		t.Fatal(err)
+	}
+	saved := storage.LoadRepositories(f.settingsPath())
+	if len(f.w.Repositories) != 2 || len(saved.Repositories) != 2 || saved.Active != canonicalPath(repoB) {
+		t.Fatalf("removal not synchronized or persisted: %+v; saved %+v", f.w.Repositories, saved)
+	}
+	sibling.Dispose()
+	if err := f.w.RemoveRepository(repoB); err != nil {
+		t.Fatalf("removing repository after its window closed: %v", err)
+	}
+	if f.w.Repo == nil || f.w.ActiveRoot != canonicalPath(repoA) {
+		t.Fatal("closing the sibling changed the original repository")
+	}
+}

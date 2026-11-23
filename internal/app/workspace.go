@@ -170,6 +170,9 @@ type Workspace struct {
 	invalidate func()
 	mu         sync.Mutex
 	pending    []func()
+	disposed   bool // guarded by mu; late background results are dropped
+	lifetime   context.Context
+	cancel     context.CancelFunc
 	nextID     uint64
 	watcher    Watcher
 	// backends are the adapters this workspace may use, registered by the
@@ -202,7 +205,30 @@ type Watcher interface{ Close() }
 // recorder keeps every existing test and a build without a config directory
 // working unchanged.
 func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
-	w := &Workspace{Git: git, Settings: settings, invalidate: invalidate, Now: time.Now, obs: observability.Nop{}, inc: observability.Nop{}, startedAt: time.Now()}
+	w := newWorkspace(git, settings, invalidate)
+	w.loadRepositories()
+	return w
+}
+
+// NewSiblingWorkspace shares persistent application data with source. Its
+// active repository, view summaries, command log and tasks belong to this
+// window. The caller supplies a separate runner for its command log.
+func NewSiblingWorkspace(git Git, source *Workspace, invalidate func()) *Workspace {
+	w := newWorkspace(git, source.Settings, invalidate)
+	w.ChangeLists = source.changeLists()
+	w.Prompts = source.prompts()
+	w.joinRepositoryCatalog(source.repos.catalog)
+	w.syncRepositoryRoots(source.repos.catalog.store.Repositories)
+	return w
+}
+
+func newWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
+	lifetime, cancel := context.WithCancel(context.Background())
+	w := &Workspace{
+		Git: git, Settings: settings, invalidate: invalidate, Now: time.Now,
+		obs: observability.Nop{}, inc: observability.Nop{}, startedAt: time.Now(),
+		lifetime: lifetime, cancel: cancel,
+	}
 	w.Caps = CapabilitiesOf(git)
 	w.SetLogLevel("")
 	w.initUpdateState()
@@ -210,7 +236,6 @@ func NewWorkspace(git Git, settings *Settings, invalidate func()) *Workspace {
 		w.SetLogLevel(settings.LogLevel)
 	}
 	git.SetCommandLog(w.logCommand)
-	w.loadRepositories()
 	w.ApplyGitSettings()
 	return w
 }
@@ -242,6 +267,10 @@ func (w *Workspace) now() time.Time {
 // post queues fn to run on the UI thread.
 func (w *Workspace) post(fn func()) {
 	w.mu.Lock()
+	if w.disposed {
+		w.mu.Unlock()
+		return
+	}
 	w.pending = append(w.pending, fn)
 	w.mu.Unlock()
 	if w.invalidate != nil {
@@ -256,9 +285,33 @@ func (w *Workspace) Drain() bool {
 	w.pending = nil
 	w.mu.Unlock()
 	for _, fn := range fns {
+		if w.disposed {
+			break
+		}
 		fn()
 	}
 	return len(fns) > 0
+}
+
+// Dispose releases a workspace whose window has closed. Close alone is
+// reversible and is also used to return to the welcome screen.
+func (w *Workspace) Dispose() {
+	w.mu.Lock()
+	if w.disposed {
+		w.mu.Unlock()
+		return
+	}
+	w.disposed = true
+	w.pending = nil
+	w.mu.Unlock()
+	delete(w.repos.catalog.windows, w)
+	for _, task := range w.Tasks {
+		w.CancelTask(task.ID)
+	}
+	w.cancel()
+	w.DismissUpdate()
+	w.Close()
+	w.Tasks = nil
 }
 
 // Pending reports queued results (for tests that wait for background work).
@@ -644,6 +697,9 @@ func (w *Workspace) ReadOnly() bool {
 // them looking in the wrong place, so the tool recorded on the error decides
 // which hint is right.
 func (w *Workspace) ErrorText(err error) string {
+	if errors.Is(err, ErrRepositoryOpenInAnotherWindow) {
+		return w.tr(i18n.AppErrorRepositoryOpenInAnotherWindow)
+	}
 	svn := errorFromSVN(err)
 	var ge *gitcli.Error
 	msg := err.Error()

@@ -20,6 +20,12 @@ const (
 	ChromeStripeGit           = Key("chrome.stripe.git")
 	ChromeStripeNotifications = Key("chrome.stripe.notifications")
 
+	// Repository windows.
+	ChromeMenuOpenInNewWindow = Key("chrome.menu.openInNewWindow")
+	ChromeCannotOpenNewWindow = Key("chrome.notice.cannotOpenNewWindow")
+	ChromeDiscardWindowsTitle = Key("chrome.dialog.discardWindowsTitle")
+	ChromeDiscardWindowsBody  = Key("chrome.dialog.discardWindowsBody")
+
 	// Project menu.
 	ChromeMenuOpen           = Key("chrome.menu.open")
 	ChromeMenuClone          = Key("chrome.menu.clone")
@@ -203,6 +209,11 @@ func init() {
 		ChromeStripeGit:           "Git",
 		ChromeStripeNotifications: "Notifications",
 
+		ChromeMenuOpenInNewWindow: "Open in New Window…",
+		ChromeCannotOpenNewWindow: "Cannot open a new window",
+		ChromeDiscardWindowsTitle: "Discard Unsaved Edits?",
+		ChromeDiscardWindowsBody:  "Open windows contain unsaved file or merge edits. Discard those edits and continue?",
+
 		ChromeMenuOpen:           "Open…",
 		ChromeMenuClone:          "Clone Repository…",
 		ChromeMenuNewRepository:  "New Repository…",
@@ -367,6 +378,11 @@ func init() {
 		ChromeStripeProject:       "项目",
 		ChromeStripeGit:           "Git",
 		ChromeStripeNotifications: "通知",
+
+		ChromeMenuOpenInNewWindow: "在新窗口中打开…",
+		ChromeCannotOpenNewWindow: "无法打开新窗口",
+		ChromeDiscardWindowsTitle: "放弃未保存的编辑？",
+		ChromeDiscardWindowsBody:  "打开的窗口中有未保存的文件或合并编辑。要放弃这些编辑并继续吗？",
 
 		ChromeMenuOpen:           "打开…",
 		ChromeMenuClone:          "克隆仓库…",
