@@ -794,7 +794,14 @@ func (w *Window) textInput(ctx app.TextInputContext) *app.TextInput {
 			// reaches the editor; the editor still applies every command.
 			in.Editor = nil
 			in.State = app.TextStateOf(buf.ed)
-			in.OnEvent = buf.applyText
+			in.OnEvent = func(event app.TextEvent) (app.TextState, error) {
+				// Native text input can still reference this handler until the
+				// window repaints with the shared installation status.
+				if w.installingUpdate() {
+					return app.TextStateOf(buf.ed), nil
+				}
+				return buf.applyText(event)
+			}
 			in.NavigationKeys = false
 			return in
 		}

@@ -215,6 +215,10 @@ func TestRepositoryWindowsProtectEditsWhileSchedulingUpdate(t *testing.T) {
 	f.click("Edit\t⌘E")
 	waitEditing(t, f, tab)
 	before := tab.edit.ed.String()
+	staleInput := second.textInput(app.TextInputContext{ID: idDiffText})
+	if staleInput == nil || staleInput.OnEvent == nil {
+		t.Fatal("editor has no native text input handler")
+	}
 
 	owner := windows.sessions[0]
 	waitPhase := func(phase vapp.UpdatePhase) {
@@ -230,11 +234,14 @@ func TestRepositoryWindowsProtectEditsWhileSchedulingUpdate(t *testing.T) {
 	first.installUpdate()
 	waitPhase(vapp.UpdateInstalling)
 	// The helper is still preparing the update while we try to edit and quit.
+	if _, err := staleInput.OnEvent(app.TextEvent{Kind: app.TextInsert, Text: "queued native input"}); err != nil {
+		t.Fatal(err)
+	}
 	owner.Settle(40*time.Millisecond, time.Second)
 	f.s.Settle(40*time.Millisecond, time.Second)
 	_ = f.s.Type("new unsaved changes")
 	if got := tab.edit.ed.String(); got != before {
-		t.Errorf("the sibling editor accepted text while preparing to quit: %q", got)
+		t.Fatalf("the sibling editor accepted text while preparing to quit: %q", got)
 	}
 	if err := owner.Keys("Esc"); err != nil {
 		t.Fatal(err)
