@@ -94,8 +94,17 @@ func (d *Windows) Show() {
 	}
 }
 
+func (d *Windows) invalidate() {
+	for _, w := range d.windows {
+		w.Invalidate()
+	}
+}
+
 // ConfirmQuit applies the same unsaved-editor protection to every window.
 func (d *Windows) ConfirmQuit(allow func()) {
+	if owner := d.primary(); owner != nil && owner.installingUpdate() {
+		return
+	}
 	for _, w := range d.windows {
 		if w.dirtyEdit() == nil {
 			continue

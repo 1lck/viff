@@ -3,6 +3,7 @@
 package viffui
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -16,6 +17,8 @@ import (
 	vapp "viff/internal/app"
 	"viff/internal/gitcli"
 	"viff/internal/i18n"
+	"viff/internal/updater"
+	"viff/internal/version"
 )
 
 type headlessWindows struct {
@@ -185,4 +188,104 @@ func TestRepositoryWindowsQuitChecksSecondEditor(t *testing.T) {
 	if !allowed {
 		t.Fatal("confirming quit did not run the quit action")
 	}
+}
+
+func TestRepositoryWindowsProtectEditsWhileSchedulingUpdate(t *testing.T) {
+	previous := version.Version
+	version.Version = "v0.1.0"
+	t.Cleanup(func() { version.Version = previous })
+	installResult := make(chan error, 1)
+	t.Cleanup(func() { close(installResult) })
+
+	f := newUIFixture(t)
+	windows := newHeadlessWindows(f)
+	windows.updates = windowUpdateService{installResult: installResult}
+	first, err := windows.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := windows.open(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.win, f.ws, f.s = second, second.ws, windows.sessions[1]
+	second.Start(f.dir)
+	f.settle()
+	tab := openEditableFile(t, f, "config.json")
+	f.click("Edit\t⌘E")
+	waitEditing(t, f, tab)
+	before := tab.edit.ed.String()
+
+	owner := windows.sessions[0]
+	waitPhase := func(phase vapp.UpdatePhase) {
+		t.Helper()
+		if err := owner.WaitFor(func(app.Snapshot) bool { return first.ws.Update.Phase == phase }, 5*time.Second); err != nil {
+			t.Fatalf("wait for update phase %v, got %+v: %v", phase, first.ws.Update, err)
+		}
+	}
+	first.checkForUpdates()
+	waitPhase(vapp.UpdateAvailable)
+	first.ws.DownloadUpdate()
+	waitPhase(vapp.UpdateReady)
+	first.installUpdate()
+	waitPhase(vapp.UpdateInstalling)
+	// The helper is still preparing the update while we try to edit and quit.
+	owner.Settle(40*time.Millisecond, time.Second)
+	f.s.Settle(40*time.Millisecond, time.Second)
+	_ = f.s.Type("new unsaved changes")
+	if got := tab.edit.ed.String(); got != before {
+		t.Errorf("the sibling editor accepted text while preparing to quit: %q", got)
+	}
+	if err := owner.Keys("Esc"); err != nil {
+		t.Fatal(err)
+	}
+	if first.dialog == nil {
+		t.Error("Escape dismissed the update dialog while preparing to quit")
+	}
+	quit := false
+	windows.ConfirmQuit(func() { quit = true })
+	second.onCloseRequest(func() { quit = true })
+	if quit || second.dialog != nil {
+		t.Error("quit or close went through before the install result arrived")
+	}
+	if !f.s.HasText(first.t(i18n.UpdateNoticeInstalling)) {
+		t.Error("the sibling window did not show the installation status")
+	}
+	f.snap("update-installing")
+
+	// After an install failure, the same editor must still be usable.
+	installResult <- errors.New("simulated install failure")
+	waitPhase(vapp.UpdateError)
+	f.s.Settle(40*time.Millisecond, time.Second)
+	f.click(second.t(i18n.FileviewDone))
+	if tab.edit != nil {
+		t.Error("the sibling editor could not finish editing after installation failed")
+	}
+
+	windows.quit = func() { quit = true }
+	first.installUpdate()
+	waitPhase(vapp.UpdateInstalling)
+	installResult <- nil
+	if err := owner.WaitFor(func(app.Snapshot) bool { return quit }, 5*time.Second); err != nil {
+		t.Fatal("the application did not quit after the helper was ready:", err)
+	}
+}
+
+type windowUpdateService struct {
+	installResult <-chan error
+}
+
+func (windowUpdateService) Check(context.Context) (*updater.Update, error) {
+	return &updater.Update{Version: "v0.1.1"}, nil
+}
+
+func (windowUpdateService) Download(context.Context, *updater.Update, func(int64, int64)) (string, error) {
+	return "test-package", nil
+}
+
+func (s windowUpdateService) Install(*updater.Update, string) (*updater.InstallResult, error) {
+	if err := <-s.installResult; err != nil {
+		return nil, err
+	}
+	return &updater.InstallResult{}, nil
 }

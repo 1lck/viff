@@ -318,6 +318,7 @@ func (w *Window) Config() app.Config {
 }
 
 func (w *Window) onWake() {
+	wasInstalling := w.ws.Update.Phase == vapp.UpdateInstalling
 	w.ws.Drain()
 	w.warnLFSSetup()
 	w.pumpTerminal()
@@ -327,6 +328,12 @@ func (w *Window) onWake() {
 	if w.windows != nil && w.ws.Update.ShouldQuit {
 		w.windows.quit()
 		return
+	}
+	if w.installingUpdate() {
+		return
+	}
+	if wasInstalling && w.windows != nil {
+		w.windows.invalidate()
 	}
 	w.runDeferred()
 	w.runDue()
@@ -375,9 +382,9 @@ func (w *Window) ShowCrashNotice(crashPath string) {
 // text. Before this, closing the window was the one common exit that discarded
 // an edit silently.
 func (w *Window) onCloseRequest(allow func()) {
-	// An update helper is being scheduled. Its result needs this window's
-	// event loop so it can either report the error or quit for replacement.
-	if w.ws.Update.Phase == vapp.UpdateInstalling {
+	// Keep the installation status visible while the updater prepares to
+	// either quit all windows for replacement or restore them on failure.
+	if w.installingUpdate() {
 		return
 	}
 	if w.dirtyEdit() == nil {
@@ -475,6 +482,10 @@ func (w *Window) Paint(c *ui.Canvas, size ui.Size) {
 
 	full := rect(0, 0, size.Width, size.Height)
 	w.p.fill(full, w.pal.Frame)
+	if w.installingUpdate() {
+		w.paintInstallingUpdate(full)
+		return
+	}
 	if w.ws.Repo == nil {
 		w.paintWelcome(full)
 	} else {
@@ -597,6 +608,10 @@ func (w *Window) focused(id ui.ID) bool { return w.c != nil && w.c.Focused() == 
 // ---- events --------------------------------------------------------------
 
 func (w *Window) onPointer(e ui.PointerEvent) ui.EventResult {
+	if w.installingUpdate() {
+		w.drag = nil
+		return ui.EventResult{Handled: true}
+	}
 	w.mouse = ui.Point{X: e.X, Y: e.Y}
 	if d := w.drag; d != nil {
 		switch e.Kind {
@@ -678,6 +693,9 @@ func (w *Window) onScroll(e ui.ScrollEvent) ui.EventResult {
 }
 
 func (w *Window) onKey(e ui.KeyEvent) ui.EventResult {
+	if w.installingUpdate() {
+		return ui.EventResult{Handled: true}
+	}
 	if e.Release {
 		return ui.EventResult{}
 	}
@@ -714,6 +732,9 @@ func (w *Window) onKey(e ui.KeyEvent) ui.EventResult {
 }
 
 func (w *Window) onShortcut(e ui.KeyEvent) ui.EventResult {
+	if w.installingUpdate() {
+		return ui.EventResult{Handled: true}
+	}
 	if e.Release {
 		return ui.EventResult{}
 	}
@@ -732,10 +753,7 @@ func (w *Window) onShortcut(e ui.KeyEvent) ui.EventResult {
 }
 
 func (w *Window) onFileDrop(e ui.FileDropEvent) ui.EventResult {
-	if len(e.Paths) == 0 && e.Phase != ui.FileDropDrop {
-		return ui.EventResult{Handled: true}
-	}
-	if e.Phase == ui.FileDropDrop && len(e.Paths) > 0 {
+	if !w.installingUpdate() && e.Phase == ui.FileDropDrop && len(e.Paths) > 0 {
 		w.openRepo(e.Paths[0])
 		return ui.EventResult{Handled: true, Repaint: true}
 	}
@@ -743,6 +761,9 @@ func (w *Window) onFileDrop(e ui.FileDropEvent) ui.EventResult {
 }
 
 func (w *Window) textInput(ctx app.TextInputContext) *app.TextInput {
+	if w.installingUpdate() {
+		return nil
+	}
 	if ctx.ID == idTerminal && w.termOpen && w.term.emu != nil {
 		return w.ensureTerminalInput()
 	}
@@ -810,6 +831,9 @@ func (w *Window) after(fn func()) {
 
 // runDeferred runs the work scheduled by after, in order.
 func (w *Window) runDeferred() {
+	if w.installingUpdate() {
+		return
+	}
 	fns := w.deferred
 	w.deferred = nil
 	for _, fn := range fns {
