@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/vivaui/viva/app"
-	"github.com/vivaui/viva/ui"
 
 	"viff/assets/branding"
 	vapp "viff/internal/app"
@@ -212,33 +211,30 @@ func run() (code int) {
 		},
 	})
 
-	var win *viffui.Window
-	windowCreate := time.Now()
-	ws := vapp.NewWorkspace(git, settings, func() {
-		if win != nil {
-			win.Invalidate()
+	// Each workspace needs its own command log and active backend. The
+	// settings and repository catalog are shared by sibling workspaces.
+	newWorkspace := func(source *vapp.Workspace, invalidate func()) *vapp.Workspace {
+		git := &gitcli.Runner{Path: settings.GitPath}
+		svn := &svncli.Runner{Path: settings.SVNPath}
+		var ws *vapp.Workspace
+		if source == nil {
+			ws = vapp.NewWorkspace(git, settings, invalidate)
+		} else {
+			ws = vapp.NewSiblingWorkspace(git, source, invalidate)
 		}
-	})
-	// Both adapters are registered; the app picks one per repository by a local
-	// probe of .git/.svn, so one binary opens either kind of working copy.
-	ws.SetBackends(git, svn)
-	ws.SetRecorder(rec, incidents)
-	ws.SetLogLevel(settings.LogLevel)
-	// The updater owns downloads and self-replacement; the app only sees the
-	// narrow UpdateService interface. Cleanup removes leftovers from an
-	// interrupted install before the window opens.
+		ws.SetBackends(git, svn)
+		ws.SetRecorder(rec, incidents)
+		ws.SetLogLevel(settings.LogLevel)
+		ws.Watch = func(repo domain.Repo, changed func(meta, overflow bool)) (vapp.Watcher, error) {
+			return platform.Watch(repo, changed)
+		}
+		if source == nil && logErr != nil {
+			ws.Notify(vapp.NoticeWarning, "Logging disabled", "Viff cannot write its diagnostics log: "+logErr.Error())
+		}
+		return ws
+	}
 	updates := updater.NewClient(version.Version)
-	ws.SetUpdateService(updates)
 	updates.Cleanup()
-	ws.Watch = func(repo domain.Repo, changed func(meta, overflow bool)) (vapp.Watcher, error) {
-		return platform.Watch(repo, changed)
-	}
-	win = viffui.New(ws)
-	phaseOf("window_create", windowCreate)
-
-	if logErr != nil {
-		ws.Notify(vapp.NoticeWarning, "Logging disabled", "Viff cannot write its diagnostics log: "+logErr.Error())
-	}
 
 	// A path argument opens that repository; otherwise the last one, as
 	// IntelliJ reopens the last project. A remote path (an ssh:// URL or a WSL
@@ -261,42 +257,38 @@ func run() (code int) {
 			dir = recent
 		}
 	}
-	win.Start(dir)
-	phaseOf("window_start", windowCreate)
-
-	// The crash-directory scan runs after the window is up: nothing in the
-	// first frame depends on it, and a notice queued here shows on the next
-	// wake.
-	go func() {
-		if crash, ok := observability.PreviousCrash(crashDir, 7*24*time.Hour); ok {
-			rec.Event(observability.Event{
-				Event:  observability.EventAppRecover,
-				Level:  observability.LevelWarn,
-				Fields: map[string]any{"crash": filepath.Base(crash)},
-			})
-			win.SetCrashNotice(crash)
-		}
-	}()
-
-	// RunApplication, not RunCanvas: the application owns the window, which is
-	// what lets Viff keep an icon in the status area. RunCanvas has no handle to
-	// add one to.
+	// RunApplication owns both the desktop windows and the status item.
 	if err := app.RunApplication(func(application *app.Application) error {
-		native, err := application.OpenWindow(win.Config(), &ui.Canvas{})
+		windowCreate := time.Now()
+		windows := viffui.NewWindows(application, newWorkspace, updates)
+		win, err := windows.Open()
 		if err != nil {
 			return err
 		}
-		win.SetTray(native, application.Quit)
-		// macOS menu and Dock Quit bypass the window's close button; keep the
-		// same unsaved-editor confirmation on that path.
-		application.OnQuitRequest(func(allow func()) { win.ConfirmQuit(allow) })
+		phaseOf("window_create", windowCreate)
+		win.Start(dir)
+		phaseOf("window_start", windowCreate)
+
+		// Previous-crash scanning stays off the first-frame path.
+		go func() {
+			if crash, ok := observability.PreviousCrash(crashDir, 7*24*time.Hour); ok {
+				rec.Event(observability.Event{
+					Event:  observability.EventAppRecover,
+					Level:  observability.LevelWarn,
+					Fields: map[string]any{"crash": filepath.Base(crash)},
+				})
+				win.SetCrashNotice(crash)
+			}
+		}()
+		application.OnQuitRequest(windows.ConfirmQuit)
+		application.OnReopen(windows.Show)
 		// A desktop with no status area (a Linux session without a
 		// StatusNotifier host) still runs; only the icon is missing then.
 		if _, err := application.AddStatusItem(app.StatusItemConfig{
 			Tooltip: "Viff",
 			Icon:    branding.Icon.StatusIcon(32),
-			OnClick: func(app.StatusClick) { win.ShowFromTray() },
-			Menu:    win.TrayMenu,
+			OnClick: func(app.StatusClick) { windows.Show() },
+			Menu:    windows.TrayMenu,
 		}); err != nil {
 			rec.Event(observability.Event{
 				Event:  observability.EventAppStart,

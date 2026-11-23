@@ -2,7 +2,6 @@ package viffui
 
 import (
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/vivaui/viva/text"
@@ -226,8 +225,6 @@ func (w *Window) showDiffForFocus() {
 
 // ---- background fetch -------------------------------------------------------
 
-var fetchDue atomic.Bool
-
 // startAutoFetch (re)starts the background fetch timer from settings.
 func (w *Window) startAutoFetch() {
 	w.stopAutoFetch()
@@ -246,7 +243,7 @@ func (w *Window) startAutoFetch() {
 			case <-stop:
 				return
 			case <-t.C:
-				fetchDue.Store(true)
+				w.fetchDue.Store(true)
 				w.Invalidate()
 			}
 		}
@@ -259,14 +256,18 @@ func (w *Window) stopAutoFetch() {
 		close(w.fetchStop)
 		w.fetchStop = nil
 	}
+	w.fetchDue.Store(false)
 }
 
 // runDue performs timer work on the UI thread.
 func (w *Window) runDue() {
+	if !w.saveAt.IsZero() && !time.Now().Before(w.saveAt) {
+		w.flushSettings()
+	}
 	if p := w.pendingCrash.Swap(nil); p != nil {
 		w.ShowCrashNotice(*p)
 	}
-	if fetchDue.Swap(false) && w.ws.Repo != nil && !w.ws.Busy() && !w.ws.ReadOnly() && len(w.ws.Repo.Remotes) > 0 {
+	if w.fetchDue.Swap(false) && w.ws.Repo != nil && !w.ws.Busy() && !w.ws.ReadOnly() && len(w.ws.Repo.Remotes) > 0 {
 		w.ws.Fetch(true)
 	}
 }

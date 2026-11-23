@@ -20,8 +20,8 @@ func (w *Window) helpMenu() []item {
 		items = append(items, item{title: w.t(i18n.HelpSaveDiagnostics), icon: icons.Archive, run: w.saveDiagnostics})
 	}
 	title := "Check for Updates…"
-	if w.ws.Update.Phase == vapp.UpdateAvailable && w.ws.Update.Version != "" {
-		title = "Update Viff to " + w.ws.Update.Version + "…"
+	if update := w.updateWindow().ws.Update; update.Phase == vapp.UpdateAvailable && update.Version != "" {
+		title = "Update Viff to " + update.Version + "…"
 	}
 	items = append(items,
 		item{title: w.t(i18n.HelpOpenLogFolder), icon: icons.Folder, run: w.openLogFolder},

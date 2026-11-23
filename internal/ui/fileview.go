@@ -169,7 +169,14 @@ func (w *Window) paintFileToolbar(t *diffTab, r ui.Rect) {
 		w.after(func() {
 			w.ws.Settings.DiffCodemap = !w.ws.Settings.DiffCodemap
 			w.saveSettings()
-			w.rebuildDiffEdge()
+			if w.windows == nil {
+				w.rebuildDiffEdge()
+				return
+			}
+			for _, window := range w.windows.windows {
+				window.rebuildDiffEdge()
+				window.Invalidate()
+			}
 		})
 	}
 	rx := right(r) - 8

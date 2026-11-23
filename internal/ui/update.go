@@ -12,8 +12,13 @@ import (
 // The dialog renders the state the check posts; it never performs the network
 // request itself.
 func (w *Window) checkForUpdates() {
-	w.ws.CheckForUpdates(true)
-	w.openUpdateDialog()
+	owner := w.updateWindow()
+	if owner != w {
+		owner.show()
+	}
+	owner.ws.CheckForUpdates(true)
+	owner.openUpdateDialog()
+	owner.Invalidate()
 }
 
 // openUpdateDialog shows the in-app update flow. Its body and action label are
@@ -78,7 +83,7 @@ func (w *Window) submitUpdateAction() bool {
 		w.ws.DownloadUpdate()
 		return false
 	case vapp.UpdateReady:
-		w.ws.InstallUpdate()
+		w.installUpdate()
 		return false
 	case vapp.UpdateManual:
 		if state.ManualPath != "" {
@@ -87,7 +92,7 @@ func (w *Window) submitUpdateAction() bool {
 		return false
 	case vapp.UpdateError:
 		if w.ws.HasDownloadedUpdate() {
-			w.ws.InstallUpdate()
+			w.installUpdate()
 		} else if w.ws.HasUpdate() {
 			w.ws.DownloadUpdate()
 		} else {
@@ -96,6 +101,21 @@ func (w *Window) submitUpdateAction() bool {
 		return false
 	}
 	return true
+}
+
+func (w *Window) installUpdate() {
+	install := func() {
+		w.ws.InstallUpdate()
+		if w.ws.Update.Phase == vapp.UpdateInstalling {
+			w.openUpdateDialog()
+			w.Invalidate()
+		}
+	}
+	if w.windows != nil {
+		w.windows.ConfirmQuit(install)
+	} else {
+		w.confirmDiscardEdits(install)
+	}
 }
 
 // cancelUpdateDownload cancels an in-flight download before closing. The

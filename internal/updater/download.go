@@ -37,7 +37,6 @@ func (c *Client) Download(ctx context.Context, u *Update, progress func(done, to
 		return "", err
 	}
 	dst := filepath.Join(dir, name)
-	tmp := dst + ".part"
 
 	resp, err := c.get(ctx, u.Asset.URL, "")
 	if err != nil {
@@ -53,10 +52,11 @@ func (c *Client) Download(ctx context.Context, u *Update, progress func(done, to
 		}
 	}
 
-	file, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	file, err := os.CreateTemp(dir, name+"-*.part")
 	if err != nil {
-		return "", fmt.Errorf("updater: create download %s: %w", tmp, err)
+		return "", fmt.Errorf("updater: create download for %s: %w", name, err)
 	}
+	tmp := file.Name()
 	complete := false
 	defer func() {
 		_ = file.Close()
@@ -103,7 +103,9 @@ func (c *Client) Download(ctx context.Context, u *Update, progress func(done, to
 	if err := checkSHA256(name, expected, actual); err != nil {
 		return "", fmt.Errorf("updater: %w", err)
 	}
-	_ = os.Remove(dst)
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("updater: download %s canceled: %w", name, err)
+	}
 	if err := os.Rename(tmp, dst); err != nil {
 		return "", fmt.Errorf("updater: finalize %s: %w", dst, err)
 	}

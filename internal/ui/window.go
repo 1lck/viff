@@ -1,7 +1,6 @@
 package viffui
 
 import (
-	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -19,7 +18,7 @@ import (
 	"viff/internal/sshpath"
 )
 
-// Window is the one main window: it owns view state (selection, scroll,
+// Window is a repository window: it owns view state (selection, scroll,
 // open panels) and reads everything else from the workspace.
 type Window struct {
 	ws  *vapp.Workspace
@@ -40,9 +39,10 @@ type Window struct {
 	// tr speaks the language the settings chose.
 	tr *i18n.Translator
 	// native is the window the application opened; nil in headless runs.
-	native *app.Window
-	// quit closes the application from the status item's menu.
-	quit func()
+	native        *app.Window
+	windows       *Windows
+	secondary     bool // only the startup window remembers its desktop frame
+	openDirectory func(app.OpenDirectoryOptions) (string, error)
 	// openURL opens a web link in the system browser. Tests replace it to assert
 	// which address an action would open without starting a browser.
 	openURL func(string) error
@@ -113,6 +113,8 @@ type Window struct {
 	// git-lfs, so the notification appears once per opened repository.
 	lfsWarnedGen uint64
 	saveTimer    *time.Timer
+	saveAt       time.Time
+	fetchDue     atomic.Bool
 	fetchStop    chan struct{}
 	// pendingCrash receives the previous-crash path from any goroutine; the
 	// UI thread shows the notice on the next wake so startup never blocks on
@@ -154,7 +156,7 @@ const (
 // New creates the window for a workspace. The caller sets the invalidate
 // hook of the workspace to w.Invalidate.
 func New(ws *vapp.Workspace) *Window {
-	w := &Window{ws: ws, commitOpen: true, gitOpen: true, openURL: platform.OpenURL}
+	w := &Window{ws: ws, commitOpen: true, gitOpen: true, openURL: platform.OpenURL, openDirectory: app.OpenDirectory}
 	ws.ConfirmCheckout = w.confirmStashCheckout
 	w.applyFont()
 	w.applyLanguage()
@@ -263,42 +265,6 @@ func (w *Window) t(key i18n.Key, args ...any) string {
 	return w.tr.T(key, args...)
 }
 
-// SetTray hands the window the native handle the application opened and how to
-// quit, which the status item's menu uses. Headless runs leave it nil.
-func (w *Window) SetTray(native *app.Window, quit func()) {
-	w.native = native
-	w.quit = quit
-}
-
-// ShowFromTray brings the window back after a press on the status item.
-func (w *Window) ShowFromTray() {
-	if w.native == nil {
-		return
-	}
-	w.native.Show()
-	w.Invalidate()
-}
-
-// TrayMenu is the status item's menu: bring the window back, or quit.
-func (w *Window) TrayMenu() []app.MenuItem {
-	quit := w.quit
-	return []app.MenuItem{
-		{Title: "Show Viff", OnSelect: w.ShowFromTray},
-		{Separator: true},
-		{Title: "Quit Viff", OnSelect: func() {
-			if quit == nil {
-				return
-			}
-			if w.dirtyEdit() != nil {
-				// The menu can be used while the window is hidden; a dialog
-				// behind it would ask nobody.
-				w.ShowFromTray()
-			}
-			w.confirmDiscardEdits(quit)
-		}},
-	}
-}
-
 // Config is the Viva window configuration.
 func (w *Window) Config() app.Config {
 	s := w.ws.Settings
@@ -345,7 +311,7 @@ func (w *Window) Config() app.Config {
 	// display: Viva places the content area there, keeps it on a connected
 	// screen, and falls back to the main screen when the saved position
 	// matches none. Without a saved frame the system picks the spot.
-	if s.Window.Positioned {
+	if !w.secondary && s.Window.Positioned {
 		cfg.Origin = &ui.Point{X: float32(s.Window.X), Y: float32(s.Window.Y)}
 	}
 	return cfg
@@ -358,8 +324,9 @@ func (w *Window) onWake() {
 	if w.ws.ConsumeUpdatePrompt() {
 		w.openUpdateDialog()
 	}
-	if w.ws.Update.ShouldQuit {
-		w.quitForUpdate()
+	if w.windows != nil && w.ws.Update.ShouldQuit {
+		w.windows.quit()
+		return
 	}
 	w.runDeferred()
 	w.runDue()
@@ -372,7 +339,7 @@ func (w *Window) Start(dir string) {
 		w.openRepo(dir)
 	}
 	w.startAutoFetch()
-	if w.ws.Settings.AutoUpdateCheck {
+	if !w.secondary && w.ws.Settings.AutoUpdateCheck {
 		w.ws.CheckForUpdates(false)
 	}
 	if w.ws.Settings.Warning != "" {
@@ -408,6 +375,11 @@ func (w *Window) ShowCrashNotice(crashPath string) {
 // text. Before this, closing the window was the one common exit that discarded
 // an edit silently.
 func (w *Window) onCloseRequest(allow func()) {
+	// An update helper is being scheduled. Its result needs this window's
+	// event loop so it can either report the error or quit for replacement.
+	if w.ws.Update.Phase == vapp.UpdateInstalling {
+		return
+	}
 	if w.dirtyEdit() == nil {
 		allow()
 		return
@@ -417,38 +389,23 @@ func (w *Window) onCloseRequest(allow func()) {
 	w.Invalidate()
 }
 
-// ConfirmQuit is the application-level quit guard: macOS menu and Dock Quit
-// reach the application, not the window's close button. It shares the editor
-// confirmation with the window close request.
-func (w *Window) ConfirmQuit(allow func()) {
-	w.onCloseRequest(allow)
-}
-
 func (w *Window) onClosed() {
 	w.lg.multi.stop()
 	w.stopTerminal()
 	w.flushSettings()
 	w.stopAutoFetch()
-	w.ws.Close()
-}
-
-// quitForUpdate exits the process after the detached update helper was
-// scheduled. Viva v0.2.3's RunCanvas has no programmatic window close, so this
-// repeats the onClosed teardown and lets the operating system reclaim the
-// window; the helper waits for this exit before replacing files.
-func (w *Window) quitForUpdate() {
-	w.lg.multi.stop()
-	w.stopTerminal()
-	w.flushSettings()
-	w.stopAutoFetch()
-	w.ws.Close()
-	os.Exit(0)
+	w.ws.Dispose()
+	if w.windows != nil {
+		w.windows.closed(w)
+	}
 }
 
 func (w *Window) onResize(size ui.Size) {
-	w.ws.Settings.Window.Width = int(size.Width)
-	w.ws.Settings.Window.Height = int(size.Height)
-	w.saveSettings()
+	if !w.secondary {
+		w.ws.Settings.Window.Width = int(size.Width)
+		w.ws.Settings.Window.Height = int(size.Height)
+		w.saveSettings()
+	}
 	// The grid's cell count follows the panel, and the pty follows the grid.
 	w.Invalidate()
 }
@@ -458,6 +415,9 @@ func (w *Window) onResize(size ui.Size) {
 // and a live drag reports every intermediate point, so saveSettings debounces
 // the write instead of one per mouse move.
 func (w *Window) onFrameChange(frame ui.Rect) {
+	if w.secondary {
+		return
+	}
 	win := &w.ws.Settings.Window
 	x, y := int(frame.X), int(frame.Y)
 	if win.Positioned && win.X == x && win.Y == y {
@@ -476,15 +436,18 @@ func (w *Window) saveSettings() {
 	if w.saveTimer != nil {
 		w.saveTimer.Stop()
 	}
-	s := w.ws.Settings
-	w.saveTimer = time.AfterFunc(600*time.Millisecond, func() { _ = s.Save() })
+	const delay = 600 * time.Millisecond
+	w.saveAt = time.Now().Add(delay)
+	w.saveTimer = time.AfterFunc(delay, w.Invalidate)
 }
 
 func (w *Window) flushSettings() {
 	w.ws.ApplyGitSettings()
 	if w.saveTimer != nil {
 		w.saveTimer.Stop()
+		w.saveTimer = nil
 	}
+	w.saveAt = time.Time{}
 	_ = w.ws.Settings.Save()
 }
 
@@ -581,8 +544,6 @@ func (w *Window) syncRepo() {
 		return
 	}
 	w.lastGen = rs.Gen
-	w.ws.Settings.AddRecent(rs.Repo.Root)
-	w.saveSettings()
 	if w.commitDrafts == nil {
 		w.commitDrafts = make(map[string]string)
 	}

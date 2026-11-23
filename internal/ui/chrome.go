@@ -270,8 +270,11 @@ func (w *Window) taskRunning(prefix string) bool {
 // projectMenu lists recent repositories and the project actions.
 func (w *Window) projectMenu() []item {
 	var out []item
-	out = append(out, item{title: w.t(i18n.ChromeMenuOpen), icon: icons.Open, shortcut: "⌘O", run: w.chooseRepoNow},
-		item{title: w.t(i18n.ChromeMenuClone), icon: icons.Download, run: w.openClone},
+	out = append(out, item{title: w.t(i18n.ChromeMenuOpen), icon: icons.Open, shortcut: "⌘O", run: w.chooseRepoNow})
+	if w.windows != nil {
+		out = append(out, item{title: w.t(i18n.ChromeMenuOpenInNewWindow), icon: icons.Open, run: w.chooseRepoInNewWindow})
+	}
+	out = append(out, item{title: w.t(i18n.ChromeMenuClone), icon: icons.Download, run: w.openClone},
 		item{title: w.t(i18n.ChromeMenuOpenRemote), icon: icons.Vcs, run: w.openRemote},
 		item{title: w.t(i18n.ChromeMenuNewRepository), icon: icons.Add, run: w.openInit},
 		item{title: w.t(i18n.ChromeMenuRepositories), icon: icons.Project, run: w.openRepositories})

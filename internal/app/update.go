@@ -167,7 +167,7 @@ func (w *Workspace) CheckForUpdates(manual bool) {
 	started := w.now()
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), updateCheckTimeout)
+		ctx, cancel := context.WithTimeout(w.lifetime, updateCheckTimeout)
 		defer cancel()
 		u, err := w.updates.svc.Check(ctx)
 		w.post(func() {

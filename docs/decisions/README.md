@@ -55,3 +55,4 @@
 | [0049](0049-left-dock-width.md) | 左侧工具窗共用一个宽度 |
 | [0050](0050-checked-files-commit-scope.md) | 勾选文件直接提交（工作树范围） |
 | [0051](0051-editable-conflict-result.md) | 可编辑的冲突结果栏 |
+| [0052](0052-repository-windows.md) | 仓库独立窗口 |

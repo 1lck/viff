@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +41,8 @@ var (
 	// repository while a write task is running: the task holds the repository
 	// and its result would land in a different view.
 	ErrRepositoryBusy = errors.New("a Git write task is running: wait for it to finish or cancel it before switching or removing the active repository")
+	// ErrRepositoryOpenInAnotherWindow protects that window's active state.
+	ErrRepositoryOpenInAnotherWindow = errors.New("repository is open in another window")
 	// ErrRepositoryUnknown reports a root that is not in the workspace list.
 	ErrRepositoryUnknown = errors.New("repository is not in the workspace")
 	// ErrRepositoryStale reports an activation that a newer one replaced, or
@@ -69,7 +72,14 @@ type repositoriesState struct {
 	// activateSeq increments for each ActivateRepository call; an activation
 	// that finishes after a newer one changed the active repository is stale.
 	activateSeq uint64
-	store       *storage.Repositories
+	catalog     *repositoryCatalog
+}
+
+// repositoryCatalog owns the single saved list for the application's windows.
+// Each workspace retains its own active root and status queries.
+type repositoryCatalog struct {
+	store   *storage.Repositories
+	windows map[*Workspace]struct{}
 }
 
 // canonicalPath resolves a path to the real directory it names, following
@@ -150,33 +160,57 @@ func IsRemotePath(path string) bool { return isRemotePath(path) }
 // loadRepositories reads the persisted list on startup. It only loads: a
 // repository that disappeared from disk is not dropped and not queried here.
 func (w *Workspace) loadRepositories() {
-	// The map must exist even without settings: a workspace that is created
-	// directly (tests, a composition root without a settings file) still has to
-	// accept repositories.
-	w.repos.byRoot = make(map[string]*repoEntry)
-	if w.Settings == nil {
-		return
+	settingsPath := ""
+	if w.Settings != nil {
+		settingsPath = w.Settings.Path()
 	}
-	store := storage.LoadRepositories(w.Settings.Path())
-	w.repos.store = store
-	if store.Warning != "" {
-		w.WorkspaceWarning = store.Warning
-	}
+	store := storage.LoadRepositories(settingsPath)
+	w.joinRepositoryCatalog(&repositoryCatalog{store: store, windows: make(map[*Workspace]struct{})})
 	for _, saved := range store.Repositories {
-		// Remote paths are keyed without disk access (entryKey); resolving
-		// them here would block the window on a file system that may have to
-		// boot a VM first.
 		root := entryKey(saved)
-		if root == "" || w.repos.byRoot[root] != nil {
-			continue
+		if root != "" && w.repos.byRoot[root] == nil {
+			w.addEntry(root)
 		}
-		w.addEntry(root)
 	}
-	// The persisted active repository is only a hint until it is opened; the
-	// UI can show it as the active row or open it. Open and Activate keep it
-	// up to date.
-	if active := entryKey(store.Active); active != "" && w.repos.byRoot[active] != nil {
+	if active := entryKey(store.Active); w.repos.byRoot[active] != nil {
 		w.ActiveRoot = active
+	}
+	// Normalize the in-memory roots once, including for new windows.
+	store.Repositories = w.repositoryRoots()
+	store.Active = w.ActiveRoot
+}
+
+func (w *Workspace) joinRepositoryCatalog(c *repositoryCatalog) {
+	w.repos.byRoot = make(map[string]*repoEntry)
+	w.repos.catalog = c
+	w.WorkspaceWarning = c.store.Warning
+	c.windows[w] = struct{}{}
+}
+
+func (w *Workspace) repositoryRoots() []string {
+	roots := make([]string, 0, len(w.repos.entries))
+	for _, e := range w.repos.entries {
+		roots = append(roots, e.root)
+	}
+	return roots
+}
+
+// syncRepositoryRoots preserves existing status entries while applying the
+// shared list. Result callbacks for removed entries fail their identity check.
+func (w *Workspace) syncRepositoryRoots(roots []string) {
+	entries := make([]*repoEntry, 0, len(roots))
+	byRoot := make(map[string]*repoEntry, len(roots))
+	for _, root := range roots {
+		e := w.repos.byRoot[root]
+		if e == nil {
+			e = &repoEntry{root: root}
+		}
+		entries = append(entries, e)
+		byRoot[root] = e
+	}
+	w.repos.entries, w.repos.byRoot = entries, byRoot
+	if byRoot[w.ActiveRoot] == nil {
+		w.ActiveRoot = ""
 	}
 	w.syncRepositoryViews()
 }
@@ -226,16 +260,20 @@ func (w *Workspace) syncRepositoryViews() {
 // by a newer Viff keeps its contents), but the failure is never swallowed: it
 // sets WorkspaceWarning and notifies once per failure streak.
 func (w *Workspace) saveRepositories() error {
-	store := w.repos.store
-	if store == nil {
-		return nil
+	catalog := w.repos.catalog
+	store := catalog.store
+	roots := w.repositoryRoots()
+	if !slices.Equal(roots, store.Repositories) {
+		store.Repositories = roots
+		for other := range catalog.windows {
+			if other != w {
+				other.syncRepositoryRoots(roots)
+				if other.invalidate != nil {
+					other.invalidate()
+				}
+			}
+		}
 	}
-	roots := make([]string, len(w.repos.entries))
-	for i, e := range w.repos.entries {
-		roots[i] = e.root
-	}
-	store.Repositories = roots
-	store.Active = w.ActiveRoot
 	if err := store.Save(); err != nil {
 		w.WorkspaceWarning = w.tr(i18n.AppNoticeWorkspaceSaveFailed, err.Error())
 		if !w.workspaceSaveWarned {
@@ -258,6 +296,7 @@ func (w *Workspace) noteActiveRepository(repo domain.Repo) string {
 	}
 	entry.err = nil
 	w.ActiveRoot = root
+	w.repos.catalog.store.Active = root
 	w.saveRepositories()
 	return root
 }
@@ -443,22 +482,22 @@ func (w *Workspace) RemoveRepository(root string) error {
 	if active && w.Busy() {
 		return ErrRepositoryBusy
 	}
-	w.removeEntry(entry)
-	switch {
-	case active:
-		// Close releases the repository-specific watcher and log state. The
-		// list itself is persisted by the save below and by Close, so closing
-		// never empties the workspace.
-		w.Close()
-		w.ActiveRoot = ""
-		w.saveRepositories()
-	case w.ActiveRoot == entry.root:
-		// The persisted active row was removed without being open.
-		w.ActiveRoot = ""
-		w.saveRepositories()
-	default:
-		w.saveRepositories()
+	for other := range w.repos.catalog.windows {
+		if other != w && other.Repo != nil && other.Repo.rootKey == key {
+			return ErrRepositoryOpenInAnotherWindow
+		}
 	}
+	w.removeEntry(entry)
+	if active {
+		w.Close()
+	}
+	if w.ActiveRoot == key {
+		w.ActiveRoot = ""
+	}
+	if w.repos.catalog.store.Active == key {
+		w.repos.catalog.store.Active = ""
+	}
+	w.saveRepositories()
 	return nil
 }
 
@@ -484,7 +523,7 @@ func (w *Workspace) RefreshRepositories(done func()) {
 		pending.Add(1)
 		go func() {
 			defer pending.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(w.lifetime, 2*time.Minute)
 			defer cancel()
 			status, err := w.Git.Status(ctx, domain.Repo{Root: root})
 			w.post(func() { w.applyRepositoryStatus(entry, seq, status, err) })
