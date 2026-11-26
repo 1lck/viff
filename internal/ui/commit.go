@@ -78,6 +78,18 @@ const (
 	commitWarningHintH = 20
 	commitStageButtonH = 28
 
+	// commitToolbarH is the height of the Commit page's action toolbar.
+	commitToolbarH = 34
+	// commitMsgMinH is the floor the message editor keeps while the changes
+	// tree still has room; a tighter dock squeezes past it (issue #101).
+	commitMsgMinH = 60
+	// commitAmendRowH covers the Amend row and the padding around it in the
+	// bottom section; commitButtonsRowH covers the hint gap, the Commit
+	// buttons and the slack below them. Together with the editor height they
+	// make up the bottom section, so the dock reserve derives from them.
+	commitAmendRowH   = 40
+	commitButtonsRowH = 44
+
 	// commitInlinePromptW is the hint width at which the warning and the Stage
 	// Selected button share a row. Below it the warning gets its own row, so a
 	// narrow Commit panel still shows both.
@@ -285,7 +297,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	}
 
 	// Toolbar.
-	tb := splitTop(&content, 34)
+	tb := splitTop(&content, commitToolbarH)
 	x, y := tb.X+8, tb.Y+(tb.Height-actionSize)/2
 	if w.action(idCmRefresh, x, y, icons.Refresh, w.t(i18n.WorkspaceActionRefresh), actOpts{}) {
 		w.after(w.ws.RefreshManually)
@@ -358,15 +370,24 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 	v := &w.cm
 	// The changes tree keeps at least ~110px (a few rows) before the message
 	// area grows; a small window shrinks the message down to 60px first.
-	msgH := clampF(v.msgH, 60, max(60, content.Height-84-hintH-110))
+	msgH := clampF(v.msgH, commitMsgMinH, max(commitMsgMinH, content.Height-commitAmendRowH-commitButtonsRowH-hintH-110))
 	if v.msgCollapsed {
 		msgH = 0
 	}
-	bottomH := msgH + 40 + hintH + 44
+	bottomH := msgH + commitAmendRowH + hintH + commitButtonsRowH
 	if v.msgCollapsed {
 		// The message area and the commit buttons fold away with it, leaving
 		// just the Amend row and the two small buttons beside it.
-		bottomH = 40
+		bottomH = commitAmendRowH
+	}
+	// A short window (or a Git panel dragged tall) can leave the dock less
+	// room than the fixed chrome needs. The message area keeps shrinking past
+	// its usual floor so the section stays inside the dock; without this the
+	// Amend row, the hint and the Commit buttons spill over the Log panel
+	// below (issue #101).
+	if !v.msgCollapsed && bottomH > content.Height {
+		msgH = max(0, msgH-(bottomH-content.Height))
+		bottomH = msgH + commitAmendRowH + hintH + commitButtonsRowH
 	}
 	bottomR := splitBottom(&content, bottomH)
 	w.p.hline(bottomR.X, bottomR.Y, bottomR.Width, w.pal.Border)
@@ -374,7 +395,7 @@ func (w *Window) paintCommitWindow(r ui.Rect) {
 		startH := msgH
 		w.splitter(idSplitMessage, rect(bottomR.X, bottomR.Y-3, bottomR.Width, 6), false,
 			func() { startH = msgH },
-			func(d float32) { v.msgH = clampF(startH-d, 60, max(60, content.Height+msgH-110)) }, nil)
+			func(d float32) { v.msgH = clampF(startH-d, commitMsgMinH, max(commitMsgMinH, content.Height+msgH-110)) }, nil)
 	}
 	w.paintChanges(content)
 	w.paintCommitMessage(bottomR, msgH, scope, stagePaths)
