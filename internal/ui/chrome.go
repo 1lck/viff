@@ -24,6 +24,14 @@ import (
 const (
 	leftPanelMinWidth  = 240
 	leftPanelEditorMin = 300
+	// leftDockUsefulHeight is the vertical room the Commit page needs to paint
+	// its fixed chrome: header, toolbar, change-list bar, Amend row, a minimum
+	// message editor, the scope hint and the Commit buttons, plus the island
+	// gap. Derived from the layout constants so it follows them when they
+	// change. The bottom panels clamp their height against it while the dock
+	// is open, so a small window squeezes the Log instead of cutting the
+	// Commit controls off or overlapping them (issue #101).
+	leftDockUsefulHeight = headerH + commitToolbarH + changeListBarH + commitAmendRowH + commitMsgMinH + commitScopeHintH + commitButtonsRowH + islandGap
 )
 
 // paintMain lays out the IDE frame: toolbar, stripes, islands, status bar.
@@ -44,12 +52,20 @@ func (w *Window) paintMain(full ui.Rect) {
 		nr.Width -= islandGap
 		w.paintNotificationsPanel(nr)
 	}
+	// The bottom panels share their vertical space with whatever sits above.
+	// An open left dock needs enough room for the Commit page's chrome, so it
+	// raises the reserve the panels clamp against; the editor alone manages
+	// with less.
+	dockReserve := float32(160)
+	if w.projectOpen || w.commitOpen {
+		dockReserve = leftDockUsefulHeight
+	}
 	// The bottom dock holds one tool window at a time, like IntelliJ's bottom
 	// stripe: the terminal replaces the Git window while it is shown, and
 	// closing it brings Git back if that was open.
 	switch {
 	case w.termOpen:
-		h := clampF(s.TerminalHeight, terminalMinHeight, max(terminalMinHeight, area.Height-160))
+		h := clampF(s.TerminalHeight, terminalMinHeight, max(terminalMinHeight, area.Height-dockReserve))
 		tr := splitBottom(&area, h)
 		area.Height -= islandGap
 		w.paintTerminal(tr)
@@ -57,18 +73,20 @@ func (w *Window) paintMain(full ui.Rect) {
 		w.splitter(idSplitTerminal, rect(tr.X, tr.Y-islandGap, tr.Width, islandGap), false,
 			func() { start = h },
 			func(d float32) {
-				s.TerminalHeight = clampF(start-d, terminalMinHeight, max(terminalMinHeight, full.Height-toolbarH-statusH-160))
+				s.TerminalHeight = clampF(start-d, terminalMinHeight, max(terminalMinHeight, full.Height-toolbarH-statusH-dockReserve))
 			},
 			w.saveSettings)
 	case w.gitOpen:
-		h := clampF(s.GitPanelHeight, 120, max(120, area.Height-160))
+		h := clampF(s.GitPanelHeight, 120, max(120, area.Height-dockReserve))
 		gr := splitBottom(&area, h)
 		area.Height -= islandGap
 		w.paintGitWindow(gr)
 		start := s.GitPanelHeight
 		w.splitter(idSplitGit, rect(gr.X, gr.Y-islandGap, gr.Width, islandGap), false,
 			func() { start = h },
-			func(d float32) { s.GitPanelHeight = clampF(start-d, 120, max(120, full.Height-toolbarH-statusH-160)) },
+			func(d float32) {
+				s.GitPanelHeight = clampF(start-d, 120, max(120, full.Height-toolbarH-statusH-dockReserve))
+			},
 			w.saveSettings)
 	}
 	// The left dock holds one tool window at a time, like IntelliJ's left
@@ -81,12 +99,17 @@ func (w *Window) paintMain(full ui.Rect) {
 		area.X += islandGap
 		area.Width -= islandGap
 		id := idSplitCommit
+		// The dock clips its page: a squeezed Commit panel shrinks its message
+		// area, and the clip is the backstop that keeps any remaining overflow
+		// from painting over the bottom panels (issue #101).
+		w.c.Clip(lr)
 		if w.projectOpen {
 			w.paintProject(lr)
 			id = idSplitProject
 		} else {
 			w.paintCommitWindow(lr)
 		}
+		w.c.Unclip()
 		start := lw
 		w.splitter(id, rect(right(lr), lr.Y, islandGap, lr.Height), true,
 			func() { start = lw },
