@@ -78,6 +78,10 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 In Log → Branch, type to search local branches, remote branches, and tags.
 Use ↑/↓ and Enter to apply a filter, or Esc to cancel.
 
+Choose **Copy Branch Name** from a branch's context menu in the log tree or its
+submenu in the branch popup. The copied name includes the remote prefix for
+branches such as `origin/feature/search`.
+
 **The interface is English by default; switch it to Simplified Chinese in
 Settings → General → Language.**
 

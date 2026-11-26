@@ -177,6 +177,7 @@ const (
 	ChromeMenuDeleteRemoteTag  = Key("chrome.menu.deleteRemoteTag")
 	ChromeMenuUpdate           = Key("chrome.menu.update")
 	ChromeMenuPushAnother      = Key("chrome.menu.pushAnotherRemote")
+	ChromeMenuCopyBranchName   = Key("chrome.menu.copyBranchName")
 	ChromeMenuRename           = Key("chrome.menu.rename")
 	ChromeMenuSetUpstream      = Key("chrome.menu.setUpstream")
 	ChromeMenuCheckoutRebase   = Key("chrome.menu.checkoutAndRebaseOnto")
@@ -349,6 +350,7 @@ func init() {
 		ChromeMenuDeleteRemoteTag:  "Delete Remote Tag…",
 		ChromeMenuUpdate:           "Update",
 		ChromeMenuPushAnother:      "Push to Another Remote…",
+		ChromeMenuCopyBranchName:   "Copy Branch Name",
 		ChromeMenuRename:           "Rename…",
 		ChromeMenuSetUpstream:      "Set Upstream…",
 		ChromeMenuCheckoutRebase:   "Checkout and Rebase onto %s",
@@ -519,6 +521,7 @@ func init() {
 		ChromeMenuDeleteRemoteTag:  "删除远端标签…",
 		ChromeMenuUpdate:           "更新",
 		ChromeMenuPushAnother:      "推送到其他远端…",
+		ChromeMenuCopyBranchName:   "复制分支名",
 		ChromeMenuRename:           "重命名…",
 		ChromeMenuSetUpstream:      "设置上游…",
 		ChromeMenuCheckoutRebase:   "检出并变基到 %s",

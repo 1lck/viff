@@ -150,11 +150,13 @@ func (w *Window) favorite(name string) *bool {
 // refActions is the submenu of a branch or tag.
 func (w *Window) refActions(r domain.Ref) []item {
 	rs := w.repo()
+	copyName := item{title: w.t(i18n.ChromeMenuCopyBranchName), icon: icons.Copy, run: func() { w.copyText(r.Short) }}
 	if w.readOnly() {
-		// Observation mode: compare and browse, never checkout, merge, push,
-		// rename or delete. The current branch keeps the same read-only set so
-		// the submenu cannot become a write back door.
+		// Observation mode offers comparison, browsing and copying.
 		items := []item{}
+		if r.Kind == domain.RefLocal || r.Kind == domain.RefRemote {
+			items = append(items, copyName)
+		}
 		if cur := rs.CurrentBranch(); cur != "" && !r.Current {
 			items = append(items, item{title: w.t(i18n.ChromeMenuCompareWith, "'"+cur+"'"), icon: icons.Diff, run: func() { w.compareBranches(cur, r.Short) }})
 		}
@@ -191,6 +193,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 			item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, run: w.openPush},
 			item{title: w.t(i18n.ChromeMenuPushAnother), icon: icons.Push, run: func() { w.openPushAnother(r) }},
 			sep(),
+			copyName,
 			item{title: w.t(i18n.ChromeMenuRename), icon: icons.Edit, run: func() { w.openRename(r) }},
 		)
 		if r.Upstream == "" && len(rs.Remotes) > 0 {
@@ -227,6 +230,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 			items = append(items, item{title: w.t(i18n.ChromeTbPush), icon: icons.Push, disabled: len(rs.Remotes) == 0, run: func() { w.openPushFor(r) }})
 		}
 		items = append(items,
+			copyName,
 			item{title: w.t(i18n.ChromeMenuRename), icon: icons.Edit, disabled: !w.canWriteBranches(), run: func() { w.openRename(r) }},
 			item{title: w.t(i18n.ChromeActionDelete), icon: icons.Delete, disabled: !w.canWriteBranches(), run: func() { w.ws.DeleteBranch(r, false) }},
 		)
@@ -237,7 +241,7 @@ func (w *Window) refActions(r domain.Ref) []item {
 			items = append(items, item{title: w.t(i18n.ChromeMenuUpdateFromRemote), icon: icons.Update, disabled: busy, run: func() { w.updateBranchFromRemote(r) }})
 		}
 	} else {
-		items = append(items, item{title: w.t(i18n.ChromeActionDelete), icon: icons.Delete, run: func() {
+		items = append(items, copyName, item{title: w.t(i18n.ChromeActionDelete), icon: icons.Delete, run: func() {
 			w.confirm(w.t(i18n.ChromeDialogDeleteRemoteBranch), w.t(i18n.ChromeDialogDeleteRemoteBranchMsg, q, r.Remote()), w.t(i18n.ChromeActionDelete), func() {
 				w.ws.DeleteBranch(r, false)
 			})
