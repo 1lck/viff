@@ -34,7 +34,7 @@ func terminalFixture(t *testing.T) *uiFixture {
 		t.Fatalf("toggle terminal: %v", err)
 	}
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
-		return f.win.termOpen && f.win.term.emu != nil && f.win.term.shell != nil
+		return f.win.termOpen && f.win.curTerm().emu != nil && f.win.curTerm().shell != nil
 	}, 10*time.Second); err != nil {
 		t.Fatalf("terminal did not start: %v\ntexts: %s", err, strings.Join(f.s.Texts(), " | "))
 	}
@@ -44,7 +44,7 @@ func terminalFixture(t *testing.T) *uiFixture {
 	// Opening the tool window must hand the keyboard to the grid, so typing
 	// needs no click.
 	if err := f.s.WaitFor(func(snapshot app.Snapshot) bool {
-		return snapshot.Focused == idTerminal
+		return snapshot.Focused == f.win.termScreenID()
 	}, 5*time.Second); err != nil {
 		for _, hit := range f.s.Snapshot().Hits {
 			t.Logf("hit %v label=%q bounds=%+v role=%v", hit.ID, hit.Label, hit.Bounds, hit.Role)
@@ -83,12 +83,12 @@ func TestTerminalRunsACommandAndShowsItsOutput(t *testing.T) {
 
 func TestTerminalFollowsThePanelSize(t *testing.T) {
 	f := terminalFixture(t)
-	beforeCols, beforeRows := f.win.term.emu.Size()
+	beforeCols, beforeRows := f.win.curTerm().emu.Size()
 	if err := f.s.Resize(980, 700); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.s.WaitFor(func(app.Snapshot) bool {
-		cols, rows := f.win.term.emu.Size()
+		cols, rows := f.win.curTerm().emu.Size()
 		return cols != beforeCols || rows != beforeRows
 	}, 5*time.Second); err != nil {
 		t.Fatalf("the pty did not follow the panel: %v", err)
@@ -97,7 +97,7 @@ func TestTerminalFollowsThePanelSize(t *testing.T) {
 
 func TestTerminalHidesWithoutEndingTheShell(t *testing.T) {
 	f := terminalFixture(t)
-	shell := f.win.term.shell
+	shell := f.win.curTerm().shell
 	if err := f.s.Keys("alt+f12"); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestTerminalHidesWithoutEndingTheShell(t *testing.T) {
 	if f.win.termOpen {
 		t.Fatal("the tool window stayed open")
 	}
-	if f.win.term.shell != shell {
+	if f.win.curTerm().shell != shell {
 		t.Fatal("hiding the window ended the shell")
 	}
 	if err := f.s.Keys("alt+f12"); err != nil {
@@ -116,7 +116,7 @@ func TestTerminalHidesWithoutEndingTheShell(t *testing.T) {
 	if err := f.s.Settle(40*time.Millisecond, time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if !f.win.termOpen || f.win.term.shell != shell {
+	if !f.win.termOpen || f.win.curTerm().shell != shell {
 		t.Fatal("showing the window started another shell")
 	}
 }
@@ -136,13 +136,13 @@ func TestTerminalCopiesASelection(t *testing.T) {
 	}
 	// Drag over the row that holds the output, then copy it with the platform
 	// chord.
-	geo := f.win.term.geometry
+	geo := f.win.curTerm().geometry
 	if geo.rows == 0 {
 		t.Fatal("the grid has no geometry")
 	}
 	row := -1
 	for index := 0; index < geo.rows; index++ {
-		line := f.win.term.emu.RowText(index)
+		line := f.win.curTerm().emu.RowText(index)
 		if strings.Contains(line, "?? notes/") {
 			row = index
 			break
@@ -220,17 +220,17 @@ func TestTerminalExplainsAFailedShellStart(t *testing.T) {
 	}, 5*time.Second); err != nil {
 		t.Fatalf("the failure was not shown: %v\ntexts: %s", err, strings.Join(f.s.Texts(), " | "))
 	}
-	if f.win.term.err == "" {
+	if f.win.curTerm().err == "" {
 		t.Fatal("the terminal state has no error")
 	}
-	if f.win.term.emu != nil || f.win.term.shell != nil {
+	if f.win.curTerm().emu != nil || f.win.curTerm().shell != nil {
 		t.Fatal("a failed start left a terminal behind")
 	}
 }
 
 func TestClosingTheProjectEndsTheShell(t *testing.T) {
 	f := terminalFixture(t)
-	shell := f.win.term.shell
+	shell := f.win.curTerm().shell
 	f.win.closeProject()
 	f.win.Invalidate()
 	if err := f.s.Settle(40*time.Millisecond, time.Second); err != nil {
@@ -245,12 +245,130 @@ func TestClosingTheProjectEndsTheShell(t *testing.T) {
 	if err := f.s.Settle(40*time.Millisecond, time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if f.win.term.shell != nil || f.win.term.emu != nil {
+	if len(f.win.terms) != 0 {
 		t.Fatal("the terminal survived the project")
 	}
 	select {
 	case <-shell.Done():
 	case <-time.After(5 * time.Second):
 		t.Fatal("closing the project left the shell running")
+	}
+}
+
+// clickHit presses the centre of the current hit with the given ID, so a test
+// can drive a widget that carries no text label.
+func clickHit(t *testing.T, f *uiFixture, id ui.ID) {
+	t.Helper()
+	for _, hit := range f.s.Snapshot().Hits {
+		if hit.ID != id {
+			continue
+		}
+		x := hit.Bounds.X + hit.Bounds.Width/2
+		y := hit.Bounds.Y + hit.Bounds.Height/2
+		if err := f.s.Press(x, y); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.s.Release(x, y); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.s.Settle(40*time.Millisecond, time.Second); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	t.Fatalf("no hit for %v\ntexts: %s", id, strings.Join(f.s.Texts(), " | "))
+}
+
+func TestTerminalAddsASecondShell(t *testing.T) {
+	f := terminalFixture(t)
+	first := f.win.curTerm().shell
+	clickHit(t, f, idTerminalNew)
+	if len(f.win.terms) != 2 || f.win.termIdx != 1 {
+		t.Fatalf("terms = %d, active = %d, want two tabs with the new one active", len(f.win.terms), f.win.termIdx)
+	}
+	second := f.win.curTerm()
+	if second.shell == nil || second.shell == first {
+		t.Fatal("the new tab did not start a shell of its own")
+	}
+	if f.win.terms[0].shell != first {
+		t.Fatal("adding a tab ended the first shell")
+	}
+	if second.number != 2 {
+		t.Fatalf("the second tab is numbered %d, want 2", second.number)
+	}
+	if err := f.s.WaitFor(func(snapshot app.Snapshot) bool {
+		return snapshot.Focused == f.win.termScreenID()
+	}, 5*time.Second); err != nil {
+		t.Fatalf("the new grid did not take the keyboard: %v", err)
+	}
+	// The tab strip appears once a second shell exists.
+	if err := f.s.WaitFor(func(snapshot app.Snapshot) bool {
+		for _, hit := range snapshot.Hits {
+			if hit.ID == scTermTabs.At(1) {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second); err != nil {
+		t.Fatalf("the tab strip did not appear: %v\ntexts: %s", err, strings.Join(f.s.Texts(), " | "))
+	}
+}
+
+func TestTerminalTabsKeepSeparateScreens(t *testing.T) {
+	f := terminalFixture(t)
+	if err := f.s.Type("echo first-tab"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.Keys("enter"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WaitFor(func(snapshot app.Snapshot) bool {
+		return snapshotHasText(snapshot, "first-tab")
+	}, 10*time.Second); err != nil {
+		t.Fatalf("the first tab did not run its command: %v", err)
+	}
+	clickHit(t, f, idTerminalNew)
+	if err := f.s.Type("echo second-tab"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.Keys("enter"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WaitFor(func(snapshot app.Snapshot) bool {
+		return snapshotHasText(snapshot, "second-tab")
+	}, 10*time.Second); err != nil {
+		t.Fatalf("the second tab did not run its command: %v", err)
+	}
+	clickHit(t, f, scTermTabs.At(0))
+	if f.win.termIdx != 0 {
+		t.Fatalf("active tab = %d, want 0", f.win.termIdx)
+	}
+	// Switching back shows the first shell's screen, not the second's.
+	if !snapshotHasText(f.s.Snapshot(), "first-tab") {
+		t.Fatalf("the first tab lost its output\ntexts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+	if snapshotHasText(f.s.Snapshot(), "second-tab") {
+		t.Fatalf("the first tab painted the second shell's output\ntexts: %s", strings.Join(f.s.Texts(), " | "))
+	}
+}
+
+func TestTerminalTabCloseEndsItsShell(t *testing.T) {
+	f := terminalFixture(t)
+	clickHit(t, f, idTerminalNew)
+	second := f.win.curTerm()
+	shell := second.shell
+	clickHit(t, f, scTermClose.At(1))
+	if len(f.win.terms) != 1 || f.win.termIdx != 0 {
+		t.Fatalf("terms = %d, active = %d, want the first tab left alone", len(f.win.terms), f.win.termIdx)
+	}
+	select {
+	case <-shell.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("closing a tab left its shell running")
+	}
+	// The last tab cannot be closed: hiding the window is how a shell goes away.
+	f.win.closeTerminalAt(0)
+	if len(f.win.terms) != 1 {
+		t.Fatal("the last tab was closed")
 	}
 }

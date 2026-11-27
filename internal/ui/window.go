@@ -97,7 +97,12 @@ type Window struct {
 	con  consoleView
 	wel  welcomeView
 	nt   noticeView
-	term terminalView
+	// terms holds one shell per terminal tab, in tab order; termIdx is the
+	// visible one, and termSeq is the last tab number handed out. Numbers are
+	// not reused after a tab closes, so a tab keeps its name while it lives.
+	terms   []*terminalView
+	termIdx int
+	termSeq int
 
 	favPtr                map[string]*bool
 	pendingRebase         string
@@ -398,7 +403,7 @@ func (w *Window) onCloseRequest(allow func()) {
 
 func (w *Window) onClosed() {
 	w.lg.multi.stop()
-	w.stopTerminal()
+	w.stopTerminals()
 	w.flushSettings()
 	w.stopAutoFetch()
 	w.ws.Dispose()
@@ -764,8 +769,10 @@ func (w *Window) textInput(ctx app.TextInputContext) *app.TextInput {
 	if w.installingUpdate() {
 		return nil
 	}
-	if ctx.ID == idTerminal && w.termOpen && w.term.emu != nil {
-		return w.ensureTerminalInput()
+	if w.termOpen && ctx.ID == w.termScreenID() {
+		if v := w.curTerm(); v != nil && v.emu != nil {
+			return w.ensureTerminalInput(v)
+		}
 	}
 	if ctx.ID == idDiffText || ctx.ID == idConflictText {
 		var buf *textBuffer

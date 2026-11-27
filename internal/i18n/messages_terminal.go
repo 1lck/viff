@@ -3,7 +3,10 @@ package i18n
 // Message keys of the terminal tool window.
 const (
 	TermTitle        = Key("term.title")
+	TermNumber       = Key("term.number")
 	TermStripe       = Key("term.stripe")
+	TermNew          = Key("term.new")
+	TermCloseTab     = Key("term.closeTab")
 	TermRestart      = Key("term.restart")
 	TermClear        = Key("term.clear")
 	TermHide         = Key("term.hide")
@@ -20,7 +23,10 @@ const (
 func init() {
 	register(EN, map[Key]string{
 		TermTitle:        "Terminal",
+		TermNumber:       "Terminal %d",
 		TermStripe:       "Terminal\t⌥F12",
+		TermNew:          "New Terminal",
+		TermCloseTab:     "Close Terminal",
 		TermRestart:      "Restart Shell",
 		TermClear:        "Clear",
 		TermHide:         "Hide Terminal",
@@ -35,7 +41,10 @@ func init() {
 	})
 	register(ZHCN, map[Key]string{
 		TermTitle:        "终端",
+		TermNumber:       "终端 %d",
 		TermStripe:       "终端\t⌥F12",
+		TermNew:          "新建终端",
+		TermCloseTab:     "关闭终端",
 		TermRestart:      "重启 Shell",
 		TermClear:        "清屏",
 		TermHide:         "隐藏终端",

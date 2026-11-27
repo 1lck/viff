@@ -54,13 +54,19 @@ var (
 	idTooltipLayer    = tree.ID(fChrome, "tooltip")
 	idBanner          = tree.Sub(fChrome, tree.Name("banner"))
 
-	// Terminal tool window.
-	idTerminal        = tree.ID(fTerm, "screen")
+	// Terminal tool window. The visible grid carries one ID per tab, so a tab
+	// switch moves the keyboard to a grid Viva has not seen focused before. A
+	// window with more than one shell also shows a tab strip above the grid:
+	// one tab per terminal, each with its own close button.
+	scTermScreen      = tree.Sub(fTerm, tree.Name("screen"))
 	idTerminalClear   = tree.ID(fTerm, "clear")
 	idTerminalRestart = tree.ID(fTerm, "restart")
 	idTerminalRetry   = tree.ID(fTerm, "retry")
 	idTerminalHide    = tree.ID(fTerm, "hide")
+	idTerminalNew     = tree.ID(fTerm, "new")
 	idTerminalScroll  = tree.ID(fTerm, "scrollbar")
+	scTermTabs        = tree.Sub(fTerm, tree.Name("tabs"))
+	scTermClose       = tree.Sub(fTerm, tree.Name("tab-close"))
 
 	// Commit tool window.
 	idChangesList       = tree.ID(fCommit, "changes")
