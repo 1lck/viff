@@ -70,7 +70,7 @@ periodically; if it no longer works, open an issue and we will refresh it.</sub>
 | Track large files     | Detect Git LFS rules and missing git-lfs; count and list managed files on demand from the LFS marker or Git tool window menu                               |
 | Exchange changes      | Fetch, pull, push, force-with-lease, remotes, patches, and signing/credential settings                                                                        |
 | Work on the web       | Open commits, branches, comparisons, and the pull request form on GitHub, GitLab, Bitbucket, or Gitea                                                        |
-| Run commands          | Integrated terminal in the current repository: scrollback, selection copy, paste, clear, restart, and resize                                                   |
+| Run commands          | Integrated terminal in the current repository: multiple tabs with one shell each, scrollback, selection copy, paste, clear, restart, and resize                |
 | Open WSL repositories | On Windows, open a repository inside a WSL distribution: Git runs in the distribution, files are read through `\\wsl.localhost`                                |
 | Observe SSH repositories | Open a working tree on a Linux/macOS server as `ssh://host/path` in read-only mode: status, history, diffs, refs and files come from the server's Git; nothing is written |
 | Work in your language | English and Simplified Chinese interface, English by default, switchable in Settings                                                                          |

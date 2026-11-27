@@ -32,11 +32,14 @@ const (
 	terminalBlinkSpan = 20 * time.Second
 )
 
-// terminalView is the Terminal tool window's state: one local shell, its
-// emulator, and everything the paint needs. It is owned by the window thread.
+// terminalView is one terminal tab: a local shell, its emulator, and
+// everything the paint needs. It is owned by the window thread.
 type terminalView struct {
-	shell *pty.Shell
-	emu   *term.Terminal
+	// number names the tab. The first terminal is "Terminal", later ones are
+	// "Terminal 2" and so on; a closed tab's number is never reused.
+	number int
+	shell  *pty.Shell
+	emu    *term.Terminal
 
 	// rx holds output drained from the shell but not parsed yet; it survives a
 	// frame that used its whole budget.
@@ -89,6 +92,21 @@ func (w *Window) toggleTerminal() {
 	w.openTerminal()
 }
 
+// curTerm is the visible terminal tab, nil when the window holds none.
+func (w *Window) curTerm() *terminalView {
+	if w.termIdx < 0 || w.termIdx >= len(w.terms) {
+		return nil
+	}
+	return w.terms[w.termIdx]
+}
+
+// termScreenID is the grid's hit ID for the visible tab. Each tab has its own,
+// so switching tabs is a focus change rather than the same widget showing other
+// text: the native text input then follows the new shell.
+func (w *Window) termScreenID() ui.ID {
+	return scTermScreen.At(max(w.termIdx, 0))
+}
+
 // openTerminal shows the tool window and gives the grid the keyboard. It needs
 // a repository: the terminal belongs to the project, as IntelliJ's does, and the
 // welcome screen has no place to dock it.
@@ -101,18 +119,77 @@ func (w *Window) openTerminal() {
 		return
 	}
 	w.termOpen = true
-	if w.term.shell == nil && w.term.err == "" {
-		w.startTerminal()
+	if len(w.terms) == 0 {
+		w.newTerminal()
+		return
 	}
-	w.term.focusPending = true
+	if v := w.curTerm(); v != nil {
+		v.focusPending = true
+	}
 	w.Invalidate()
+}
+
+// newTerminal adds a tab after the visible one, starts its shell and gives it
+// the keyboard.
+func (w *Window) newTerminal() {
+	if w.repo() == nil {
+		return
+	}
+	if w.readOnly() {
+		w.ws.Notify(vapp.NoticeInfo, w.t(i18n.ChromeStatusReadOnly), w.t(i18n.WorkspaceTipReadOnly))
+		return
+	}
+	w.termSeq++
+	v := &terminalView{number: w.termSeq}
+	w.terms = append(w.terms, v)
+	w.termIdx = len(w.terms) - 1
+	w.termOpen = true
+	w.startTerminal(v)
+	v.focusPending = true
+	w.Invalidate()
+}
+
+// selectTerminal shows the tab at i and gives its grid the keyboard.
+func (w *Window) selectTerminal(i int) {
+	if i < 0 || i >= len(w.terms) {
+		return
+	}
+	w.termIdx = i
+	w.terms[i].focusPending = true
+	w.Invalidate()
+}
+
+// closeTerminalAt ends one tab's shell and drops the tab. The last tab stays:
+// hiding the tool window is how a window goes back to no terminal.
+func (w *Window) closeTerminalAt(i int) {
+	if i < 0 || i >= len(w.terms) || len(w.terms) <= 1 {
+		return
+	}
+	w.terms[i].stop()
+	w.terms = append(w.terms[:i], w.terms[i+1:]...)
+	switch {
+	case i < w.termIdx:
+		w.termIdx--
+	case i == w.termIdx:
+		w.termIdx = min(i, len(w.terms)-1)
+		w.terms[w.termIdx].focusPending = true
+	}
+	w.Invalidate()
+}
+
+// stopTerminals ends every shell and forgets the tabs.
+func (w *Window) stopTerminals() {
+	for _, v := range w.terms {
+		v.stop()
+	}
+	w.terms = nil
+	w.termIdx = 0
 }
 
 // startTerminal starts a local shell in the current repository, or the home
 // directory when no repository is open. It runs on the window thread; the pty
 // fork is the only blocking step and is short.
-func (w *Window) startTerminal() {
-	v := &w.term
+func (w *Window) startTerminal(v *terminalView) {
 	v.err = ""
 	v.ended = false
 	v.dir = w.terminalDir()
@@ -147,10 +224,9 @@ func (w *Window) startTerminal() {
 	w.Invalidate()
 }
 
-// stopTerminal ends the shell and forgets the screen. Hiding the tool window
-// does not do this: only Restart and closing the window do.
-func (w *Window) stopTerminal() {
-	v := &w.term
+// stop ends the shell and forgets the screen. Hiding the tool window does not
+// do this: only Restart, closing a tab and closing the window do.
+func (v *terminalView) stop() {
 	if v.shell != nil {
 		v.shell.Close()
 	}
@@ -161,11 +237,12 @@ func (w *Window) stopTerminal() {
 	v.cache.reset()
 }
 
-// restartTerminal ends the running shell and starts a new one.
-func (w *Window) restartTerminal() {
-	w.stopTerminal()
-	w.startTerminal()
-	w.term.focusPending = true
+// restartTerminal ends the tab's running shell and starts a new one.
+func (w *Window) restartTerminal(v *terminalView) {
+	v.stop()
+	w.startTerminal(v)
+	v.focusPending = true
+	w.Invalidate()
 }
 
 // terminalDir is the directory a new shell starts in: the open repository, else
@@ -180,11 +257,17 @@ func (w *Window) terminalDir() string {
 	return ""
 }
 
-// pumpTerminal moves the shell's output into the emulator and notices its end.
-// It runs in onWake, before the paint that the shell's Notify asked for, so the
-// paint only reads state.
+// pumpTerminal moves every shell's output into its emulator and notices its
+// end. It runs in onWake, before the paint that the shell's Notify asked for,
+// so the paint only reads state.
 func (w *Window) pumpTerminal() {
-	v := &w.term
+	for _, v := range w.terms {
+		w.pumpOne(v)
+	}
+}
+
+// pumpOne drains one terminal's shell into its emulator.
+func (w *Window) pumpOne(v *terminalView) {
 	if v.shell == nil {
 		return
 	}
@@ -222,14 +305,14 @@ func (w *Window) pumpTerminal() {
 	if finished && !v.ended {
 		v.ended = true
 		status := v.shell.ExitStatus()
-		w.writeExit(status)
+		w.writeExit(v, status)
 		w.Invalidate()
 	}
 }
 
 // writeExit prints the message IntelliJ leaves when the shell ends.
-func (w *Window) writeExit(status int) {
-	if v := &w.term; v.emu != nil {
+func (w *Window) writeExit(v *terminalView, status int) {
+	if v.emu != nil {
 		message := w.t(i18n.TermExited)
 		if status != 0 {
 			message = w.t(i18n.TermExitedCode, status)
@@ -240,18 +323,16 @@ func (w *Window) writeExit(status int) {
 
 // fitTerminal records the size the panel wants and applies it after the paint,
 // so resizing never blocks the render path.
-func (w *Window) fitTerminal(cols, rows int) {
-	v := &w.term
+func (w *Window) fitTerminal(v *terminalView, cols, rows int) {
 	if cols < 1 || rows < 1 || (cols == v.wantCols && rows == v.wantRows) {
 		return
 	}
 	v.wantCols, v.wantRows = cols, rows
-	w.after(func() { w.applyTerminalSize() })
+	w.after(func() { w.applyTerminalSize(v) })
 }
 
 // applyTerminalSize tells the emulator and the pty the new cell grid.
-func (w *Window) applyTerminalSize() {
-	v := &w.term
+func (w *Window) applyTerminalSize(v *terminalView) {
 	if v.emu == nil {
 		return
 	}
@@ -268,7 +349,7 @@ func (w *Window) applyTerminalSize() {
 
 // terminalFocused reports whether the grid owns the keyboard.
 func (w *Window) terminalFocused() bool {
-	return w.termOpen && w.focused(idTerminal)
+	return w.termOpen && w.focused(w.termScreenID())
 }
 
 // terminalShortcut takes the few chords the terminal itself owns. Everything
@@ -309,16 +390,21 @@ func (w *Window) terminalShortcut(e ui.KeyEvent) (ui.EventResult, bool) {
 			return handled, true
 		}
 	case ch == "k" && !shift:
-		if v := &w.term; v.emu != nil {
+		if v := w.curTerm(); v != nil && v.emu != nil {
 			v.emu.ClearScrollback()
 			v.emu.ClearScreen()
 		}
 		return handled, true
 	case ch == "w" && !shift && mod&ui.ModifierMeta != 0:
-		// Command+W closes the tool window on macOS, as it closes IntelliJ's
-		// terminal tab. Control+W on other platforms belongs to the shell.
-		w.termOpen = false
-		w.Invalidate()
+		// Command+W closes the terminal tab on macOS, as IntelliJ's does; the
+		// last tab hides the tool window instead. Control+W on other platforms
+		// belongs to the shell.
+		if len(w.terms) > 1 {
+			w.closeTerminalAt(w.termIdx)
+		} else {
+			w.termOpen = false
+			w.Invalidate()
+		}
 		return handled, true
 	}
 	return ui.EventResult{}, false
@@ -327,8 +413,8 @@ func (w *Window) terminalShortcut(e ui.KeyEvent) (ui.EventResult, bool) {
 // pasteTerminal sends clipboard text the way a paste event would, with the
 // bracketed-paste markers a program asked for.
 func (w *Window) pasteTerminal(text string) {
-	v := &w.term
-	if v.shell == nil || v.emu == nil || text == "" {
+	v := w.curTerm()
+	if v == nil || v.shell == nil || v.emu == nil || text == "" {
 		return
 	}
 	v.hasSelection, v.selecting = false, false
@@ -353,10 +439,13 @@ func (w *Window) terminalOwnsChord(e ui.KeyEvent) bool {
 // terminalKey encodes one key for the shell. It runs from the hit's key handler
 // after the shortcut table declined the event.
 func (w *Window) terminalKey(e ui.KeyEvent) bool {
-	v := &w.term
+	v := w.curTerm()
+	if v == nil {
+		return false
+	}
 	if v.emu == nil {
 		if e.Key == ui.KeyEnter && !e.Release && v.err != "" {
-			w.startTerminal()
+			w.startTerminal(v)
 			return true
 		}
 		return false
@@ -412,8 +501,7 @@ func (w *Window) terminalKey(e ui.KeyEvent) bool {
 
 // terminalText applies a native text-system event: committed text, paste, and
 // input-method composition.
-func (w *Window) terminalText(event app.TextEvent) app.TextState {
-	v := &w.term
+func (w *Window) terminalText(v *terminalView, event app.TextEvent) app.TextState {
 	switch event.Kind {
 	case app.TextInsert:
 		v.preedit = app.TextState{}
@@ -445,8 +533,8 @@ func (w *Window) terminalText(event app.TextEvent) app.TextState {
 // copyTerminalSelection puts the selected text on the clipboard and reports
 // whether there was anything to copy.
 func (w *Window) copyTerminalSelection() bool {
-	v := &w.term
-	if v.emu == nil || !v.hasSelection {
+	v := w.curTerm()
+	if v == nil || v.emu == nil || !v.hasSelection {
 		return false
 	}
 	text := v.emu.SelectedRange(v.anchor, v.focus)
@@ -461,8 +549,8 @@ func (w *Window) copyTerminalSelection() bool {
 // fraction of a line is not lost, and turned into arrow keys on the alternate
 // screen where the program owns scrolling.
 func (w *Window) terminalScroll(dy float32) {
-	v := &w.term
-	if v.emu == nil || v.geometry.cellH <= 0 {
+	v := w.curTerm()
+	if v == nil || v.emu == nil || v.geometry.cellH <= 0 {
 		return
 	}
 	modes := v.emu.Modes()
@@ -553,11 +641,10 @@ func (v *terminalView) terminalSelectionSpan(row int) (from, to int, ok bool) {
 
 // ensureTerminalInput returns the native text surface for the grid: the cursor
 // cell where an input method composes, and the receiver of committed text.
-func (w *Window) ensureTerminalInput() *app.TextInput {
-	v := &w.term
+func (w *Window) ensureTerminalInput(v *terminalView) *app.TextInput {
 	if v.input.OnEvent == nil {
 		v.input.OnEvent = func(event app.TextEvent) (app.TextState, error) {
-			return w.terminalText(event), nil
+			return w.terminalText(v, event), nil
 		}
 	}
 	v.input.FontSize = v.geometry.fontSize
@@ -589,28 +676,53 @@ func (w *Window) ensureTerminalInput() *app.TextInput {
 // terminalStatus is the line under the title: the shell's directory, or why it
 // could not start.
 func (w *Window) terminalStatus() string {
-	if w.term.err != "" {
-		return w.term.err
+	v := w.curTerm()
+	if v == nil {
+		return ""
 	}
-	return w.term.dir
+	if v.err != "" {
+		return v.err
+	}
+	return v.dir
 }
 
-// closeProject ends the terminal and closes the repository. The shell belongs
-// to the project, so it does not outlive the project in a window with no dock;
-// a running shell is worth one confirmation before it is killed.
+// closeProject ends every terminal and closes the repository. The shells belong
+// to the project, so they do not outlive it in a window with no dock; a running
+// shell is worth one confirmation before it is killed.
 func (w *Window) closeProject() {
-	if v := &w.term; v.shell != nil && !v.ended {
+	running := false
+	for _, v := range w.terms {
+		if v.shell != nil && !v.ended {
+			running = true
+			break
+		}
+	}
+	if running {
 		w.confirm(w.t(i18n.ChromeMenuCloseProject), w.t(i18n.TermCloseRunning), w.t(i18n.ChromeMenuCloseProject), func() {
-			w.stopTerminal()
+			w.stopTerminals()
 			w.termOpen = false
 			w.ws.Close()
 		})
 		return
 	}
-	w.stopTerminal()
+	w.stopTerminals()
 	w.termOpen = false
 	w.ws.Close()
 }
 
-// terminalTitle is the tool window's title with the shell's name when known.
-func (w *Window) terminalTitle() string { return w.t(i18n.TermTitle) }
+// terminalTitle is the visible tab's name.
+func (w *Window) terminalTitle() string {
+	if v := w.curTerm(); v != nil {
+		return w.terminalTabName(v)
+	}
+	return w.t(i18n.TermTitle)
+}
+
+// terminalTabName names a tab by its number; the first terminal keeps the plain
+// title so a window with one shell reads exactly as before.
+func (w *Window) terminalTabName(v *terminalView) string {
+	if v.number <= 1 {
+		return w.t(i18n.TermTitle)
+	}
+	return w.t(i18n.TermNumber, v.number)
+}

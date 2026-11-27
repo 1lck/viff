@@ -323,12 +323,16 @@ func asciiOnly(value string) bool {
 // with its scrollback, and the actions that restart, clear or hide it.
 func (w *Window) paintTerminal(r ui.Rect) {
 	w.island(r)
-	v := &w.term
+	v := w.curTerm()
+	if v == nil {
+		return
+	}
+	id := w.termScreenID()
 	header := splitTop(&r, 32)
 	pad := float32(10)
 	w.p.icon(icons.Shell, header.X+8, header.Y+(header.Height-16)/2, 16)
 	textX := header.X + 30
-	textW := max(right(header)-8-actionSize*3-6-textX, 60)
+	textW := max(right(header)-8-actionSize*4-6-textX, 60)
 	w.p.text(w.terminalTitle(), rect(textX, header.Y+3, textW, 15), 12, semibold, w.pal.Text)
 	w.p.text(w.terminalStatus(), rect(textX, header.Y+17, textW, 12), 10, regular, w.pal.TextSecond)
 
@@ -347,7 +351,15 @@ func (w *Window) paintTerminal(r ui.Rect) {
 	}
 	ax -= actionSize + 2
 	if w.action(idTerminalRestart, ax, header.Y+(header.Height-actionSize)/2, icons.Refresh, w.t(i18n.TermRestart), actOpts{}) {
-		w.after(w.restartTerminal)
+		w.after(func() { w.restartTerminal(v) })
+	}
+	ax -= actionSize + 2
+	if w.action(idTerminalNew, ax, header.Y+(header.Height-actionSize)/2, icons.Add, w.t(i18n.TermNew), actOpts{}) {
+		w.after(w.newTerminal)
+	}
+	if len(w.terms) > 1 {
+		bar := splitTop(&r, terminalTabH)
+		w.paintTerminalTabs(bar)
 	}
 	w.p.hline(r.X, r.Y, r.Width, w.pal.Border)
 	r = inset(r, 1, 0)
@@ -364,11 +376,11 @@ func (w *Window) paintTerminal(r ui.Rect) {
 			bw := w.c.TextWidthWeight(label, 12, regular) + 28
 			br := rect(r.X+(r.Width-bw)/2, r.Y+r.Height/2+10, bw, 26)
 			if w.button(idTerminalRetry, br, label, btnNormal, false) {
-				w.after(w.restartTerminal)
+				w.after(func() { w.restartTerminal(v) })
 			}
 		}
-		w.c.HitWithOptions(idTerminal, r, w.t(i18n.TermA11y), ui.HitOptions{Role: ui.RoleTerminal})
-		w.onKeys(idTerminal, w.terminalKey)
+		w.c.HitWithOptions(id, r, w.t(i18n.TermA11y), ui.HitOptions{Role: ui.RoleTerminal})
+		w.onKeys(id, w.terminalKey)
 		return
 	}
 
@@ -383,7 +395,7 @@ func (w *Window) paintTerminal(r ui.Rect) {
 	area := inset(r, pad, 6)
 	availCols := max(1, int(area.Width/cellW))
 	availRows := max(1, int(area.Height/cellH))
-	w.fitTerminal(availCols, availRows)
+	w.fitTerminal(v, availCols, availRows)
 	// Until the deferred resize runs, the emulator still has its previous grid:
 	// draw that, clipped to the room the panel has, rather than asking for rows
 	// it does not have.
@@ -398,7 +410,7 @@ func (w *Window) paintTerminal(r ui.Rect) {
 	w.p.fill(area, w.pal.TermBG)
 	cursor := v.emu.Cursor()
 	blinkOn := true
-	focused := w.focused(idTerminal)
+	focused := w.focused(id)
 	if cursor.Visible && focused && !v.preedit.Composing {
 		blinkOn = v.blink.on(w.c, cursor.X, cursor.Y)
 	} else {
@@ -474,11 +486,11 @@ func (w *Window) paintTerminal(r ui.Rect) {
 		Y:     geo.top + float32(min(cursor.Y, rows-1))*cellH,
 		Width: cellW, Height: cellH,
 	}
-	w.c.HitWithOptions(idTerminal, area, w.t(i18n.TermA11y), ui.HitOptions{Role: ui.RoleTerminal, Autofocus: v.focusPending})
+	w.c.HitWithOptions(id, area, w.t(i18n.TermA11y), ui.HitOptions{Role: ui.RoleTerminal, Autofocus: v.focusPending})
 	v.focusPending = false
-	w.onKeys(idTerminal, w.terminalKey)
+	w.onKeys(id, w.terminalKey)
 	w.onScrollIn(area, func(_, dy float32) { w.terminalScroll(dy) })
-	w.onDrag(idTerminal, func(e dragEvent) {
+	w.onDrag(id, func(e dragEvent) {
 		switch e.Phase {
 		case dragBegin:
 			v.anchor = v.terminalPoint(e.X, e.Y)
@@ -494,12 +506,63 @@ func (w *Window) paintTerminal(r ui.Rect) {
 			v.hasSelection = v.anchor != v.focus
 		}
 	})
-	w.onDouble(idTerminal, func() {
+	w.onDouble(id, func() {
 		point := v.terminalPoint(w.mouse.X, w.mouse.Y)
 		from, to := v.emu.WordRange(point)
 		v.anchor, v.focus = from, to
 		v.hasSelection = true
 	})
+}
+
+// terminalTabH is the height of the tab strip above the grid when the window
+// holds more than one shell.
+const terminalTabH = 30
+
+// paintTerminalTabs draws one tab per terminal, the way the editor's tab bar
+// does. A tab shows its close button while it or its button is hovered.
+func (w *Window) paintTerminalTabs(r ui.Rect) {
+	x := r.X + 8
+	for i, v := range w.terms {
+		id, cid := scTermTabs.At(i), scTermClose.At(i)
+		name := w.terminalTabName(v)
+		tw := w.p.width(name, fontUI, regular)
+		width := 8 + 16 + 6 + tw + 6 + 18 + 6
+		tr := rect(x, r.Y+(r.Height-26)/2, width, 26)
+		if right(tr) > right(r)-8 {
+			break
+		}
+		active := i == w.termIdx
+		switch {
+		case active:
+			w.p.outline(tr, 6, 1, w.pal.TabSelectedBorder, w.pal.TabSelected)
+		case w.hovered(id) || w.hovered(cid):
+			w.p.round(tr, 6, w.pal.ToolHover)
+		}
+		w.p.iconIn(icons.Shell, rect(tr.X+8, tr.Y, 16, tr.Height))
+		fg := w.pal.Text
+		if !active {
+			fg = w.pal.TextMuted
+		}
+		w.p.text(name, rect(tr.X+30, tr.Y, tw+2, tr.Height), fontUI, regular, fg)
+		w.c.HitWithOptions(id, tr, name, ui.HitOptions{Role: ui.RoleTab, Selected: active, SkipFocus: true})
+		w.tip(id, v.dir)
+		cr := rect(right(tr)-24, tr.Y+(tr.Height-18)/2, 18, 18)
+		if active || w.hovered(id) || w.hovered(cid) {
+			if w.hovered(cid) {
+				w.p.round(cr, 4, w.pal.ToolHover)
+			}
+			w.p.iconIn(icons.CloseSmall, cr)
+		}
+		w.c.HitWithOptions(cid, cr, w.t(i18n.TermCloseTab), ui.HitOptions{Role: ui.RoleButton, SkipFocus: true})
+		if w.c.Clicked(cid) {
+			i := i
+			w.after(func() { w.closeTerminalAt(i) })
+		} else if w.c.Clicked(id) {
+			i := i
+			w.after(func() { w.selectTerminal(i) })
+		}
+		x = right(tr) + 4
+	}
 }
 
 // coveredOnRow is covered when it is on the row being prepared, else nothing.
